@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "simulator_lib",
+    srcs = [
+        "control.go",
+        "main.go",
+        "sim.go",
+    ],
+    importpath = "github.com/panset/hourglass/e2e/simulator",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_github_vmware_govmomi//:govmomi",
+        "@com_github_vmware_govmomi//find",
+        "@com_github_vmware_govmomi//object",
+        "@com_github_vmware_govmomi//property",
+        "@com_github_vmware_govmomi//simulator",
+        "@com_github_vmware_govmomi//vim25/mo",
+        "@com_github_vmware_govmomi//vim25/types",
+    ],
+)
+
+go_binary(
+    name = "hourglass-vcsim",
+    embed = [":simulator_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "simulator_test",
+    srcs = ["sim_test.go"],
+    embed = [":simulator_lib"],
+    deps = [
+        "//pkg/hourglass",
+        "//providers/vsphere",
+    ],
+)
