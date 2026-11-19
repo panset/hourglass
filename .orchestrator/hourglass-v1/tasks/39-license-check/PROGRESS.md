@@ -1,0 +1,2 @@
+- 2026-11-19: wrote tools/check_licenses.sh, tools/licenses_allow.txt; added one line to ci.sh; generated docs/third-party-licenses.md.
+- 2026-11-19: seeded GPL into an npm package and a Go module licence file (temporary): check failed naming each; restored, check passes.

@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 tools/check_spdx.sh
 tools/check_core_generic.sh
+tools/check_licenses.sh
 go build ./...
 # UI-3: the no-tag path must build without Node, Bazel or built UI files.
 CGO_ENABLED=0 go build -o /dev/null ./cmd/hourglassd

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Exceptions to the base policy (MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC).
+# Format: SPDX-id|exact module or package name|one-line justification
+# An entry applies only to that id on that name. An entry that no longer occurs fails the check.
+Python-2.0|argparse|PSF-style permissive licence, transitive dev dependency of the UI toolchain (js-yaml); no copyleft terms.
+MIT-0|@csstools/color-helpers|MIT without the attribution clause (equivalent to 0BSD); transitive dependency of jsdom's css-color, test-only.
+CC-BY-4.0|caniuse-lite|PROVISIONAL, owner decision pending: attribution-only data licence, dev-only (browserslist database via vite/babel); not shipped in the bundle.
