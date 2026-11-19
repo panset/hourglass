@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "filedir",
+    srcs = ["filedir.go"],
+    importpath = "github.com/panset/hourglass/examples/custom/filedir",
+    visibility = ["//visibility:public"],
+    deps = ["//pkg/hourglass"],
+)
+
+go_test(
+    name = "filedir_test",
+    srcs = ["filedir_test.go"],
+    embed = [":filedir"],
+    deps = [
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)

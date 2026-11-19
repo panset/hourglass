@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MIT
+labd.db*
+events.jsonl
+rigs/*
+!rigs/.gitkeep

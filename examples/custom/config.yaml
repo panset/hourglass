@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT
+#
+# Configuration for the labd example (a lab of GPU rigs). Run from the
+# directory that holds this file (examples/custom):
+#
+#   export HOURGLASS_SESSION_KEY="$(head -c 32 /dev/urandom | base64)"
+#   export HOURGLASS_ADMIN_PASSWORD="choose-a-long-local-password"
+#   go run ./cmd/labd -config config.yaml
+#
+# Secrets are never written here; the environment supplies them.
+
+listen: 127.0.0.1:8080
+database: data/labd.db
+timezone: UTC
+
+# No OIDC block: the only way in is the local admin account.
+
+# Seed file, imported once when the database has no setups (SET-7).
+seed: seed.yaml
+
+# The four extensions below are this example's own. Each "type" is the name
+# the extension registered in init(); "config" is handed to it untouched.
+provider:
+  type: filedir
+  config:
+    dir: data/rigs        # a rig is "deployed" while a file of its name exists here
+
+pressure:
+  type: busiest-site
+  config:
+    label: site           # setups are grouped by this label
+
+metering:
+  type: business-hours
+  config:
+    timezone: UTC         # any IANA name, e.g. Europe/Berlin
+    start: "08:00"
+    end: "19:00"
+    days: [mon, tue, wed, thu, fri]
+    gpu_weight: 2         # charged at this weight when the setup has gpu=true
+
+hooks:
+  - type: logfile
+    config:
+      path: data/events.jsonl
+      events: [hold.acquired, hold.released, hold.metering_started]

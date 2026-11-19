@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MIT
+#
+# Seed for the labd example: four GPU rigs at two sites. The resource name
+# the provider must report defaults to the setup name, so the file
+# data/rigs/rig-a1 "deploys" the setup rig-a1.
+default_weight: 1
+
+setups:
+  - name: rig-a1
+    labels: {site: east, gpu: "true"}
+    details: {host: rig-a1.lab.example, gpus: 4}
+  - name: rig-a2
+    labels: {site: east, gpu: "false"}
+    details: {host: rig-a2.lab.example}
+  - name: rig-b1
+    labels: {site: west, gpu: "true"}
+    details: {host: rig-b1.lab.example, gpus: 8}
+  - name: rig-b2
+    # Closed to new holds by the logfile hook while this label is "true".
+    labels: {site: west, gpu: "false", maintenance: "true"}
+    details: {host: rig-b2.lab.example}
+
+# Rate rules turn labels into a weight; the first match wins. The
+# business-hours policy can still override the weight per decision.
+rate_rules:
+  - selector: gpu=true
+    weight: 2
