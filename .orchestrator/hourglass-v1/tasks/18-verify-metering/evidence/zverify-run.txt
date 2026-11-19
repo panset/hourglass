@@ -1,0 +1,104 @@
+=== RUN   TestE2E_AcceptancePath
+2026/11/19 07:36:30 INFO ledger period closed period=2026-11 next=2026-12 users=1
+--- PASS: TestE2E_AcceptancePath (0.33s)
+=== RUN   TestHOLD1_ConcurrentLimit
+--- PASS: TestHOLD1_ConcurrentLimit (0.70s)
+=== RUN   TestHOLD1_TwoUsersOneSetup
+--- PASS: TestHOLD1_TwoUsersOneSetup (0.52s)
+=== RUN   TestHOLD1_RefusalOrder
+--- PASS: TestHOLD1_RefusalOrder (0.09s)
+=== RUN   TestHOLD2_TeardownMatrix
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=false/ok=false/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=false/ok=false/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=false/ok=true/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=false/ok=true/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=true/ok=false/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=true/ok=false/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=true/ok=true/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=false/set=true/ok=true/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=false/ok=false/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=false/ok=false/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=false/ok=true/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=false/ok=true/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=true/ok=false/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=true/ok=false/rep=true
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=true/ok=true/rep=false
+=== RUN   TestHOLD2_TeardownMatrix/prov=true/set=true/ok=true/rep=true
+--- PASS: TestHOLD2_TeardownMatrix (0.80s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=false/ok=false/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=false/ok=false/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=false/ok=true/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=false/ok=true/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=true/ok=false/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=true/ok=false/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=true/ok=true/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=false/set=true/ok=true/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=false/ok=false/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=false/ok=false/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=false/ok=true/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=false/ok=true/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=true/ok=false/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=true/ok=false/rep=true (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=true/ok=true/rep=false (0.05s)
+    --- PASS: TestHOLD2_TeardownMatrix/prov=true/set=true/ok=true/rep=true (0.05s)
+=== RUN   TestHOLD2_ForceRelease
+--- PASS: TestHOLD2_ForceRelease (0.08s)
+=== RUN   TestEXT6_SlowHookDoesNotDelayPoll
+--- PASS: TestEXT6_SlowHookDoesNotDelayPoll (0.08s)
+=== RUN   TestD15_BalanceEventsOnce
+--- PASS: TestD15_BalanceEventsOnce (0.20s)
+=== RUN   TestMET4_ClockBackwardsChargesNothing
+    money_test.go:55: clock moved back 10:10 -> 10:07 charged 67 mt again (samples [0 167 67 167]); 10:05-10:07 was already charged
+--- FAIL: TestMET4_ClockBackwardsChargesNothing (0.09s)
+=== RUN   TestMET5_TwoCollectorsSameInstant
+--- PASS: TestMET5_TwoCollectorsSameInstant (0.08s)
+=== RUN   TestMET5_RestartBetweenPolls
+--- PASS: TestMET5_RestartBetweenPolls (0.09s)
+=== RUN   TestMET5_TwoCollectorsOneSecondApart
+    money_test.go:104: OBSERVATION: two instances 1s apart charge 168 mt for 5 min (want 167)
+--- PASS: TestMET5_TwoCollectorsOneSecondApart (0.08s)
+=== RUN   TestMET4_PolicyErrorOnLastHoldNoPartialWrites
+--- PASS: TestMET4_PolicyErrorOnLastHoldNoPartialWrites (0.13s)
+=== RUN   TestMET3_ClosedDatabaseFailsCleanly
+--- PASS: TestMET3_ClosedDatabaseFailsCleanly (0.06s)
+=== RUN   TestMET3_ReleasedBetweenPolls
+--- PASS: TestMET3_ReleasedBetweenPolls (0.08s)
+=== RUN   TestSET5_DisabledMidHold
+--- PASS: TestSET5_DisabledMidHold (0.07s)
+=== RUN   TestRULE4_RuleChangeForwardOnly
+--- PASS: TestRULE4_RuleChangeForwardOnly (0.08s)
+=== RUN   TestADM2_PollIntervalShortened
+    money_test.go:264: after shortening poll_interval 5m->1m the next poll charged 0 mt, want 167 (gap judged against the new interval => outage)
+--- FAIL: TestADM2_PollIntervalShortened (0.07s)
+=== RUN   TestMET3_PolicyWeightOverrideAndZeroWeight
+--- PASS: TestMET3_PolicyWeightOverrideAndZeroWeight (0.13s)
+=== RUN   TestMET3_ReleasedDuringPollNotCharged
+--- PASS: TestMET3_ReleasedDuringPollNotCharged (0.08s)
+=== RUN   TestLED3_BoundaryExactlyMidnightLocal
+2026/11/19 07:36:33 INFO ledger period closed period=2026-11 next=2026-12 users=1
+--- PASS: TestLED3_BoundaryExactlyMidnightLocal (0.05s)
+=== RUN   TestLED3_DownAcrossTwoBoundaries
+2026/11/19 07:36:33 INFO ledger period closed period=2026-10 next=2026-11 users=1
+2026/11/19 07:36:33 INFO ledger period closed period=2026-11 next=2026-12 users=1
+--- PASS: TestLED3_DownAcrossTwoBoundaries (0.05s)
+=== RUN   TestLED3_PollAtBoundaryBeforeRollover
+2026/11/19 07:36:33 INFO ledger period closed period=2026-11 next=2026-12 users=1
+    rollover_test.go:96: between a 00:00 poll and the rollover the balance cache is -167 and acquire is refused: Your token balance is zero or below.
+--- FAIL: TestLED3_PollAtBoundaryBeforeRollover (0.08s)
+=== RUN   TestLED3_ApprovedDuringPendingRollover
+2026/11/19 07:36:33 INFO ledger period closed period=2026-11 next=2026-12 users=2
+--- PASS: TestLED3_ApprovedDuringPendingRollover (0.05s)
+=== RUN   TestLED3_AllowanceChangeNextRolloverAndUntouched
+2026/11/19 07:36:34 INFO ledger period closed period=2026-11 next=2026-12 users=2
+--- PASS: TestLED3_AllowanceChangeNextRolloverAndUntouched (0.06s)
+=== RUN   TestLED3_DebtSurvivesRoleRemovalAcrossRollover
+2026/11/19 07:36:34 INFO ledger period closed period=2026-11 next=2026-12 users=1
+    rollover_test.go:163: role removed over the rollover then restored: balance 300000, want 260000 (the -40 debt was dropped)
+--- FAIL: TestLED3_DebtSurvivesRoleRemovalAcrossRollover (0.05s)
+=== RUN   TestADM2_SettingsBoundaries
+--- PASS: TestADM2_SettingsBoundaries (0.00s)
+=== RUN   TestADM2_SettingsJSONRoundTripAndChangedOnly
+--- PASS: TestADM2_SettingsJSONRoundTripAndChangedOnly (0.00s)
+FAIL
+FAIL	github.com/panset/hourglass/internal/zverify	4.476s
+FAIL

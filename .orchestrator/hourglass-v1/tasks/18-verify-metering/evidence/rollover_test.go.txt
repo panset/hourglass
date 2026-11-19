@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: MIT
+
+package zverify
+
+import (
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/store"
+)
+
+func ny(t *testing.T) *time.Location {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip(err)
+	}
+	return loc
+}
+
+// LED-3: the boundary is exactly 00:00 local.
+func TestLED3_BoundaryExactlyMidnightLocal(t *testing.T) {
+	loc := ny(t)
+	w := newWorld(t, opts{start: time.Date(2026, 11, 15, 12, 0, 0, 0, loc), loc: loc, policy: meterAll()})
+	u := w.approve("dev")
+	w.clk.Set(time.Date(2026, 11, 30, 23, 59, 59, 999e6, loc))
+	if c, _ := w.led.RolloverDue(bg); len(c) != 0 {
+		t.Fatalf("closed early %v", c)
+	}
+	w.clk.Set(time.Date(2026, 12, 1, 0, 0, 0, 0, loc)) // 05:00 UTC
+	if c, _ := w.led.RolloverDue(bg); !reflect.DeepEqual(c, []string{"2026-11"}) {
+		t.Fatalf("closed %v", c)
+	}
+	if c, _ := w.led.RolloverDue(bg); len(c) != 0 {
+		t.Fatalf("second run closed %v", c)
+	}
+	if b := w.balance(u); b != 300000 {
+		t.Fatalf("balance %d", b)
+	}
+	if n := w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND period='2026-11'`, u); n != 0 {
+		t.Fatalf("Nov not zeroed by expiry: %d", n)
+	}
+}
+
+// D17: process down across two boundaries; debt carries through.
+func TestLED3_DownAcrossTwoBoundaries(t *testing.T) {
+	w := newWorld(t, opts{start: time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC), policy: meterAll()})
+	admin, _ := w.st.CreateLocalAdmin(bg, "admin", "x", false, w.clk.Now())
+	u := w.approve("dev")
+	w.led.Grant(bg, admin.ID, u, -340000, "to -40")
+	w.clk.Set(time.Date(2026, 12, 15, 0, 0, 0, 0, time.UTC))
+	c, err := w.led.RolloverDue(bg)
+	if err != nil || !reflect.DeepEqual(c, []string{"2026-10", "2026-11"}) {
+		t.Fatalf("%v %v", c, err)
+	}
+	// Oct -40 -> Nov 260 (no activity) -> expiry 260, Dec 300.
+	if b := w.balance(u); b != 300000 {
+		t.Fatalf("balance %d", b)
+	}
+	if n := w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND period='2026-11'`, u); n != 0 {
+		t.Fatalf("Nov sum %d", n)
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM ledger WHERE user_id=? AND period='2026-11' AND type='carryover'`, u); n != 1 {
+		t.Fatalf("Nov carryover %d", n)
+	}
+}
+
+// A poll at exactly 00:00:00 before the rollover runs (e.g. RunOnce without Run,
+// or Run's rollover read the clock a moment before the boundary).
+func TestLED3_PollAtBoundaryBeforeRollover(t *testing.T) {
+	w, u, h := started(t, nil) // t0 = 2026-11-10 10:00 UTC
+	w.clk.Set(time.Date(2026, 11, 30, 23, 55, 0, 0, time.UTC))
+	w.poll() // outage (long gap), nothing charged
+	w.clk.Set(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	w.poll() // 167, lands in 2026-12 before the rollover
+	cache := w.balance(u)
+	if cache != -167 {
+		t.Logf("cache before rollover %d", cache)
+	}
+	// Enforcement on: is the user refused acquire between the poll and rollover?
+	w.setting("enforcement", "true")
+	s2 := w.setup("lab-02", nil)
+	_, acqErr := w.holds.Acquire(bg, u, s2)
+	if _, err := w.led.RolloverDue(bg); err != nil {
+		t.Fatal(err)
+	}
+	w.checkMoney()
+	nov := w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND period='2026-11'`, u)
+	dec := w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND period='2026-12'`, u)
+	total := w.q1(`SELECT -SUM(amount_mt) FROM ledger WHERE user_id=? AND type='debit'`, u)
+	if nov != 0 || dec != 300000-167 || total != w.q1(`SELECT SUM(debit_mt) FROM usage_samples WHERE hold_id=?`, h) {
+		t.Fatalf("nov %d dec %d total %d", nov, dec, total)
+	}
+	if acqErr != nil {
+		t.Errorf("between a 00:00 poll and the rollover the balance cache is %d and acquire is refused: %v", cache, acqErr)
+	}
+}
+
+// User approved while a rollover is pending gets exactly one allowance.
+func TestLED3_ApprovedDuringPendingRollover(t *testing.T) {
+	w := newWorld(t, opts{start: time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC), policy: meterAll()})
+	w.approve("old")
+	w.clk.Set(time.Date(2026, 12, 1, 0, 0, 30, 0, time.UTC))
+	nu := w.approve("new") // before RolloverDue runs
+	if b := w.balance(nu); b != 0 {
+		t.Logf("pre-rollover balance of new user %d", b)
+	}
+	if _, err := w.led.RolloverDue(bg); err != nil {
+		t.Fatal(err)
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM ledger WHERE user_id=? AND type='allowance'`, nu); n != 1 {
+		t.Fatalf("allowances %d", n)
+	}
+	if b := w.balance(nu); b != 300000 {
+		t.Fatalf("balance %d", b)
+	}
+}
+
+// Allowance change mid-month applies from the next rollover only; local admin
+// and role-less users untouched.
+func TestLED3_AllowanceChangeNextRolloverAndUntouched(t *testing.T) {
+	w := newWorld(t, opts{start: time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC), policy: meterAll()})
+	admin, _ := w.st.CreateLocalAdmin(bg, "admin", "x", false, w.clk.Now())
+	u := w.approve("dev")
+	roleless, _ := w.st.CreateOIDCUser(bg, "nobody", "n@example.test", "n", w.clk.Now())
+	w.setting("default_allowance", "200")
+	if b := w.balance(u); b != 300000 {
+		t.Fatalf("mid-month change touched balance %d", b)
+	}
+	late := w.approve("late") // approved after the change: gets 200 now
+	w.clk.Set(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	w.led.RolloverDue(bg)
+	if b := w.balance(u); b != 200000 {
+		t.Fatalf("after rollover %d", b)
+	}
+	if b := w.balance(late); b != 200000 {
+		t.Fatalf("late %d", b)
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM ledger WHERE user_id IN (?,?)`, admin.ID, roleless.ID); n != 0 {
+		t.Fatalf("admin/roleless rows %d", n)
+	}
+	if _, err := w.holds.Acquire(bg, admin.ID, w.setup("x", nil)); holds.CodeOf(err) != holds.CodeForbidden {
+		t.Fatalf("admin acquire %v", err)
+	}
+	_ = store.RoleAdmin
+}
+
+// LED-3 "debt carries over": a user whose roles are removed before the
+// rollover and restored after it.
+func TestLED3_DebtSurvivesRoleRemovalAcrossRollover(t *testing.T) {
+	w := newWorld(t, opts{start: time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC), policy: meterAll()})
+	admin, _ := w.st.CreateLocalAdmin(bg, "admin", "x", false, w.clk.Now())
+	u := w.approve("dev")
+	w.approve("other") // keeps the rollover non-empty
+	w.led.Grant(bg, admin.ID, u, -340000, "to -40")
+	w.st.SetUserRoles(bg, u, nil) // admin removes all roles (no holds)
+	w.clk.Set(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	w.led.RolloverDue(bg)
+	w.clk.Set(time.Date(2026, 12, 2, 0, 0, 0, 0, time.UTC))
+	w.grantRole(u)
+	if b := w.balance(u); b != 260000 {
+		t.Errorf("role removed over the rollover then restored: balance %d, want 260000 (the -40 debt was dropped)", b)
+	}
+}

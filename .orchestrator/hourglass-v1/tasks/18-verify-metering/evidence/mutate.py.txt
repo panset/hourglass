@@ -1,0 +1,46 @@
+import subprocess, sys, pathlib
+root = pathlib.Path(sys.argv[1])
+M = [
+ ("M1 skip idempotence", "internal/collector/collector.go", "if inserted && debit > 0 {", "if (inserted || true) && debit > 0 {", ["collector"]),
+ ("M2 charge on metering-start poll", "internal/collector/collector.go",
+  "\t\t} else {\n\t\t\tdebit = metering.DebitMT(weight, mult, elapsed)\n\t\t}", "\t\t}\n\t\tdebit = metering.DebitMT(weight, mult, elapsed)", ["collector"]),
+ ("M3 emit before commit", "internal/collector/collector.go",
+  "\treturn append(evs, balanceEvents...), debited, nil", "\tfor _, e := range append(evs, balanceEvents...) {\n\t\tc.emit(e)\n\t}\n\treturn nil, debited, nil", ["collector"]),
+ ("M4 drop limit re-check in tx", "internal/holds/holds.go",
+  "\t\tif n >= cfg.MaxHoldsPerUser {\n\t\t\treturn limitErr(cfg.MaxHoldsPerUser)\n\t\t}\n\t\th, err = tx.CreateHold", "\t\t_ = n\n\t\th, err = tx.CreateHold", ["holds"]),
+ ("M5 off-by-one 2x cap", "internal/metering/metering.go", "if gap > 2*pollInterval {", "if gap >= 2*pollInterval {", ["collector"]),
+ ("M6 carry positive balances", "internal/ledger/ledger.go", "\tcase closingBalanceMT < 0:", "\tcase closingBalanceMT != 0:", ["ledger"]),
+ ("M6b carry positive balances (service-level mutation)", "internal/ledger/service.go",
+  "Rollover(u.ID, closing, cfg.DefaultAllowanceMT, old, next, at)", "Rollover(u.ID, closing-closing*2*boolI(closing > 0), cfg.DefaultAllowanceMT, old, next, at)", ["ledger"]),
+ ("M7 enforcement ignored", "internal/holds/holds.go", "if cfg.Enforcement && u.BalanceMT <= 0 {", "if u.BalanceMT <= 0 {", ["holds"]),
+ ("M8 veto continues past error", "internal/events/events.go",
+  "\t\tif err := d.deliver(ctx, h, e); err != nil {\n\t\t\treturn &VetoError", "\t\tif err := d.deliver(ctx, h, e); err != nil && false {\n\t\t\treturn &VetoError", ["events"]),
+ ("M9 first allowance twice", "internal/ledger/service.go", "\tif err != nil || n > 0 {\n\t\treturn err\n\t}\n\tcfg, err := settings.Load", "\tif err != nil {\n\t\treturn err\n\t}\n\t_ = n\n\tcfg, err := settings.Load", ["ledger"]),
+ ("M10 charge released hold", "internal/collector/collector.go", "\tif cur.ReleasedAt != nil {\n\t\treturn nil, false, nil", "\tif cur.ReleasedAt != nil && false {\n\t\treturn nil, false, nil", ["collector"]),
+ ("M11 debit cache period from at instead of clock", "internal/ledger/service.go", "\tcur := s.CurrentPeriod()\n\tbefore, err := tx.SumLedger(ctx, userID, cur, \"\")\n\tif err != nil {\n\t\treturn BalanceCrossings{}, err\n\t}\n\te := Debit", "\tcur := \"1999-01\"\n\tbefore, err := tx.SumLedger(ctx, userID, cur, \"\")\n\tif err != nil {\n\t\treturn BalanceCrossings{}, err\n\t}\n\te := Debit", ["ledger","collector"]),
+ ("M12 smoothing ignores history", "internal/collector/collector.go", "\t\t\tsamples = append(samples, metering.Sample{At: p.PolledAt, Raw: p.Raw})\n", "", ["collector"]),
+ ("M13 force-release without audit", "internal/holds/holds.go", "\t\tif opts.Force {\n\t\t\tafter, _ :=", "\t\tif opts.Force && false {\n\t\t\tafter, _ :=", ["holds"]),
+]
+import os
+only = sys.argv[2].split(',') if len(sys.argv) > 2 and sys.argv[2] else None
+extra_pkgs = sys.argv[3].split(',') if len(sys.argv) > 3 else []
+for name, f, old, new, pkgs in M:
+    if only and name.split()[0] not in only: continue
+    pkgs = pkgs + extra_pkgs
+    name = name + (' [+' + ','.join(extra_pkgs) + ']' if extra_pkgs else '')
+    p = root / f
+    src = p.read_text()
+    if src.count(old) != 1:
+        print(f"{name}: PATTERN NOT FOUND ({src.count(old)})"); continue
+    extra = ""
+    if "boolI" in new:
+        extra = "\nfunc boolI(b bool) int64 { if b { return 1 }; return 0 }\n"
+    p.write_text(src.replace(old, new) + extra)
+    try:
+        r = subprocess.run(["go","test","-count=1"] + [f"./internal/{x}/" for x in pkgs], cwd=root, capture_output=True, text=True, timeout=600)
+        out = r.stdout + r.stderr
+        fails = [l.strip() for l in out.splitlines() if l.startswith("--- FAIL") or "build failed" in l or "[build failed]" in l]
+        verdict = "KILLED" if r.returncode != 0 else "SURVIVED"
+        print(f"{name}: {verdict}; {fails[:4]}")
+    finally:
+        p.write_text(src)

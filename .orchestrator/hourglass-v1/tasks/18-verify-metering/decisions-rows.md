@@ -1,0 +1,15 @@
+| 2026-11-19 | "Previous successful poll" is the newest ok run strictly before T, read from `collector_runs`. **REVIEW**: it double-charges when the clock steps back (task 18 finding 1); it should be the newest ok run regardless of T, with no charge when T <= prev. | Restart-safe and same-instant idempotent. | agent |
+| 2026-11-19 | A debit is booked in the period of the poll's timestamp, so the interval ending at 00:00 lands in the new month. **REVIEW** | Simplest rule; nothing is lost. The alternative books it to the month the time was used. | agent |
+| 2026-11-19 | No first allowance is written while a rollover is pending; the rollover gives it instead. | Keeps the newest-allowance rule of D21 able to detect the pending rollover. | agent |
+| 2026-11-19 | A user without a role at rollover is skipped, and a role given back later writes a fresh allowance, so debt from before the role removal is dropped. **REVIEW** (task 18 finding 2) | LED-3 limits rollover to users with a role; the spec says nothing on removal followed by re-adding a role. | agent |
+| 2026-11-19 | A rollover period in which no user qualifies writes nothing and is not emitted as closed. | Otherwise the newest-allowance rule would re-close it on every run. | agent |
+| 2026-11-19 | `usage_samples.pressure` stores the smoothed pressure that the multiplier came from. | The spec does not say raw or smoothed; smoothed explains the debit. | agent |
+| 2026-11-19 | Pressure source and policy calls get the same 30 s timeout as the provider; a negative or non-finite policy weight fails the poll. | Keeps a hung extension from stalling metering. | agent |
+| 2026-11-19 | Outage polls and the first poll still write zero-debit samples and can start metering. | The metering start is recorded even when nothing is charged. | agent |
+| 2026-11-19 | The 2x gap cap is judged against the poll interval in force at the new poll. **REVIEW**: shortening the interval makes the next poll a false outage (task 18 finding 4). | Simplest reading of MET-4. | agent |
+| 2026-11-19 | A force-release audit row has `after_json` only. **REVIEW**: ADM-3 asks for before and after values. | The before state is implied by the hold row. | agent |
+| 2026-11-19 | The acquire balance check uses the cached `users.balance_mt`; the hold limit is re-checked inside the write transaction after the veto. | The cache is the current period's sum (LED-2); the re-check closes the concurrent-acquire race. | agent |
+| 2026-11-19 | Release authorisation: the owner releases their own hold; an admin needs Force (with a non-blank reason) for anyone else's; Force by a non-admin is forbidden. | HOLD-2. | agent |
+| 2026-11-19 | `hold.acquiring` carries a Hold with ID 0 and AcquiredAt set to the pending time. | The hold does not exist yet. | agent |
+| 2026-11-19 | Settings JSON: absent fields take their defaults, unknown fields are rejected, allowance is in whole tokens, poll_interval is a duration string. | A stable API form. | agent |
+| 2026-11-19 | Hook calls run in their own goroutine, so a hook that ignores its context is abandoned at the timeout. | EXT-6 timeout without trusting the hook. | agent |

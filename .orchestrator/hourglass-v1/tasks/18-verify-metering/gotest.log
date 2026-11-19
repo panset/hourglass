@@ -1,0 +1,10 @@
+ok  	github.com/panset/hourglass/internal/collector	3.238s
+ok  	github.com/panset/hourglass/internal/events	1.633s
+ok  	github.com/panset/hourglass/internal/holds	2.439s
+ok  	github.com/panset/hourglass/internal/ledger	2.050s
+ok  	github.com/panset/hourglass/internal/metering	1.163s
+ok  	github.com/panset/hourglass/internal/rules	1.176s
+ok  	github.com/panset/hourglass/internal/settings	1.257s
+ok  	github.com/panset/hourglass/internal/store	2.416s
+ok  	github.com/panset/hourglass/internal/version	1.153s
+test exit 0

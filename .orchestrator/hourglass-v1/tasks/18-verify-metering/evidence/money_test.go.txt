@@ -1,0 +1,317 @@
+// SPDX-License-Identifier: MIT
+
+package zverify
+
+import (
+	"context"
+	"errors"
+	"reflect"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/collector"
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+	"github.com/panset/hourglass/pkg/hourglasstest"
+)
+
+var t0 = time.Date(2026, 11, 10, 10, 0, 0, 0, time.UTC)
+
+// meterAll is a fake policy that always meters.
+func meterAll() *hourglasstest.FakePolicy {
+	p := hourglasstest.NewFakePolicy()
+	p.SetDefault(hourglass.Decision{Meter: true, Reason: "verify"})
+	return p
+}
+
+// started returns a world with one weight-2 hold whose metering started at t0.
+func started(t *testing.T, pol hourglass.MeteringPolicy) (*world, int64, int64) {
+	if pol == nil {
+		pol = meterAll()
+	}
+	w := newWorld(t, opts{start: t0, policy: pol})
+	w.rules(store.Rule{Selector: "tier=gold", Value: 2})
+	u := w.approve("dev")
+	s := w.setup("lab-01", map[string]string{"tier": "gold"})
+	h, err := w.holds.Acquire(bg, u, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.poll() // t0: metering starts, no charge
+	return w, u, h.ID
+}
+
+// MET-4/MET-5: a clock that moves backwards must charge nothing.
+func TestMET4_ClockBackwardsChargesNothing(t *testing.T) {
+	w, u, h := started(t, nil)
+	w.step(5 * time.Minute) // 10:05 167
+	w.step(5 * time.Minute) // 10:10 167
+	before := w.balance(u)
+	w.clk.Set(t0.Add(7 * time.Minute)) // NTP step back to 10:07
+	w.poll()
+	if got := w.balance(u); got != before {
+		t.Errorf("clock moved back 10:10 -> 10:07 charged %d mt again (samples %v); 10:05-10:07 was already charged",
+			before-got, w.debitsOf(h))
+	}
+}
+
+// MET-5: two collectors on one database at the same clock time charge once.
+func TestMET5_TwoCollectorsSameInstant(t *testing.T) {
+	w, u, _ := started(t, nil)
+	c2 := w.newCollector()
+	w.clk.Advance(5 * time.Minute)
+	var wg sync.WaitGroup
+	for _, c := range []*collector.Collector{w.col, c2} {
+		wg.Add(1)
+		go func(c *collector.Collector) { defer wg.Done(); _ = c.RunOnce(bg) }(c)
+	}
+	wg.Wait()
+	w.checkMoney()
+	if got := w.balance(u); got != 300000-167 {
+		t.Errorf("balance %d want %d", got, 300000-167)
+	}
+}
+
+// Restarted collector between polls charges only the time since the last
+// successful poll.
+func TestMET5_RestartBetweenPolls(t *testing.T) {
+	w, u, h := started(t, nil)
+	w.step(5 * time.Minute) // 10:05 167
+	w.col = w.newCollector()
+	w.step(2 * time.Minute) // 10:07 restart poll: 2 min weight 2 1x = 66.67 -> 67
+	w.step(5 * time.Minute) // 10:12 167
+	if got, want := w.debitsOf(h), []int64{0, 167, 67, 167}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("debits %v want %v", got, want)
+	}
+	if b := w.balance(u); b != 300000-167-67-167 {
+		t.Fatalf("balance %d", b)
+	}
+}
+
+// Two collectors one second apart (spec: single instance; recorded as an observation).
+func TestMET5_TwoCollectorsOneSecondApart(t *testing.T) {
+	w, u, _ := started(t, nil)
+	c2 := w.newCollector()
+	w.clk.Advance(5 * time.Minute)
+	w.poll()
+	w.clk.Advance(time.Second)
+	if err := c2.RunOnce(bg); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.balance(u); got != 300000-167 {
+		t.Logf("OBSERVATION: two instances 1s apart charge %d mt for 5 min (want 167)", 300000-got)
+	}
+}
+
+// failOnNth fails the policy for the Nth hold of a poll.
+type failLast struct {
+	*hourglasstest.FakePolicy
+	mu   sync.Mutex
+	fail bool
+	n    int
+}
+
+func (f *failLast) Decide(ctx context.Context, h hourglass.HoldState, s hourglass.Snapshot) (hourglass.Decision, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.n++
+	if f.fail && f.n == len(s.Holds) {
+		return hourglass.Decision{}, errors.New("policy boom on last hold")
+	}
+	return f.FakePolicy.Decide(ctx, h, s)
+}
+
+// MET-4: a policy error on the last hold fails the whole poll with no
+// partial writes; the next good poll charges per D12; poll.failed fires.
+func TestMET4_PolicyErrorOnLastHoldNoPartialWrites(t *testing.T) {
+	pol := &failLast{FakePolicy: meterAll()}
+	w := newWorld(t, opts{start: t0, policy: pol})
+	a, b := w.approve("a"), w.approve("b")
+	sa, sb := w.setup("lab-a", nil), w.setup("lab-b", nil)
+	w.holds.Acquire(bg, a, sa)
+	w.holds.Acquire(bg, b, sb)
+	pol.n = 0
+	w.poll()
+	pol.n = 0
+	w.step(5 * time.Minute) // 10:05: 83 each (weight 1)
+	samples := w.q1(`SELECT COUNT(*) FROM usage_samples`)
+	press := w.q1(`SELECT COUNT(*) FROM pressure_samples`)
+	led := w.q1(`SELECT COUNT(*) FROM ledger`)
+	pol.mu.Lock()
+	pol.fail, pol.n = true, 0
+	pol.mu.Unlock()
+	w.clk.Advance(5 * time.Minute)
+	if err := w.col.RunOnce(bg); err == nil {
+		t.Fatal("poll should fail")
+	}
+	if w.q1(`SELECT COUNT(*) FROM usage_samples`) != samples || w.q1(`SELECT COUNT(*) FROM pressure_samples`) != press ||
+		w.q1(`SELECT COUNT(*) FROM ledger`) != led {
+		t.Fatal("failed poll wrote rows")
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM collector_runs WHERE ok=0`); n != 1 {
+		t.Fatalf("failed runs %d", n)
+	}
+	pol.mu.Lock()
+	pol.fail, pol.n = false, 0
+	pol.mu.Unlock()
+	w.step(5 * time.Minute) // 10:15: 10 min since 10:05 = exactly 2x interval: charged in full (D12) = 167
+	if bal := w.balance(a); bal != 300000-83-167 {
+		t.Fatalf("balance a %d", bal)
+	}
+	found := false
+	for _, ty := range w.eventTypes() {
+		found = found || ty == hourglass.EventPollFailed
+	}
+	if !found {
+		t.Fatal("no poll.failed")
+	}
+	// Two more failed polls then a good one: gap 15 min > 10 -> outage, not charged.
+	pol.mu.Lock()
+	pol.fail = true
+	pol.mu.Unlock()
+	for i := 0; i < 2; i++ {
+		pol.mu.Lock()
+		pol.n = 0
+		pol.mu.Unlock()
+		w.clk.Advance(5 * time.Minute)
+		_ = w.col.RunOnce(bg)
+	}
+	pol.mu.Lock()
+	pol.fail, pol.n = false, 0
+	pol.mu.Unlock()
+	w.step(5 * time.Minute) // 10:30
+	if bal := w.balance(a); bal != 300000-83-167 {
+		t.Fatalf("outage poll charged: balance a %d", bal)
+	}
+	outs, _ := w.st.ListOutages(bg, 10)
+	if len(outs) != 1 || !outs[0].StartedAt.Equal(t0.Add(15*time.Minute)) || !outs[0].EndedAt.Equal(t0.Add(30*time.Minute)) {
+		t.Fatalf("outages %+v", outs)
+	}
+}
+
+// A DB closed mid-life: the poll fails, nothing partial.
+func TestMET3_ClosedDatabaseFailsCleanly(t *testing.T) {
+	w, u, _ := started(t, nil)
+	before := w.balance(u)
+	w.st.Close()
+	w.clk.Advance(5 * time.Minute)
+	if err := w.col.RunOnce(bg); err == nil {
+		t.Fatal("expected error")
+	}
+	if b := w.q1(`SELECT balance_mt FROM users WHERE id=?`, u); b != before {
+		t.Fatalf("balance changed %d", b)
+	}
+}
+
+// A hold released between polls gets no further debit.
+func TestMET3_ReleasedBetweenPolls(t *testing.T) {
+	w, u, h := started(t, nil)
+	w.step(5 * time.Minute)
+	w.clk.Advance(3 * time.Minute)
+	if _, err := w.holds.Release(bg, u, h, struct {
+		Force  bool
+		Reason string
+	}{}); err != nil {
+		t.Fatal(err)
+	}
+	w.step(2 * time.Minute)
+	w.step(5 * time.Minute)
+	if got, want := w.debitsOf(h), []int64{0, 167}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("debits %v", got)
+	}
+}
+
+// SET-5 bypassed at store level: a setup disabled mid-hold keeps being
+// charged but leaves the Snapshot; delete is refused by the FK.
+func TestSET5_DisabledMidHold(t *testing.T) {
+	w, u, h := started(t, nil)
+	s, _ := w.st.GetSetup(bg, 1)
+	s.Enabled = false
+	if err := w.st.UpdateSetup(bg, s); err != nil {
+		t.Fatal(err)
+	}
+	w.step(5 * time.Minute)
+	if got := w.debitsOf(h); len(got) != 2 || got[1] != 167 {
+		t.Fatalf("debits %v", got)
+	}
+	if err := w.st.DeleteSetup(bg, 1); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("delete with hold: %v", err)
+	}
+	_ = u
+}
+
+// RULE-4 / ADM-2: rule change and poll interval change between polls.
+func TestRULE4_RuleChangeForwardOnly(t *testing.T) {
+	w, _, h := started(t, nil)
+	w.step(5 * time.Minute) // 167 at weight 2
+	w.rules(store.Rule{Selector: "tier=gold", Value: 4})
+	w.step(5 * time.Minute) // 333 at weight 4 (whole interval at the new weight)
+	s, _ := w.st.ListUsageSamples(bg, h)
+	if s[1].DebitMT != 167 || s[1].Weight != 2 || s[2].DebitMT != 333 || s[2].Weight != 4 {
+		t.Fatalf("samples %+v", s)
+	}
+}
+
+func TestADM2_PollIntervalShortened(t *testing.T) {
+	w, u, _ := started(t, nil)
+	w.step(5 * time.Minute)
+	b := w.balance(u)
+	w.setting("poll_interval", `"1m"`)
+	w.step(5 * time.Minute) // the wait already scheduled at 5m elapses; next poll sees 1m interval
+	if got := b - w.balance(u); got != 167 {
+		t.Errorf("after shortening poll_interval 5m->1m the next poll charged %d mt, want 167 (gap judged against the new interval => outage)", got)
+	}
+}
+
+func TestMET3_PolicyWeightOverrideAndZeroWeight(t *testing.T) {
+	pol := hourglasstest.NewFakePolicy()
+	pol.SetDefault(hourglass.Decision{Meter: true, Weight: 3, Reason: "override"})
+	w, u, h := started(t, pol)
+	w.step(5 * time.Minute) // 3 x 1 x 5/60 = 250
+	s, _ := w.st.ListUsageSamples(bg, h)
+	if s[1].DebitMT != 250 || s[1].RuleSelector != "" || w.balance(u) != 300000-250 {
+		t.Fatalf("override sample %+v", s[1])
+	}
+
+	w2, u2, h2 := started(t, nil)
+	w2.rules(store.Rule{Selector: "tier=gold", Value: 0})
+	w2.step(5 * time.Minute)
+	s2, _ := w2.st.ListUsageSamples(bg, h2)
+	if len(s2) != 2 || s2[1].DebitMT != 0 || w2.balance(u2) != 300000 ||
+		w2.q1(`SELECT COUNT(*) FROM ledger WHERE type='debit'`) != 0 {
+		t.Fatalf("weight 0: %+v", s2)
+	}
+}
+
+// releasingPolicy releases the hold while the poll is deciding (between the
+// collector's snapshot read and its transaction).
+type releasingPolicy struct {
+	*hourglasstest.FakePolicy
+	w    *world
+	user int64
+	arm  bool
+}
+
+func (p *releasingPolicy) Decide(ctx context.Context, h hourglass.HoldState, s hourglass.Snapshot) (hourglass.Decision, error) {
+	if p.arm {
+		p.arm = false
+		if _, err := p.w.holds.Release(ctx, p.user, h.Hold.ID, holds.ReleaseOpts{}); err != nil {
+			return hourglass.Decision{}, err
+		}
+	}
+	return p.FakePolicy.Decide(ctx, h, s)
+}
+
+func TestMET3_ReleasedDuringPollNotCharged(t *testing.T) {
+	pol := &releasingPolicy{FakePolicy: meterAll()}
+	w, u, h := started(t, pol)
+	pol.w, pol.user = w, u
+	w.step(5 * time.Minute)
+	pol.arm = true
+	w.step(5 * time.Minute)
+	if got := w.debitsOf(h); len(got) != 2 {
+		t.Fatalf("hold released mid-poll was charged: %v", got)
+	}
+}

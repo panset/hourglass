@@ -1,0 +1,235 @@
+// SPDX-License-Identifier: MIT
+
+package zverify
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// HOLD-1: 20 goroutines, 3 setups, limit 2, one user: never more than 2.
+func TestHOLD1_ConcurrentLimit(t *testing.T) {
+	for round := 0; round < 5; round++ {
+		w := newWorld(t, opts{start: t0, policy: meterAll()})
+		u := w.approve("dev")
+		ids := []int64{w.setup("a", nil), w.setup("b", nil), w.setup("c", nil)}
+		var wg sync.WaitGroup
+		var ok, other int32
+		var mu sync.Mutex
+		codes := map[string]int{}
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				_, err := w.holds.Acquire(bg, u, ids[i%3])
+				mu.Lock()
+				defer mu.Unlock()
+				if err == nil {
+					atomic.AddInt32(&ok, 1)
+				} else if c := holds.CodeOf(err); c != "" {
+					codes[c]++
+				} else {
+					other++
+					codes["raw:"+err.Error()]++
+				}
+			}(i)
+		}
+		wg.Wait()
+		if n := w.q1(`SELECT COUNT(*) FROM holds WHERE released_at IS NULL`); n > 2 || ok != int32(n) || n != 2 {
+			t.Fatalf("round %d: active holds %d ok %d codes %v", round, n, ok, codes)
+		}
+		if other > 0 {
+			t.Errorf("round %d: unmapped errors %v", round, codes)
+		}
+	}
+}
+
+// Two users racing for one setup: exactly one wins, the loser gets setup_held.
+func TestHOLD1_TwoUsersOneSetup(t *testing.T) {
+	for round := 0; round < 10; round++ {
+		w := newWorld(t, opts{start: t0, policy: meterAll()})
+		a, b := w.approve("a"), w.approve("b")
+		s := w.setup("x", nil)
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		for i, u := range []int64{a, b} {
+			wg.Add(1)
+			go func(i int, u int64) { defer wg.Done(); _, errs[i] = w.holds.Acquire(bg, u, s) }(i, u)
+		}
+		wg.Wait()
+		wins := 0
+		for _, e := range errs {
+			if e == nil {
+				wins++
+			} else if holds.CodeOf(e) != holds.CodeSetupHeld {
+				t.Fatalf("loser error %v", e)
+			}
+		}
+		if wins != 1 {
+			t.Fatalf("wins %d", wins)
+		}
+	}
+}
+
+// Order of refusals: role, not found, disabled, held, tokens, limit, veto.
+func TestHOLD1_RefusalOrder(t *testing.T) {
+	w := newWorld(t, opts{start: t0, policy: meterAll()})
+	admin, _ := w.st.CreateLocalAdmin(bg, "admin", "x", false, t0)
+	u := w.approve("dev")
+	other := w.approve("other")
+	nobody, _ := w.st.CreateOIDCUser(bg, "nobody", "n@example.test", "n", t0)
+	held := w.setup("held", nil)
+	w.holds.Acquire(bg, other, held)
+	dis, _ := w.st.CreateSetup(bg, store.Setup{Name: "dis", Enabled: false})
+	free := w.setup("free", nil)
+	w.setting("enforcement", "true")
+	w.setting("max_holds_per_user", "0")
+	w.led.Grant(bg, admin.ID, u, -300000, "zero")
+	check := func(user, setup int64, want string) {
+		t.Helper()
+		if _, err := w.holds.Acquire(bg, user, setup); holds.CodeOf(err) != want {
+			t.Errorf("user %d setup %d: got %v want %s", user, setup, err, want)
+		}
+	}
+	check(nobody.ID, 999, holds.CodeForbidden)
+	check(admin.ID, free, holds.CodeForbidden)
+	check(u, 999, holds.CodeNotFound)
+	check(u, dis, holds.CodeSetupDisabled)
+	check(u, held, holds.CodeSetupHeld)
+	check(u, free, holds.CodeInsufficientTokens)
+	w.setting("enforcement", "false") // shadow mode: zero balance does not block (MET-6)
+	check(u, free, holds.CodeHoldLimit)
+	w.setting("max_holds_per_user", "2")
+	w.hook.SetError(hourglass.EventHoldAcquiring, errors.New("no capacity in rack r1"))
+	_, err := w.holds.Acquire(bg, u, free)
+	if holds.CodeOf(err) != holds.CodeHookVeto || err.Error() != "no capacity in rack r1" {
+		t.Fatalf("veto: %v", err)
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM holds WHERE setup_id=?`, free); n != 0 {
+		t.Fatal("veto created a hold")
+	}
+	w.hook.SetError(hourglass.EventHoldAcquiring, nil)
+	check(u, free, "")
+}
+
+type fakePV struct{ ok, rep bool }
+
+func (p fakePV) OK() bool             { return p.ok }
+func (p fakePV) Reported(string) bool { return p.rep }
+
+// HOLD-2: teardown rule under each combination.
+func TestHOLD2_TeardownMatrix(t *testing.T) {
+	for _, prov := range []bool{false, true} {
+		for _, setting := range []bool{false, true} {
+			for _, pollOK := range []bool{false, true} {
+				for _, rep := range []bool{false, true} {
+					name := fmt.Sprintf("prov=%v/set=%v/ok=%v/rep=%v", prov, setting, pollOK, rep)
+					t.Run(name, func(t *testing.T) {
+						w := newWorld(t, opts{start: t0, policy: meterAll()})
+						u := w.approve("dev")
+						s := w.setup("x", nil)
+						h, _ := w.holds.Acquire(bg, u, s)
+						w.setting("release_requires_teardown", fmt.Sprint(setting))
+						svc := holds.NewService(holds.Deps{Store: w.st, Events: w.disp, Clock: w.clk, ProviderConfigured: prov,
+							Poll: func() holds.PollView {
+								if !pollOK {
+									return nil
+								}
+								return fakePV{ok: true, rep: rep}
+							}})
+						_, err := svc.Release(bg, u, h.ID, holds.ReleaseOpts{})
+						refuse := prov && setting && pollOK && rep
+						if refuse != (holds.CodeOf(err) == holds.CodeStillDeployed) || (!refuse && err != nil) {
+							t.Fatalf("refuse=%v err=%v", refuse, err)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+// HOLD-2 force-release: admin + reason, audited; developers cannot.
+func TestHOLD2_ForceRelease(t *testing.T) {
+	w := newWorld(t, opts{start: t0, policy: meterAll(), provider: true})
+	u := w.approve("dev")
+	other := w.approve("other")
+	adm := w.approve("adm")
+	w.st.SetUserRoles(bg, adm, []string{store.RoleAdmin})
+	s := w.setup("x", nil)
+	h, _ := w.holds.Acquire(bg, u, s)
+	w.prov.SetAllocations(alloc("x"))
+	w.poll()
+	if _, err := w.holds.Release(bg, other, h.ID, holds.ReleaseOpts{}); holds.CodeOf(err) != holds.CodeForbidden {
+		t.Fatalf("other: %v", err)
+	}
+	if _, err := w.holds.Release(bg, other, h.ID, holds.ReleaseOpts{Force: true, Reason: "x"}); holds.CodeOf(err) != holds.CodeForbidden {
+		t.Fatalf("other force: %v", err)
+	}
+	if _, err := w.holds.Release(bg, adm, h.ID, holds.ReleaseOpts{}); holds.CodeOf(err) != holds.CodeForbidden {
+		t.Fatalf("admin non-force on another's hold: %v", err)
+	}
+	if _, err := w.holds.Release(bg, adm, h.ID, holds.ReleaseOpts{Force: true, Reason: "  "}); holds.CodeOf(err) != holds.CodeValidation {
+		t.Fatalf("blank reason: %v", err)
+	}
+	if _, err := w.holds.Release(bg, adm, h.ID, holds.ReleaseOpts{Force: true, Reason: "left overnight"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM audit_log WHERE action='hold.force_release' AND actor_id=?`, adm); n != 1 {
+		t.Fatalf("audit rows %d", n)
+	}
+	if _, err := w.holds.Release(bg, adm, h.ID, holds.ReleaseOpts{Force: true, Reason: "again"}); holds.CodeOf(err) != holds.CodeNotFound {
+		t.Fatalf("second release: %v", err)
+	}
+	w.flush()
+	rel := w.hook.EventsOfType(hourglass.EventHoldReleased)
+	if len(rel) != 1 || rel[0].Data["forced"] != true || rel[0].User == nil || rel[0].User.ID != u {
+		t.Fatalf("released event %+v", rel)
+	}
+}
+
+// EXT-6: a slow hook never delays a poll or an acquire.
+func TestEXT6_SlowHookDoesNotDelayPoll(t *testing.T) {
+	w, u, _ := started(t, nil)
+	gate := make(chan struct{})
+	defer close(gate)
+	w.hook.SetGate(gate) // every Handle blocks until the 2 s timeout
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		w.clk.Advance(5 * time.Minute)
+		if err := w.col.RunOnce(bg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("3 polls took %s with a slow hook", d)
+	}
+	w.hook.SetGate(nil)
+	_ = u
+}
+
+// D15: balance.low and balance.overdrawn fire once across many debits.
+func TestD15_BalanceEventsOnce(t *testing.T) {
+	w, u, _ := started(t, nil)
+	admin, _ := w.st.CreateLocalAdmin(bg, "admin", "x", false, t0)
+	w.led.Grant(bg, admin.ID, u, -(300000 - 30200), "near low") // 30.2 tokens; low below 30
+	for i := 0; i < 5; i++ {
+		w.step(5 * time.Minute)
+	}
+	w.led.Grant(bg, admin.ID, u, -(w.balance(u) - 200), "near zero")
+	for i := 0; i < 5; i++ {
+		w.step(5 * time.Minute)
+	}
+	w.flush()
+	if l, o := len(w.hook.EventsOfType("balance.low")), len(w.hook.EventsOfType("balance.overdrawn")); l != 1 || o != 1 {
+		t.Fatalf("low %d overdrawn %d", l, o)
+	}
+}

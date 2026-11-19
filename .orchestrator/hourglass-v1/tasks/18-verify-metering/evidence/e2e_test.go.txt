@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: MIT
+
+package zverify
+
+import (
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// TestE2E_AcceptancePath walks the spec's acceptance path at package level
+// (HOLD-1..3, MET-1..5, LED-3) with hand-computed milli-token amounts.
+func TestE2E_AcceptancePath(t *testing.T) {
+	t0 := time.Date(2026, 11, 30, 10, 0, 0, 0, time.UTC)
+	w := newWorld(t, opts{start: t0, provider: true})
+	w.rules(store.Rule{Selector: "size=extralarge", Value: 4}, store.Rule{Selector: "size=large", Value: 2})
+	s1 := w.setup("lab-01", map[string]string{"size": "large"})
+	s2 := w.setup("lab-02", map[string]string{"size": "large"})
+	s3 := w.setup("lab-03", map[string]string{"size": "medium"})
+	admin, err := w.st.CreateLocalAdmin(bg, "admin", "x", false, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Role given -> allowance once, even if the role is assigned twice.
+	dev := w.approve("dev")
+	w.grantRole(dev)
+	if n := w.q1(`SELECT COUNT(*) FROM ledger WHERE user_id=? AND type='allowance'`, dev); n != 1 {
+		t.Fatalf("allowance entries = %d, want 1", n)
+	}
+	if b := w.balance(dev); b != 300000 {
+		t.Fatalf("balance = %d", b)
+	}
+	if b := w.balance(admin.ID); b != 0 {
+		t.Fatalf("local admin balance = %d", b)
+	}
+
+	w.poll() // 10:00 first poll: nothing to charge
+	w.clk.Advance(time.Minute)
+	h1, err := w.holds.Acquire(bg, dev, s1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.clk.Set(t0.Add(5 * time.Minute))
+	w.poll() // 10:05: not reported, < 2h: no metering
+	if got := w.debitsOf(h1.ID); len(got) != 0 {
+		t.Fatalf("samples before metering: %v", got)
+	}
+	w.prov.SetAllocations(alloc("lab-01"))
+	w.step(5 * time.Minute) // 10:10: metering starts, deployed, zero debit
+	hh, _ := w.st.GetHold(bg, h1.ID)
+	if hh.MeteringStartedAt == nil || !hh.MeteringStartedAt.Equal(t0.Add(10*time.Minute)) ||
+		hh.DeployedAt == nil || !hh.DeployedAt.Equal(t0.Add(10*time.Minute)) {
+		t.Fatalf("hold after 10:10: %+v", hh)
+	}
+	w.step(5 * time.Minute) // 10:15 weight 2, 1x, 5 min = 166.67 -> 167
+	w.pressure.SetValue(0.8)
+	w.step(5 * time.Minute) // 10:20 smoothed (0.6+0.6+0.8)/3=0.667 -> 1x -> 167
+	w.step(5 * time.Minute) // 10:25 (0.6+0.8+0.8)/3=0.733 -> 1x -> 167
+	w.step(5 * time.Minute) // 10:30 0.8 -> 2x -> 333
+	if got, want := w.debitsOf(h1.ID), []int64{0, 167, 167, 167, 333}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("debits %v want %v", got, want)
+	}
+	if b := w.balance(dev); b != 300000-167*3-333 {
+		t.Fatalf("balance %d", b)
+	}
+
+	w.clk.Advance(time.Minute)
+	if _, err := w.holds.Acquire(bg, dev, s2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.holds.Acquire(bg, dev, s3); holds.CodeOf(err) != holds.CodeHoldLimit {
+		t.Fatalf("third acquire: %v", err)
+	}
+	if _, err := w.holds.Release(bg, dev, h1.ID, holds.ReleaseOpts{}); holds.CodeOf(err) != holds.CodeStillDeployed {
+		t.Fatalf("release while reported: %v", err)
+	}
+	w.prov.SetAllocations()
+	w.clk.Set(t0.Add(35 * time.Minute))
+	w.poll() // 10:35: h1 still held, 2x -> 333; h2 not metering
+	if _, err := w.holds.Release(bg, dev, h1.ID, holds.ReleaseOpts{}); err != nil {
+		t.Fatalf("release after teardown: %v", err)
+	}
+	w.step(5 * time.Minute) // 10:40: nothing for h1
+	if got, want := w.debitsOf(h1.ID), []int64{0, 167, 167, 167, 333, 333}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("debits %v want %v", got, want)
+	}
+	bal := w.balance(dev)
+	if bal != 300000-167*3-333*2 {
+		t.Fatalf("balance %d", bal)
+	}
+
+	// Drive the balance to exactly -40 tokens with a correction grant.
+	if _, err := w.led.Grant(bg, admin.ID, dev, -40000-bal, "verify: drive to -40"); err != nil {
+		t.Fatal(err)
+	}
+	// Month rollover at 00:00 (UTC configured), as Run does: rollover then poll.
+	w.clk.Set(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	closed, err := w.led.RolloverDue(bg)
+	if err != nil || !reflect.DeepEqual(closed, []string{"2026-11"}) {
+		t.Fatalf("rollover %v %v", closed, err)
+	}
+	w.poll()
+	if b := w.balance(dev); b != 260000 {
+		t.Fatalf("balance after rollover = %d, want 260000", b)
+	}
+	if n := w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND period='2026-12' AND type='carryover'`, dev); n != -40000 {
+		t.Fatalf("carryover %d", n)
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM ledger WHERE user_id=?`, admin.ID); n != 0 {
+		t.Fatalf("local admin ledger rows %d", n)
+	}
+
+	var got []string
+	for _, ty := range w.eventTypes() {
+		if ty != hourglass.EventHoldAcquiring {
+			got = append(got, ty)
+		}
+	}
+	want := []string{"hold.acquired", "hold.metering_started", "hold.deployed", "hold.acquired", "hold.released",
+		"balance.low", "balance.overdrawn", "period.closed", "hold.metering_started"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("events\n got %v\nwant %v", got, want)
+	}
+	for _, e := range w.hook.Events() {
+		if e.Type == "hold.acquired" || e.Type == "hold.metering_started" || e.Type == "hold.deployed" || e.Type == "hold.released" {
+			if e.User == nil || e.Setup == nil || e.Hold == nil || e.Setup.Labels["size"] != "large" || string(e.Setup.Details) != `{"rack":"r1"}` {
+				t.Errorf("event %s missing payload: %+v", e.Type, e)
+			}
+		}
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM event_deliveries`); n != int64(len(w.hook.Events())) {
+		t.Errorf("delivery records %d, hook calls %d", n, len(w.hook.Events()))
+	}
+	if n := w.q1(`SELECT COUNT(*) FROM outages`); n != 1 {
+		t.Errorf("outages %d, want 1 (10:40 -> 00:00)", n)
+	}
+}

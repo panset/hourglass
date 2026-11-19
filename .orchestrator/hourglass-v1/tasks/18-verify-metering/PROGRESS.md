@@ -1,0 +1,6 @@
+- 2026-11-19 cloned HEAD e7bd862 into scratch verify-18; starting check 1
+- 2026-11-19 check 1 done: vet 0, go test -race ok, bazel 9/9, spdx and genericity OK; test counts recorded.
+- 2026-11-19 wrote adversarial suite in clone internal/zverify (copied to evidence/*.go.txt); e2e acceptance path passes with hand-computed amounts.
+- 2026-11-19 checks 3-7: 4 adversarial failures (clock backwards double charge; poll interval shortening outage; 00:00 poll before rollover; debt escape via role removal).
+- 2026-11-19 check 9: 13 mutations; M10 survives own tests, M4 intermittent; others killed (M6 equivalent).
+- 2026-11-19 check 10: decisions-rows.md written. RESULT.md written; status done.

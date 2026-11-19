@@ -1,0 +1,272 @@
+// SPDX-License-Identifier: MIT
+
+// Package zverify holds task 18's adversarial tests. It wires the real
+// ledger service, events dispatcher, collector and holds service over one
+// real store with the fakes and a fake clock.
+package zverify
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/collector"
+	"github.com/panset/hourglass/internal/events"
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+	"github.com/panset/hourglass/pkg/hourglasstest"
+	defpolicy "github.com/panset/hourglass/policies/default"
+)
+
+var bg = context.Background()
+
+var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
+
+// pollAdapter makes collector.PollView satisfy holds.PollView (field OK vs method OK()).
+type pollAdapter struct{ v collector.PollView }
+
+func (p pollAdapter) OK() bool                  { return p.v.OK }
+func (p pollAdapter) Reported(name string) bool { return p.v.Reported(name) }
+
+type world struct {
+	t        *testing.T
+	path     string
+	st       *store.Store
+	raw      *sql.DB
+	clk      *hourglasstest.FakeClock
+	hook     *hourglasstest.FakeHook
+	disp     *events.Dispatcher
+	led      *ledger.Service
+	prov     *hourglasstest.FakeProvider
+	pressure *hourglasstest.FakePressureSource
+	policy   hourglass.MeteringPolicy
+	col      *collector.Collector
+	holds    *holds.Service
+	loc      *time.Location
+}
+
+type opts struct {
+	start    time.Time
+	loc      *time.Location
+	provider bool
+	policy   hourglass.MeteringPolicy // nil: real default policy, start_after 2h
+}
+
+func newWorld(t *testing.T, o opts) *world {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "h.db")
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(10000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &world{t: t, path: path, st: st, raw: raw, clk: hourglasstest.NewFakeClock(o.start),
+		hook: hourglasstest.NewFakeHook(), pressure: hourglasstest.NewFakePressureSource(), loc: o.loc}
+	if w.loc == nil {
+		w.loc = time.UTC
+	}
+	w.pressure.SetValue(0.6)
+	w.disp = events.New([]hourglass.Hook{w.hook}, st, events.WithClock(w.clk), events.WithLogger(quiet),
+		events.WithTimeout(2*time.Second))
+	w.disp.Start(bg)
+	t.Cleanup(func() {
+		_ = w.disp.Close(bg)
+		raw.Close()
+		st.Close()
+	})
+	w.led = ledger.NewService(st, w.disp, w.clk, w.loc)
+	if o.provider {
+		w.prov = hourglasstest.NewFakeProvider()
+	}
+	w.policy = o.policy
+	if w.policy == nil {
+		p, err := defpolicy.New(json.RawMessage(`{"start_after":"2h","start_on_allocation":true}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.policy = p
+	}
+	w.col = w.newCollector()
+	w.holds = holds.NewService(holds.Deps{Store: st, Events: w.disp, Clock: w.clk, Logger: quiet,
+		ProviderConfigured: w.prov != nil,
+		Poll: func() holds.PollView {
+			v := w.col.LastPoll()
+			if !v.OK {
+				return nil
+			}
+			return pollAdapter{v}
+		}})
+	return w
+}
+
+func (w *world) newCollector() *collector.Collector {
+	d := collector.Deps{Store: w.st, Pressure: w.pressure, Policy: w.policy, Events: w.disp, Ledger: w.led,
+		Clock: w.clk, Logger: quiet}
+	if w.prov != nil {
+		d.Provider = w.prov
+	}
+	return collector.New(d)
+}
+
+func (w *world) approve(sub string) int64 {
+	w.t.Helper()
+	u, err := w.st.CreateOIDCUser(bg, sub, sub+"@example.test", sub, w.clk.Now())
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	w.grantRole(u.ID)
+	return u.ID
+}
+
+// grantRole mimics the API: assign a role and the first allowance in one tx.
+func (w *world) grantRole(id int64) {
+	w.t.Helper()
+	if err := w.st.Tx(bg, func(tx *store.Tx) error {
+		if err := tx.SetUserRoles(bg, id, []string{store.RoleDeveloper}); err != nil {
+			return err
+		}
+		return w.led.EnsureFirstAllowanceTx(tx, id, w.clk.Now())
+	}); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+func (w *world) setup(name string, labels map[string]string) int64 {
+	w.t.Helper()
+	id, err := w.st.CreateSetup(bg, store.Setup{Name: name, Enabled: true, Labels: labels, DetailsJSON: `{"rack":"r1"}`})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return id
+}
+
+func (w *world) rules(r ...store.Rule) {
+	w.t.Helper()
+	if err := w.st.ReplaceRules(bg, "rate", r, nil, w.clk.Now()); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+func (w *world) setting(key, value string) {
+	w.t.Helper()
+	if err := w.st.PutSetting(bg, key, value, nil, w.clk.Now()); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+func (w *world) poll() {
+	w.t.Helper()
+	if err := w.col.RunOnce(bg); err != nil {
+		w.t.Fatalf("RunOnce at %s: %v", w.clk.Now(), err)
+	}
+	w.checkMoney()
+}
+
+func (w *world) step(d time.Duration) { w.t.Helper(); w.clk.Advance(d); w.poll() }
+
+func (w *world) balance(u int64) int64 {
+	w.t.Helper()
+	us, err := w.st.GetUser(bg, u)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return us.BalanceMT
+}
+
+func (w *world) q1(query string, args ...any) int64 {
+	w.t.Helper()
+	var n sql.NullInt64
+	if err := w.raw.QueryRow(query, args...).Scan(&n); err != nil {
+		w.t.Fatalf("%s: %v", query, err)
+	}
+	return n.Int64
+}
+
+// checkMoney asserts the money invariants of check 3 at the current step.
+func (w *world) checkMoney() {
+	w.t.Helper()
+	rows, err := w.raw.Query(`SELECT id FROM users`)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	rows.Close()
+	cur := ledger.PeriodOf(w.clk.Now(), w.loc)
+	for _, id := range ids {
+		led := -w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND type='debit'`, id)
+		smp := w.q1(`SELECT SUM(u.debit_mt) FROM usage_samples u JOIN holds h ON h.id=u.hold_id WHERE h.user_id=?`, id)
+		if led != smp {
+			w.t.Errorf("user %d: ledger debits %d != sample debits %d at %s", id, led, smp, w.clk.Now())
+		}
+		sum := w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE user_id=? AND period=?`, id, cur)
+		if b := w.balance(id); b != sum {
+			w.t.Errorf("user %d: balance cache %d != ledger sum %d for %s at %s", id, b, sum, cur, w.clk.Now())
+		}
+	}
+	hrows, err := w.raw.Query(`SELECT id FROM holds`)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	var hids []int64
+	for hrows.Next() {
+		var id int64
+		hrows.Scan(&id)
+		hids = append(hids, id)
+	}
+	hrows.Close()
+	for _, h := range hids {
+		led := -w.q1(`SELECT SUM(amount_mt) FROM ledger WHERE hold_id=? AND type='debit'`, h)
+		smp := w.q1(`SELECT SUM(debit_mt) FROM usage_samples WHERE hold_id=?`, h)
+		if led != smp {
+			w.t.Errorf("hold %d: ledger debits %d != sample debits %d", h, led, smp)
+		}
+	}
+}
+
+func (w *world) flush() {
+	w.t.Helper()
+	ctx, cancel := context.WithTimeout(bg, 5*time.Second)
+	defer cancel()
+	if err := w.disp.Flush(ctx); err != nil {
+		w.t.Fatal(err)
+	}
+}
+
+func (w *world) eventTypes() []string {
+	w.flush()
+	var out []string
+	for _, e := range w.hook.Events() {
+		out = append(out, e.Type)
+	}
+	return out
+}
+
+func (w *world) debitsOf(hold int64) []int64 {
+	w.t.Helper()
+	s, err := w.st.ListUsageSamples(bg, hold)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	var out []int64
+	for _, x := range s {
+		out = append(out, x.DebitMT)
+	}
+	return out
+}
+
+func alloc(name string) hourglass.Allocation { return hourglass.Allocation{ResourceName: name} }

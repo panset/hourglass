@@ -1,0 +1,97 @@
+// SPDX-License-Identifier: MIT
+
+package zverify
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/metering"
+	"github.com/panset/hourglass/internal/settings"
+)
+
+type putRec struct{ keys []string }
+
+func (p *putRec) PutSetting(_ context.Context, key, _ string, _ *int64, _ time.Time) error {
+	p.keys = append(p.keys, key)
+	return nil
+}
+
+func field(err error) string {
+	var fe *settings.FieldError
+	if errors.As(err, &fe) {
+		return fe.Field
+	}
+	return ""
+}
+
+func TestADM2_SettingsBoundaries(t *testing.T) {
+	d := settings.Defaults()
+	cases := []struct {
+		name  string
+		mod   func(*settings.Settings)
+		field string
+	}{
+		{"poll 59s", func(s *settings.Settings) { s.PollInterval = 59 * time.Second }, "poll_interval"},
+		{"poll 60s", func(s *settings.Settings) { s.PollInterval = 60 * time.Second }, ""},
+		{"bands unsorted", func(s *settings.Settings) {
+			s.Bands = metering.Bands{Steps: []metering.Step{{From: 0.75, Multiplier: 2}, {From: 0.5, Multiplier: 1}}}
+		}, "bands"},
+		{"bands duplicate", func(s *settings.Settings) {
+			s.Bands = metering.Bands{Steps: []metering.Step{{From: 0.5, Multiplier: 1}, {From: 0.5, Multiplier: 2}}}
+		}, "bands"},
+		{"band from 0", func(s *settings.Settings) { s.Bands = metering.Bands{Steps: []metering.Step{{From: 0, Multiplier: 1}}} }, "bands"},
+		{"band from 1.01", func(s *settings.Settings) { s.Bands = metering.Bands{Steps: []metering.Step{{From: 1.01, Multiplier: 1}}} }, "bands"},
+		{"band from 1", func(s *settings.Settings) { s.Bands = metering.Bands{Steps: []metering.Step{{From: 1, Multiplier: 1}}} }, ""},
+		{"negative multiplier", func(s *settings.Settings) { s.Bands = metering.Bands{Steps: []metering.Step{{From: 0.5, Multiplier: -1}}} }, "bands"},
+		{"negative allowance", func(s *settings.Settings) { s.DefaultAllowanceMT = -1 }, "default_allowance"},
+		{"zero allowance", func(s *settings.Settings) { s.DefaultAllowanceMT = 0 }, ""},
+		{"bad template", func(s *settings.Settings) { s.ResourceNameTemplate = "{{.SetupName" }, "resource_name_template"},
+		{"unknown field template", func(s *settings.Settings) { s.ResourceNameTemplate = "{{.Nope}}" }, "resource_name_template"},
+		{"empty template", func(s *settings.Settings) { s.ResourceNameTemplate = "" }, "resource_name_template"},
+		{"negative max holds", func(s *settings.Settings) { s.MaxHoldsPerUser = -1 }, "max_holds_per_user"},
+		{"dup label key", func(s *settings.Settings) { s.DisplayLabelKeys = []string{"a", "a"} }, "display_label_keys"},
+		{"bad label key", func(s *settings.Settings) { s.DisplayLabelKeys = []string{"A"} }, "display_label_keys"},
+	}
+	for _, c := range cases {
+		s := d
+		s.Bands = metering.DefaultBands()
+		c.mod(&s)
+		if got := field(s.Validate()); got != c.field {
+			t.Errorf("%s: field %q want %q (err %v)", c.name, got, c.field, s.Validate())
+		}
+	}
+}
+
+func TestADM2_SettingsJSONRoundTripAndChangedOnly(t *testing.T) {
+	s := settings.Defaults()
+	s.PollInterval = 90 * time.Second
+	s.DefaultAllowanceMT = 250500
+	s.DisplayLabelKeys = []string{"site"}
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back settings.Settings
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatalf("%s: %v", b, err)
+	}
+	b2, _ := json.Marshal(back)
+	if string(b) != string(b2) {
+		t.Fatalf("round trip\n%s\n%s", b, b2)
+	}
+	if err := json.Unmarshal([]byte(`{"pol_interval":"5m"}`), &back); err == nil {
+		t.Fatal("unknown field accepted")
+	}
+	var rec putRec
+	ch, err := settings.Save(bg, &rec, settings.Defaults(), s, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.keys) != 3 || len(ch) != 3 {
+		t.Fatalf("wrote %v", rec.keys)
+	}
+}
