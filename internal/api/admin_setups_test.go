@@ -276,3 +276,21 @@ func TestSET1_AdminViewShowsDeployedAndLastSeen(t *testing.T) {
 		t.Errorf("cost = %v", s["cost_per_hour_tokens"])
 	}
 }
+
+// SET-2: details are well-formed JSON, which means valid UTF-8 (task 23 finding 6).
+func TestSET2_DetailsWithInvalidUTF8AreRefused(t *testing.T) {
+	e := newAdEnv(t)
+	for _, p := range []string{setupPath} {
+		if f, _ := adErr(t, e.send("POST", p, setupBody("bad", "{\"k\":\"v\xff\xfe\"}", true)), 400, "validation"); f != "details" {
+			t.Errorf("field = %q", f)
+		}
+	}
+	if ss, _ := e.st.ListSetups(uBg, false); len(ss) != 0 {
+		t.Errorf("setup stored: %+v", ss)
+	}
+	id := e.setup("ok", true, map[string]string{"tier": "a"})
+	if f, _ := adErr(t, e.send("PUT", setupPath+"/"+uItoa(id), setupBody("ok", "{\"k\":\"\xc3\"}", true)), 400, "validation"); f != "details" {
+		t.Errorf("update field = %q", f)
+	}
+	uWantOK(t, e.send("POST", setupPath, setupBody("good", "{\"k\":\"é\"}", true)), 201)
+}

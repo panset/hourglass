@@ -66,6 +66,7 @@ type backend struct {
 	policy   *hourglasstest.FakePolicy
 	hook     *hourglasstest.FakeHook
 	h        http.Handler
+	deps     Deps
 	logs     *syncBuf
 	admin    store.User // the local admin
 }
@@ -135,8 +136,9 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 		Events: b.ev, Ledger: b.led, Clock: b.clk, Logger: log})
 	hs := holds.NewService(holds.Deps{Store: st, Events: b.ev, ProviderConfigured: true, Clock: b.clk, Logger: log,
 		Poll: func() holds.PollView { return b.col.LastPoll().ForHolds() }})
-	b.h = New(Deps{Store: st, Auth: svc, Holds: hs, Ledger: b.led, Events: b.ev, Collector: b.col, Clock: b.clk,
-		Location: loc, Logger: log, Runtime: o.runtime, Fallback: o.fallback})
+	b.deps = Deps{Store: st, Auth: svc, Holds: hs, Ledger: b.led, Events: b.ev, Collector: b.col, Clock: b.clk,
+		Location: loc, Logger: log, Runtime: o.runtime, Fallback: o.fallback}
+	b.h = New(b.deps)
 	return b
 }
 

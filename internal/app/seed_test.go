@@ -168,3 +168,122 @@ func TestSET7_InvalidSeedRejectedAtomically(t *testing.T) {
 		})
 	}
 }
+
+func marker(t *testing.T, st *store.Store) string {
+	t.Helper()
+	s, err := st.GetSetting(context.Background(), SeedMarkerKey)
+	if errors.Is(err, store.ErrNotFound) {
+		return ""
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.ValueJSON
+}
+
+// SET-7: "never applied again", even when every setup was deleted afterwards
+// (task 23 finding 5), and the admin's rate rules are not overwritten.
+func TestSET7_NeverAppliedAgainEvenAfterEverySetupIsDeleted(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t)
+	p := writeSeed(t, "seed.yaml", goodSeedYAML)
+	if ok, err := ImportSeed(ctx, st, p, time.Now()); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if m := marker(t, st); !strings.Contains(m, SeedStateApplied) {
+		t.Fatalf("marker = %q", m)
+	}
+	setups, _ := st.ListSetups(ctx, false)
+	for _, s := range setups {
+		if err := st.DeleteSetup(ctx, s.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.ReplaceRules(ctx, "rate", []store.Rule{{Selector: "mine=1", Value: 9}}, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := ImportSeed(ctx, st, p, time.Now()); err != nil || ok {
+		t.Fatalf("second import ok=%v err=%v", ok, err)
+	}
+	if s, _ := st.ListSetups(ctx, false); len(s) != 0 {
+		t.Fatalf("setups came back: %+v", s)
+	}
+	if r, _ := st.ListRules(ctx, "rate"); len(r) != 1 || r[0].Selector != "mine=1" {
+		t.Fatalf("admin's rules were replaced: %+v", r)
+	}
+}
+
+// A first start without a seed records that too: a seed configured later is not applied.
+func TestSET7_StartWithoutSeedRecordsMarker(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t)
+	if ok, err := ImportSeed(ctx, st, "", time.Now()); ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if m := marker(t, st); !strings.Contains(m, SeedStateNoSeed) {
+		t.Fatalf("marker = %q", m)
+	}
+	if ok, err := ImportSeed(ctx, st, writeSeed(t, "seed.yaml", goodSeedYAML), time.Now()); ok || err != nil {
+		t.Fatalf("late seed ok=%v err=%v", ok, err)
+	}
+	if s, _ := st.ListSetups(ctx, false); len(s) != 0 {
+		t.Fatalf("late seed applied: %+v", s)
+	}
+}
+
+// An existing database without a marker (made before the marker existed) is
+// initialised when it holds setups, rules, or a user beyond the local admin.
+func TestSET7_ExistingDatabaseWithoutMarkerIsTreatedAsInitialised(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	for name, prep := range map[string]func(*store.Store){
+		"setups": func(st *store.Store) {
+			if _, err := st.CreateSetup(ctx, store.Setup{Name: "mine", Enabled: true}); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"rules": func(st *store.Store) {
+			if err := st.ReplaceRules(ctx, "rate", []store.Rule{{Selector: "a=b", Value: 1}}, nil, now); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"oidc user": func(st *store.Store) {
+			if _, err := st.CreateOIDCUser(ctx, "sub-1", "x@example.com", "x", now); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st := openStore(t)
+			prep(st)
+			p := writeSeed(t, "seed.yaml", goodSeedYAML)
+			if ok, err := ImportSeed(ctx, st, p, now); ok || err != nil {
+				t.Fatalf("ok=%v err=%v", ok, err)
+			}
+			if m := marker(t, st); !strings.Contains(m, SeedStateExisting) {
+				t.Fatalf("marker = %q", m)
+			}
+			if s, _ := st.ListSetups(ctx, false); len(s) > 1 {
+				t.Fatalf("seed applied over existing data: %+v", s)
+			}
+		})
+	}
+}
+
+// The local admin alone does not make a database initialised, and an invalid seed leaves no marker.
+func TestSET7_LocalAdminAloneIsFreshAndInvalidSeedLeavesNoMarker(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t)
+	if _, err := st.CreateLocalAdmin(ctx, "admin", "hash", true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ImportSeed(ctx, st, writeSeed(t, "bad.yaml", "setups: ["), time.Now()); err == nil {
+		t.Fatal("invalid seed accepted")
+	}
+	if m := marker(t, st); m != "" {
+		t.Fatalf("marker after a failed seed: %q", m)
+	}
+	if ok, err := ImportSeed(ctx, st, writeSeed(t, "seed.yaml", goodSeedYAML), time.Now()); !ok || err != nil {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+}

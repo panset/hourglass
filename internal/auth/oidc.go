@@ -86,6 +86,28 @@ func (s *Service) openFlow(v string) (flowState, bool) {
 	return f, true
 }
 
+// useFlow marks a flow as used and reports whether it was fresh. The signed
+// cookie is stateless, so single use (AUTH-1) needs the server to remember the
+// state until the cookie would have expired anyway.
+func (s *Service) useFlow(f flowState) bool {
+	now := s.now()
+	s.usedMu.Lock()
+	defer s.usedMu.Unlock()
+	if s.usedFlows == nil {
+		s.usedFlows = map[string]time.Time{}
+	}
+	for k, exp := range s.usedFlows {
+		if !now.Before(exp) {
+			delete(s.usedFlows, k)
+		}
+	}
+	if _, used := s.usedFlows[f.State]; used {
+		return false
+	}
+	s.usedFlows[f.State] = time.Unix(f.Expires, 0)
+	return true
+}
+
 func flowCookieWith(value string, maxAge int) *http.Cookie {
 	return &http.Cookie{Name: flowCookie, Value: value, Path: flowCookiePath, MaxAge: maxAge,
 		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode}
@@ -177,6 +199,10 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	f, ok := s.openFlow(c.Value)
 	if !ok {
 		fail("invalid or expired flow cookie", nil)
+		return
+	}
+	if !s.useFlow(f) {
+		fail("flow cookie already used", nil)
 		return
 	}
 	q := r.URL.Query()

@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -197,6 +199,26 @@ func (c Config) Validate() error {
 	if _, err := time.LoadLocation(c.Timezone); err != nil {
 		return fmt.Errorf("config: timezone %q: %w", c.Timezone, err)
 	}
+	if err := checkListenAddr("listen", c.Listen); err != nil {
+		return err
+	}
+	if c.Metrics.Listen != "" {
+		if err := checkListenAddr("metrics.listen", c.Metrics.Listen); err != nil {
+			return err
+		}
+	}
+	// An unset key is generated at start (sessions then do not survive a restart); a set one must be strong.
+	if c.SessionKey != "" && len(c.SessionKey) < MinSessionKeyBytes {
+		return fmt.Errorf("config: session_key must be at least %d bytes (it is %d)", MinSessionKeyBytes, len(c.SessionKey))
+	}
+	if err := c.OIDC.validate(); err != nil {
+		return err
+	}
+	for i, o := range c.CORS.AllowedOrigins {
+		if err := checkOrigin(o); err != nil {
+			return fmt.Errorf("config: cors.allowed_origins[%d]: %w", i, err)
+		}
+	}
 	if c.Metrics.Listen != "" && c.Metrics.Listen == c.Listen {
 		return errors.New("config: metrics.listen must differ from listen: metrics are never served on the public port")
 	}
@@ -207,6 +229,55 @@ func (c Config) Validate() error {
 	}
 	if c.Provider != nil && c.Provider.Type == "" && len(c.Provider.Config) > 0 {
 		return errors.New("config: provider has a config block but no type")
+	}
+	return nil
+}
+
+// MinSessionKeyBytes is the shortest session key accepted; internal/auth
+// enforces the same bound.
+const MinSessionKeyBytes = 32
+
+// checkListenAddr accepts host:port with a numeric port 0..65535 (the host may be empty).
+func checkListenAddr(name, addr string) error {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("config: %s %q: %v (want host:port, for example :8080)", name, addr, err)
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("config: %s %q: port must be a number from 0 to 65535", name, addr)
+	}
+	return nil
+}
+
+// validate checks the shape of the OIDC block: unset, or an issuer with a
+// client id and redirect URL, the URLs being absolute http(s) URLs.
+func (o OIDC) validate() error {
+	if o.Issuer == "" {
+		if o.ClientID != "" || o.ClientSecret != "" || o.RedirectURL != "" {
+			return errors.New("config: oidc.client_id, client_secret or redirect_url is set but oidc.issuer is not")
+		}
+		return nil
+	}
+	if o.ClientID == "" || o.RedirectURL == "" {
+		return errors.New("config: oidc.issuer is set, so oidc.client_id and oidc.redirect_url are required")
+	}
+	for name, v := range map[string]string{"oidc.issuer": o.Issuer, "oidc.redirect_url": o.RedirectURL} {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("config: %s must be an absolute http or https URL", name)
+		}
+	}
+	return nil
+}
+
+// checkOrigin accepts only scheme://host[:port] (a trailing slash is
+// tolerated): never "null", "*", a path, a query or credentials.
+func checkOrigin(o string) error {
+	u, err := url.Parse(o)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || strings.Contains(o, "*") {
+		return fmt.Errorf("%q is not an origin (want scheme://host[:port], for example https://hourglass.example.com)", o)
 	}
 	return nil
 }

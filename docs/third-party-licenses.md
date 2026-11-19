@@ -133,8 +133,8 @@ Policy: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, plus the justified exc
 | @types/babel__traverse | 7.28.0 | MIT |
 | @types/estree | 1.0.10 | MIT |
 | @types/prop-types | 15.7.15 | MIT |
-| @types/react-dom | 18.3.1 | MIT |
 | @types/react | 18.3.12 | MIT |
+| @types/react-dom | 18.3.1 | MIT |
 | @vitejs/plugin-react | 4.3.4 | MIT |
 | @vitest/expect | 2.1.8 | MIT |
 | @vitest/mocker | 2.1.8 | MIT |
@@ -246,12 +246,12 @@ Policy: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, plus the justified exc
 | postcss | 8.5.33 | MIT |
 | pretty-format | 27.5.1 | MIT |
 | punycode | 2.3.1 | MIT |
+| react | 18.3.1 | MIT |
 | react-dom | 18.3.1 | MIT |
 | react-is | 17.0.2 | MIT |
 | react-refresh | 0.14.2 | MIT |
-| react-router-dom | 6.28.0 | MIT |
 | react-router | 6.28.0 | MIT |
-| react | 18.3.1 | MIT |
+| react-router-dom | 6.28.0 | MIT |
 | redent | 3.0.0 | MIT |
 | require-from-string | 2.0.2 | MIT |
 | rollup | 4.68.7 | MIT |
@@ -274,16 +274,16 @@ Policy: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, plus the justified exc
 | tinypool | 1.1.1 | MIT |
 | tinyrainbow | 1.2.0 | MIT |
 | tinyspy | 3.0.2 | MIT |
-| tldts-core | 6.1.86 | MIT |
 | tldts | 6.1.86 | MIT |
+| tldts-core | 6.1.86 | MIT |
 | tough-cookie | 5.1.2 | BSD-3-Clause |
 | tr46 | 5.1.1 | MIT |
 | type-fest | 4.41.0 | (MIT OR CC0-1.0) |
 | typescript | 5.6.3 | Apache-2.0 |
 | update-browserslist-db | 1.4.0 | MIT |
 | uri-js-replace | 1.0.3 | MIT |
-| vite-node | 2.1.8 | MIT |
 | vite | 5.4.11 | MIT |
+| vite-node | 2.1.8 | MIT |
 | vitest | 2.1.8 | MIT |
 | w3c-xmlserializer | 5.0.0 | MIT |
 | webidl-conversions | 7.0.0 | BSD-2-Clause |
@@ -297,3 +297,15 @@ Policy: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, plus the justified exc
 | yallist | 3.1.1 | ISC |
 | yaml-ast-parser | 0.0.43 | Apache-2.0 |
 | yargs-parser | 21.1.1 | ISC |
+
+## npm packages (e2e/browser/package-lock.json, production and dev)
+
+| Package | Version | License |
+| --- | --- | --- |
+| @playwright/test | 1.49.1 | Apache-2.0 |
+| @types/node | 22.10.2 | MIT |
+| fsevents | 2.3.2 | MIT |
+| playwright | 1.49.1 | Apache-2.0 |
+| playwright-core | 1.49.1 | Apache-2.0 |
+| typescript | 5.7.2 | Apache-2.0 |
+| undici-types | 6.20.0 | MIT |

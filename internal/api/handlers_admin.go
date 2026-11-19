@@ -467,6 +467,9 @@ func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInpu
 	if len(body.Details) > maxDetailsBytes {
 		return bad("details", "details is %d bytes (at most %d)", len(body.Details), maxDetailsBytes)
 	}
+	if !utf8.Valid(body.Details) {
+		return bad("details", "details must be valid UTF-8")
+	}
 	if body.Enabled == nil {
 		return bad("enabled", "enabled is required")
 	}
@@ -778,12 +781,14 @@ func (a *API) replaceRules(w http.ResponseWriter, r *http.Request) {
 	a.getRules(w, r)
 }
 
-func ruleSnapshot(rs []store.Rule) []map[string]any {
+// ruleSnapshot is the audit form of a rule list (ADM-3): an object, because
+// the audit schema's before and after are objects, holding the whole ordered list.
+func ruleSnapshot(rs []store.Rule) map[string]any {
 	out := make([]map[string]any, len(rs))
 	for i, x := range rs {
 		out[i] = map[string]any{"position": i + 1, "selector": x.Selector, "weight": x.Value}
 	}
-	return out
+	return map[string]any{"rules": out}
 }
 
 // ---- settings ----

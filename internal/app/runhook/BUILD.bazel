@@ -7,3 +7,13 @@ go_library(
     importpath = "github.com/panset/hourglass/internal/app/runhook",
     visibility = ["//:__subpackages__"],
 )
+
+# The source scan in internal/api/registration_test.go reads these files.
+filegroup(
+    name = "go_sources",
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
+    visibility = ["//internal/api:__pkg__"],
+)

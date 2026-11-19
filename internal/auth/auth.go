@@ -83,6 +83,9 @@ type Service struct {
 
 	oidcMu   sync.Mutex
 	provider *oidc.Provider
+
+	usedMu    sync.Mutex
+	usedFlows map[string]time.Time // OIDC flow state -> flow expiry; makes the flow cookie single use
 }
 
 // New builds the Service. It does not contact the OIDC issuer; discovery

@@ -235,3 +235,28 @@ func TestRunRequiresAPIAndServesUntilCancelled(t *testing.T) {
 		t.Errorf("run: %d %s", code, errb.String())
 	}
 }
+
+// UI-3: a path the prefix check and the upstream could read differently (dot
+// segments, encoded slashes) is refused, not forwarded (task 23 finding 7).
+func TestUI3_UnnormalisedProxiedPathsAreRefused(t *testing.T) {
+	api := newFakeAPI(t)
+	h, err := newHandler(testUI, api.srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"/api/../etc/passwd", "/api%2f..%2fsecret", "/healthz/../admin", "/api/v1/./me", "/auth/%2e%2e/x", "/api/v1%5cme", "/api/v1/..%2Fx"} {
+		api.last = nil
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
+		if rec.Code != http.StatusBadRequest || api.last != nil {
+			t.Errorf("%s: status %d, forwarded=%v", p, rec.Code, api.last != nil)
+		}
+	}
+	for _, p := range []string{"/api/v1/me", "/api/v1/setups/3", "/auth/local"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
+		if rec.Code != 200 {
+			t.Errorf("%s: status %d", p, rec.Code)
+		}
+	}
+}

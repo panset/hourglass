@@ -524,3 +524,38 @@ func TestOptionsClock_CollectorAndLedgerUseTheSuppliedClock(t *testing.T) {
 		}
 	}
 }
+
+// Startup order (task 23b item 5): a configuration error leaves no database file
+// and logs no admin password, whichever setting is wrong.
+func TestStartupOrder_BadConfigurationLeavesNoDatabaseAndLogsNoPassword(t *testing.T) {
+	registerFakes()
+	cases := map[string]struct{ extra, env string }{
+		"session key":     {"", "short"},
+		"timezone":        {"timezone: Mars/Base\n", ""},
+		"oidc shape":      {"oidc: {issuer: 'https://idp.test'}\n", ""},
+		"listen address":  {"metrics: {listen: 'nonsense'}\n", ""},
+		"extension names": {"pressure: {type: nope}\n", ""},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			if c.env != "" {
+				t.Setenv("HOURGLASS_SESSION_KEY", c.env)
+			}
+			cfg, db := writeConfig(t, c.extra)
+			var out syncBuf
+			err := Run(context.Background(), runhook.Options{ConfigPath: cfg, DefaultPressureSource: testPressure,
+				DefaultMeteringPolicy: testPolicy, Stdout: &out, Stderr: io.Discard})
+			if err == nil {
+				t.Fatal("Run succeeded")
+			}
+			for _, f := range []string{db, db + "-wal", db + "-shm"} {
+				if _, statErr := os.Stat(f); !errors.Is(statErr, os.ErrNotExist) {
+					t.Errorf("%s exists after a configuration error", f)
+				}
+			}
+			if strings.Contains(out.String(), `"password"`) {
+				t.Errorf("a password was logged: %s", out.String())
+			}
+		})
+	}
+}

@@ -269,15 +269,19 @@ func (a *API) auditView(r *http.Request, f store.AuditFilter) (auditListOut, err
 	return res, nil
 }
 
-// decodeObject parses a stored audit JSON object; an empty or non-object
-// value is null.
+// decodeObject parses a stored audit JSON object; an empty value is null. Any
+// other JSON value (an older row that stored a bare array) is returned as
+// {"value": ...} rather than dropped.
 func decodeObject(s string) map[string]any {
 	if strings.TrimSpace(s) == "" {
 		return nil
 	}
-	var m map[string]any
-	if err := json.Unmarshal([]byte(s), &m); err != nil {
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil || v == nil {
 		return nil
 	}
-	return m
+	if m, ok := v.(map[string]any); ok {
+		return m
+	}
+	return map[string]any{"value": v}
 }

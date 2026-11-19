@@ -29,19 +29,20 @@ const maxBodyBytes = 8 << 10
 //
 // The caller wraps the whole mux in s.CORS(s.Authenticate(mux)) so these
 // routes see the session.
-func (s *Service) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /auth/oidc/start", s.handleOIDCStart)
-	mux.HandleFunc("GET /auth/callback", s.handleOIDCCallback)
-	mux.HandleFunc("POST /auth/local", s.handleLocalSignIn)
-	mux.Handle("POST /auth/local/password", s.RequireLocalAdmin(s.RequireCSRF(http.HandlerFunc(s.handleChangePassword))))
-	mux.Handle("POST /auth/logout", s.RequireSession(s.RequireCSRF(http.HandlerFunc(s.handleLogout))))
-	mux.HandleFunc("GET /api/v1/auth/methods", s.handleMethods)
-	mux.Handle("GET /api/v1/session", s.RequireSession(http.HandlerFunc(s.handleSession)))
+func (s *Service) Register(handle func(pattern string, h http.Handler)) {
+	handle("GET /auth/oidc/start", http.HandlerFunc(s.handleOIDCStart))
+	handle("GET /auth/callback", http.HandlerFunc(s.handleOIDCCallback))
+	handle("POST /auth/local", http.HandlerFunc(s.handleLocalSignIn))
+	handle("POST /auth/local/password", s.RequireLocalAdmin(s.RequireCSRF(http.HandlerFunc(s.handleChangePassword))))
+	handle("POST /auth/logout", s.RequireSession(s.RequireCSRF(http.HandlerFunc(s.handleLogout))))
+	handle("GET /api/v1/auth/methods", http.HandlerFunc(s.handleMethods))
+	handle("GET /api/v1/session", s.RequireSession(http.HandlerFunc(s.handleSession)))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

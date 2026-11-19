@@ -351,6 +351,11 @@ func Load(ctx context.Context, r Reader) (Settings, error) {
 			return Settings{}, fmt.Errorf("stored setting %q: %w", row.Key, err)
 		}
 	}
+	// A stored template that breaks the SET-4 restrictions (for example one
+	// written before they existed) fails the load, hence the poll, with a clear error.
+	if err := ValidateTemplate(s.ResourceNameTemplate); err != nil {
+		return Settings{}, fmt.Errorf("stored setting %q: %w", KeyResourceNameTemplate, err)
+	}
 	return s, nil
 }
 

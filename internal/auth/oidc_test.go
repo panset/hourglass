@@ -444,3 +444,47 @@ func TestAUTH1_SignInReplacesExistingSession(t *testing.T) {
 		t.Fatalf("old session still valid: %d", r.Code)
 	}
 }
+
+// AUTH-1: the flow cookie is single use on the server too. A copy replayed with
+// a second code for the same state is refused (task 23 finding 8).
+func TestAUTH1_FlowCookieReplayRefused(t *testing.T) {
+	e, iss := newOIDCEnv(t)
+	fc, cb := startFlow(t, e)
+	if first := callback(t, e, fc, cb); first.session == nil {
+		t.Fatal("first sign-in failed")
+	}
+	f, _ := e.svc.openFlow(fc.Value)
+	sum := sha256.Sum256([]byte(f.Verifier))
+	q := url.Values{"client_id": {testClientID}, "response_type": {"code"}, "redirect_uri": {testRedirect},
+		"scope": {"openid email profile"}, "code_challenge_method": {"S256"}, "code_challenge": {b64(sum[:])},
+		"nonce": {f.Nonce}, "state": {f.State}}
+	res, err := noRedirect.Get(iss.srv.URL + "/authorize?" + q.Encode())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	cb2, err := url.Parse(res.Header.Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantFailure(t, callback(t, e, fc, cb2))
+	// A fresh flow still works.
+	if again := signIn(t, e); again.session == nil {
+		t.Fatal("a new flow was refused")
+	}
+}
+
+// Auth JSON responses carry nosniff like the API's (task 23 finding 10).
+func TestAuthJSONResponsesSetNosniff(t *testing.T) {
+	e := newEnv(t, Config{})
+	for _, p := range []string{"/api/v1/auth/methods"} {
+		rec := e.do(req{method: "GET", path: p})
+		if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: no nosniff header: %v", p, rec.Header())
+		}
+	}
+	rec := e.do(req{method: "POST", path: "/auth/local", body: `{"username":"x","password":"y"}`, header: map[string]string{"Content-Type": "application/json"}})
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("auth error body: no nosniff header: %v", rec.Header())
+	}
+}

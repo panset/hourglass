@@ -43,6 +43,7 @@ go_test(
         "contract_test.go",
         "helpers_test.go",
         "permissions_test.go",
+        "registration_test.go",
         "router_test.go",
         "testenv_test.go",
         "user_test.go",
@@ -53,6 +54,14 @@ go_test(
         # spec's table; both are found by walking up from the runfiles directory.
         "//:api/openapi.yaml",
         "//:docs/SPEC.md",
+        # The registration scan (registration_test.go) reads the sources of these packages.
+        ":go_sources",
+        "//cmd/hourglass-ui:go_sources",
+        "//cmd/hourglassd:go_sources",
+        "//internal/api/apierr:go_sources",
+        "//internal/app:go_sources",
+        "//internal/app/runhook:go_sources",
+        "//internal/auth:go_sources",
     ],
     embed = [":api"],
     deps = [
@@ -71,4 +80,14 @@ go_test(
         "@com_github_getkin_kin_openapi//routers",
         "@com_github_getkin_kin_openapi//routers/legacy",
     ],
+)
+
+# The source scan in internal/api/registration_test.go reads these files.
+filegroup(
+    name = "go_sources",
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
+    visibility = ["//internal/api:__pkg__"],
 )

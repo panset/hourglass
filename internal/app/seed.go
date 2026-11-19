@@ -118,66 +118,75 @@ func (f *seedFile) validate() error {
 
 func validWeight(w float64) bool { return !math.IsNaN(w) && !math.IsInf(w, 0) && w >= 0 }
 
-// ImportSeed implements SET-7: when the database has no setups and path is
-// set, it imports the seed's setups, rate rules and optional default weight
-// in one transaction. It reports whether anything was imported. Once any
-// setup exists the file is not even read. An invalid seed changes nothing.
+// SeedMarkerKey is the settings row that records, durably, that the database
+// has been initialised (SET-7): written in the same transaction as the seed,
+// or on the first start without a seed, or when an existing database is
+// adopted. While it exists the seed is never applied, even when every setup
+// has since been deleted. Settings.Load ignores unknown keys, so it is not a
+// user-visible setting.
+const SeedMarkerKey = "seed_state"
+
+// Values of the marker's "state" field.
+const (
+	SeedStateApplied  = "applied"           // the seed file was imported
+	SeedStateNoSeed   = "no_seed"           // first start without a seed file
+	SeedStateExisting = "existing_database" // data was already there and no marker: treated as initialised
+)
+
+func seedMarkerValue(state string) string {
+	b, _ := json.Marshal(map[string]string{"state": state})
+	return string(b)
+}
+
+// ImportSeed implements SET-7. On the first start of a database (no marker) it
+// imports the seed's setups, rate rules and optional default weight, if path
+// is set, and records the marker in the same transaction. A database that
+// already holds setups, rules, or users other than the local admin, and has no
+// marker, is treated as initialised: the marker is written and the file is not
+// read. Once the marker exists the file is never read, whatever the data looks
+// like. It reports whether anything was imported. An invalid seed changes
+// nothing (no marker either), so the next start can try again.
 func ImportSeed(ctx context.Context, st *store.Store, path string, now time.Time) (bool, error) {
-	if path == "" {
-		return false, nil
-	}
-	existing, err := st.ListSetups(ctx, false)
-	if err != nil {
+	has, err := hasSeedMarker(ctx, st)
+	if err != nil || has {
 		return false, err
 	}
-	if len(existing) > 0 {
-		return false, nil
-	}
-	f, err := ParseSeed(path)
-	if err != nil {
-		return false, err
+	var f *seedFile
+	if path != "" {
+		existing, err := initialisedAlready(ctx, st)
+		if err != nil {
+			return false, err
+		}
+		if !existing {
+			if f, err = ParseSeed(path); err != nil {
+				return false, err
+			}
+		}
 	}
 	applied := false
 	err = st.Tx(ctx, func(tx *store.Tx) error {
 		// Re-check inside the write transaction: two starts cannot both seed.
-		cur, err := tx.ListSetups(ctx, false)
-		if err != nil {
+		if _, err := tx.GetSetting(ctx, SeedMarkerKey); err == nil {
+			return nil
+		} else if !errors.Is(err, store.ErrNotFound) {
 			return err
 		}
-		if len(cur) > 0 {
-			return nil
+		state := SeedStateNoSeed
+		if existing, err := initialisedAlready(ctx, tx); err != nil {
+			return err
+		} else if existing {
+			state = SeedStateExisting
+			f = nil
+		} else if f != nil {
+			state = SeedStateApplied
 		}
-		for _, s := range f.Setups {
-			details := "{}"
-			if d := bytes.TrimSpace(s.Details); len(d) > 0 && string(d) != "null" {
-				details = string(d)
-			}
-			enabled := s.Enabled == nil || *s.Enabled
-			if _, err := tx.CreateSetup(ctx, store.Setup{Name: s.Name, Labels: s.Labels, DetailsJSON: details,
-				Enabled: enabled, ResourceNameOverride: s.ResourceNameOverride}); err != nil {
-				return fmt.Errorf("setup %q: %w", s.Name, err)
-			}
-		}
-		if len(f.RateRules) > 0 {
-			rs := make([]store.Rule, len(f.RateRules))
-			for i, r := range f.RateRules {
-				rs[i] = store.Rule{Kind: rules.KindRate, Selector: r.Selector, Value: *r.Weight}
-			}
-			if err := tx.ReplaceRules(ctx, rules.KindRate, rs, nil, now); err != nil {
+		if f != nil {
+			if err := applySeed(ctx, tx, f, now); err != nil {
 				return err
 			}
+			applied = true
 		}
-		if f.DefaultWeight != nil {
-			v, err := json.Marshal(*f.DefaultWeight)
-			if err != nil {
-				return err
-			}
-			if err := tx.PutSetting(ctx, settings.KeyDefaultWeight, string(v), nil, now); err != nil {
-				return err
-			}
-		}
-		applied = true
-		return nil
+		return tx.PutSetting(ctx, SeedMarkerKey, seedMarkerValue(state), nil, now)
 	})
 	if err != nil {
 		var se *SeedError
@@ -187,4 +196,75 @@ func ImportSeed(ctx context.Context, st *store.Store, path string, now time.Time
 		return false, fmt.Errorf("seed: %w", err)
 	}
 	return applied, nil
+}
+
+func hasSeedMarker(ctx context.Context, st *store.Store) (bool, error) {
+	_, err := st.GetSetting(ctx, SeedMarkerKey)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// dataReader is what both the store and a transaction offer.
+type dataReader interface {
+	ListSetups(ctx context.Context, enabledOnly bool) ([]store.Setup, error)
+	ListRules(ctx context.Context, kind string) ([]store.Rule, error)
+	ListUsers(ctx context.Context, status string) ([]store.User, error)
+}
+
+// initialisedAlready: the database holds setups, rules, or any user other than
+// the local admin.
+func initialisedAlready(ctx context.Context, q dataReader) (bool, error) {
+	ss, err := q.ListSetups(ctx, false)
+	if err != nil || len(ss) > 0 {
+		return len(ss) > 0, err
+	}
+	rs, err := q.ListRules(ctx, rules.KindRate)
+	if err != nil || len(rs) > 0 {
+		return len(rs) > 0, err
+	}
+	us, err := q.ListUsers(ctx, "")
+	if err != nil {
+		return false, err
+	}
+	for _, u := range us {
+		if u.AuthSource != store.AuthLocal {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func applySeed(ctx context.Context, tx *store.Tx, f *seedFile, now time.Time) error {
+	for _, s := range f.Setups {
+		details := "{}"
+		if d := bytes.TrimSpace(s.Details); len(d) > 0 && string(d) != "null" {
+			details = string(d)
+		}
+		enabled := s.Enabled == nil || *s.Enabled
+		if _, err := tx.CreateSetup(ctx, store.Setup{Name: s.Name, Labels: s.Labels, DetailsJSON: details,
+			Enabled: enabled, ResourceNameOverride: s.ResourceNameOverride}); err != nil {
+			return fmt.Errorf("setup %q: %w", s.Name, err)
+		}
+	}
+	if len(f.RateRules) > 0 {
+		rs := make([]store.Rule, len(f.RateRules))
+		for i, r := range f.RateRules {
+			rs[i] = store.Rule{Kind: rules.KindRate, Selector: r.Selector, Value: *r.Weight}
+		}
+		if err := tx.ReplaceRules(ctx, rules.KindRate, rs, nil, now); err != nil {
+			return err
+		}
+	}
+	if f.DefaultWeight != nil {
+		v, err := json.Marshal(*f.DefaultWeight)
+		if err != nil {
+			return err
+		}
+		if err := tx.PutSetting(ctx, settings.KeyDefaultWeight, string(v), nil, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }

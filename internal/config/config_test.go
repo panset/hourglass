@@ -46,7 +46,7 @@ func TestCFG_FileThenEnvOverride(t *testing.T) {
 	p := writeFile(t, `
 listen: ":1111"
 database: /data/a.db
-session_key: file-key
+session_key: file-key-0123456789-0123456789-0123456789
 timezone: Europe/Berlin
 oidc: {issuer: https://idp.test, client_id: id, client_secret: file-secret, redirect_url: https://x.test/auth/callback}
 ui: {serve: true}
@@ -57,7 +57,7 @@ seed: seed.yaml
 	c, err := Load(p, env(map[string]string{
 		"HOURGLASS_LISTEN":               ":2222",
 		"HOURGLASS_DATABASE":             "/data/b.db",
-		"HOURGLASS_SESSION_KEY":          "env-key",
+		"HOURGLASS_SESSION_KEY":          "env-key-0123456789-0123456789-0123456789",
 		"HOURGLASS_TIMEZONE":             "UTC",
 		"HOURGLASS_ADMIN_PASSWORD":       "pw",
 		"HOURGLASS_OIDC_ISSUER":          "https://other.test",
@@ -71,7 +71,7 @@ seed: seed.yaml
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Listen != ":2222" || c.Database != "/data/b.db" || c.SessionKey != "env-key" || c.Timezone != "UTC" ||
+	if c.Listen != ":2222" || c.Database != "/data/b.db" || c.SessionKey != "env-key-0123456789-0123456789-0123456789" || c.Timezone != "UTC" ||
 		c.AdminPassword != "pw" || c.OIDC != (OIDC{"https://other.test", "id2", "env-secret", "https://y.test/auth/callback"}) ||
 		c.UI.Serve || len(c.CORS.AllowedOrigins) != 1 || c.CORS.AllowedOrigins[0] != "http://env.test" ||
 		c.Metrics.Listen != ":9200" || c.Seed != "seed.yaml" {
@@ -172,7 +172,7 @@ func TestCFG_EmptyFileIsDefaults(t *testing.T) {
 
 func TestNFR_RedactedNeverContainsSecrets(t *testing.T) {
 	p := writeFile(t, `
-session_key: SESSIONKEY-VALUE
+session_key: SESSIONKEY-VALUE-0123456789-0123456789
 admin_password: ADMINPW-VALUE
 oidc: {issuer: https://idp.test, client_id: cid, client_secret: OIDCSECRET-VALUE, redirect_url: https://x.test/cb}
 provider: {type: static, config: {password: PROVIDERPW-VALUE}}
@@ -211,5 +211,37 @@ func TestYAMLToJSON(t *testing.T) {
 	}
 	if _, err := YAMLToJSON([]byte("{1: a}")); err == nil {
 		t.Fatal("non-string key accepted")
+	}
+}
+
+// Startup validates the whole configuration before anything is created (task 23b item 5),
+// and the CORS origin list holds only origins (task 23 finding 11).
+func TestCFG_WholeConfigurationValidatedAtLoad(t *testing.T) {
+	cases := map[string]string{
+		"short session key":     "session_key: short\n",
+		"oidc without client":   "oidc: {issuer: 'https://idp.test'}\n",
+		"oidc client no issuer": "oidc: {client_id: cid}\n",
+		"oidc bad issuer":       "oidc: {issuer: 'idp.test', client_id: c, redirect_url: 'https://x.test/cb'}\n",
+		"oidc bad redirect":     "oidc: {issuer: 'https://idp.test', client_id: c, redirect_url: '/cb'}\n",
+		"listen no port":        "listen: localhost\n",
+		"listen bad port":       "listen: ':http'\n",
+		"metrics bad listen":    "metrics: {listen: 'x:99999'}\n",
+		"cors null":             "cors: {allowed_origins: ['null']}\n",
+		"cors wildcard":         "cors: {allowed_origins: ['*']}\n",
+		"cors wildcard host":    "cors: {allowed_origins: ['https://*.example.com']}\n",
+		"cors path":             "cors: {allowed_origins: ['https://a.example.com/x']}\n",
+		"cors no scheme":        "cors: {allowed_origins: ['a.example.com']}\n",
+	}
+	for name, body := range cases {
+		_, err := Load(writeFile(t, body), env(nil))
+		if err == nil {
+			t.Errorf("%s: want error", name)
+		}
+	}
+	ok := "session_key: 0123456789-0123456789-0123456789-01\nlisten: '127.0.0.1:0'\n" +
+		"oidc: {issuer: 'https://idp.test', client_id: c, redirect_url: 'https://x.test/cb'}\n" +
+		"cors: {allowed_origins: ['http://dev.example:5173', 'https://a.example.com/']}\n"
+	if _, err := Load(writeFile(t, ok), env(nil)); err != nil {
+		t.Errorf("valid configuration rejected: %v", err)
 	}
 }

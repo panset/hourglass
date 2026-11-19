@@ -100,7 +100,7 @@ func newEnv(t *testing.T, cfg Config, opts ...Option) *env {
 		_, _ = io.WriteString(w, `{"data":"secret-data"}`)
 	})
 	mux := http.NewServeMux()
-	svc.Register(mux)
+	svc.Register(mux.Handle)
 	mux.Handle("GET /api/v1/me", svc.RoleRoute(ok))
 	mux.Handle("POST /api/v1/setups/{id}/acquire", svc.RoleRoute(ok))
 	mux.Handle("GET /api/v1/admin/users", svc.AdminRoute(ok))

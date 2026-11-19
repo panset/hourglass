@@ -146,7 +146,10 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	if err != nil {
 		return err
 	}
-	// Extensions first: a misconfigured name must not leave a new database behind.
+	// Everything that can be checked without side effects is checked before the
+	// database is opened or created, the local admin is created or a password
+	// is logged: config.Load validated the session key length, OIDC shape,
+	// listen addresses, timezone and CORS origins; extension names come next.
 	ext, err := buildExtensions(cfg, opts.DefaultPressureSource, opts.DefaultMeteringPolicy)
 	if err != nil {
 		return err
@@ -168,19 +171,21 @@ func Run(ctx context.Context, opts runhook.Options) error {
 			log.Error("closing the database failed", "err", err)
 		}
 	}
-	if _, err := auth.EnsureLocalAdmin(ctx, st, cfg.AdminPassword, log); err != nil {
-		closeStore()
-		return err
-	}
 	var clock interface{ Now() time.Time } = systemClock{}
 	if opts.Clock != nil {
 		clock = opts.Clock
 	}
+	// The seed comes before the local admin: a bad seed file must not use up the
+	// one-time print of a generated admin password.
 	if applied, err := ImportSeed(ctx, st, cfg.Seed, clock.Now()); err != nil {
 		closeStore()
 		return err
 	} else if applied {
 		log.Info("seed file imported", "seed", cfg.Seed)
+	}
+	if _, err := auth.EnsureLocalAdmin(ctx, st, cfg.AdminPassword, log); err != nil {
+		closeStore()
+		return err
 	}
 
 	m := newMetrics(clock.Now())

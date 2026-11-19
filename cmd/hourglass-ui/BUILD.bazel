@@ -29,3 +29,13 @@ go_test(
     srcs = ["proxy_test.go"],
     embed = [":hourglass-ui_lib"],
 )
+
+# The source scan in internal/api/registration_test.go reads these files.
+filegroup(
+    name = "go_sources",
+    srcs = glob(
+        ["*.go"],
+        exclude = ["*_test.go"],
+    ),
+    visibility = ["//internal/api:__pkg__"],
+)

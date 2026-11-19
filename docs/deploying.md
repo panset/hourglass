@@ -130,7 +130,7 @@ An admin edits these in the UI (Admin, Settings), or with `GET` and `PUT /api/v1
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `resource_name_template` | `{{.SetupName}}` | Go template giving the resource name a provider must report for a setup. `.SetupName` and `.Labels` are available (`{{.Labels.size}}`). A missing label renders empty, and an empty result is an error. A setup's own override wins |
+| `resource_name_template` | `{{.SetupName}}` | Go template giving the resource name a provider must report for a setup. `.SetupName` and `.Labels` are available (`{{.Labels.size}}`). A missing label renders empty, and an empty result is an error. Only text, `.SetupName`, `.Labels`, `.Labels.key`, `index`, `print`, `printf` (plain `%v %s %d %q` verbs), `if` and `with .Labels` are allowed; `range`, `define`, `template`, `block` and other functions are rejected, the template is at most 1 KB and the rendered name at most 253 characters. A setup's own override wins |
 | `default_weight` | `1` | Weight of a setup that no rate rule matches |
 | `display_label_keys` | `[]` | Label keys shown as columns and filters on the Setups page |
 | `bands` | base `0`; from 0.50 give 1, from 0.75 give 2, from 0.90 give 3 | Pressure bands and multipliers. Lower bounds are inclusive |
@@ -242,7 +242,7 @@ For each cluster in scope, the highest of three ratios: the root resource pool's
 ### Limits you should know about
 
 - Clusters are found only as direct children of a datacenter's host folder. A cluster inside a host sub-folder is not discovered.
-- If `datacenter` or `clusters` names something that does not exist, the pressure source fails the poll, but the provider silently lists nothing. Every setup then shows as expected but not reported. Run `check-provider` after any change to those keys.
+- If `datacenter` or `clusters` names something that does not exist, both the provider and the pressure source fail the poll with an error naming it (`datacenter "x" not found`, `cluster "y" not found`); the provider no longer lists nothing. Run `check-provider` after any change to those keys.
 - A standalone host's pools (not in a cluster) are ignored.
 - The vCenter session is never logged out at shutdown. It ends at vCenter's idle timeout.
 
@@ -260,7 +260,7 @@ Mocks cannot confirm these. Work through them before enforcement is turned on, w
 
 ## Seed file
 
-A seed file creates the first setups and rate rules, once. Name it in `seed:`. It is imported only on a start where the database has no setups; after that Hourglass does not read it at all, so edit setups and rules in the UI.
+A seed file creates the first setups and rate rules, once. Name it in `seed:`. It is imported only on the first start of a database, which is recorded in a marker (the `seed_state` row of the settings table, written in the same transaction); once the marker exists it is never applied again, even if every setup is later deleted, and Hourglass does not read the file, so edit setups and rules in the UI. A database that already has setups, rules or users other than the local admin and no marker is treated as initialised.
 
 ```yaml
 default_weight: 1            # optional

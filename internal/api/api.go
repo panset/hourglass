@@ -69,6 +69,25 @@ type API struct{ d Deps }
 // New builds the router. It panics when a route of the table has no handler
 // (a programming error, caught by the tests).
 func New(d Deps) http.Handler {
+	h, _ := build(d)
+	return h
+}
+
+// registrar is the only way to add a handler to the public listener's mux:
+// it records every pattern, and registrar.register holds the only
+// Handle call in this package that the source scan in registration_test.go
+// allows. Auth routes arrive through the same function value.
+type registrar struct {
+	mux      *http.ServeMux
+	patterns []string
+}
+
+func (r *registrar) register(pattern string, h http.Handler) {
+	r.patterns = append(r.patterns, pattern)
+	r.mux.Handle(pattern, h)
+}
+
+func build(d Deps) (http.Handler, *registrar) {
 	if d.Store == nil || d.Auth == nil {
 		panic("api: Store and Auth are required")
 	}
@@ -82,8 +101,8 @@ func New(d Deps) http.Handler {
 		d.Location = time.UTC
 	}
 	a := &API{d: d}
-	mux := http.NewServeMux()
-	d.Auth.Register(mux)
+	reg := &registrar{mux: http.NewServeMux()}
+	d.Auth.Register(reg.register)
 	hs := a.handlers()
 	for _, r := range routes {
 		if authServed[r.OperationID] {
@@ -93,26 +112,26 @@ func New(d Deps) http.Handler {
 		if !ok {
 			panic(fmt.Sprintf("api: no handler for operation %s", r.OperationID))
 		}
-		mux.Handle(r.Method+" "+r.Pattern, a.guard(r.Access, h))
+		reg.register(r.Method+" "+r.Pattern, a.guard(r.Access, h))
 	}
 	// Anything else under /api/ or /auth/ is a JSON not_found, never HTML.
-	mux.HandleFunc("/api/", notFound)
-	mux.HandleFunc("/auth/", notFound)
+	reg.register("/api/", http.HandlerFunc(notFound))
+	reg.register("/auth/", http.HandlerFunc(notFound))
 	if d.Fallback != nil {
-		mux.Handle("/", d.Fallback)
+		reg.register("/", d.Fallback)
 	} else {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
+		reg.register("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
 	}
 
 	// Outermost first: log, recover, no-store, CORS, session, last-login hook.
-	var h http.Handler = mux
+	var h http.Handler = reg.mux
 	h = a.trackLocalLogin(h)
 	h = d.Auth.Authenticate(h)
 	h = d.Auth.CORS(h)
 	h = noStore(h)
 	h = a.recoverer(h)
 	h = a.logRequests(h)
-	return h
+	return h, reg
 }
 
 // guard wraps a handler in the middleware chain of an access level. Role and

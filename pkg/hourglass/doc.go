@@ -28,7 +28,9 @@
 // Snapshot with the enabled setups (labels, details, resolved weight and
 // expected resource name), the active holds and the provider's allocations,
 // and passes it to the pressure source and the metering policy. Setup,
-// User and Hold are plain structs that mirror the data model.
+// User and Hold are plain structs that mirror the data model. Extensions
+// should read the time of a poll from Snapshot.Time, not the wall clock, so
+// that they behave the same under the test clocks and in replays.
 //
 // A minimal hook package looks like this:
 //

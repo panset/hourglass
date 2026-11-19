@@ -18,7 +18,10 @@ go_library(
 
 go_test(
     name = "settings_test",
-    srcs = ["settings_test.go"],
+    srcs = [
+        "resourcename_test.go",
+        "settings_test.go",
+    ],
     embed = [":settings"],
     deps = [
         "//internal/metering",

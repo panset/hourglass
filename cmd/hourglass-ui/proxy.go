@@ -62,11 +62,27 @@ func newHandler(ui fs.FS, apiBase string) (http.Handler, error) {
 			w.Header().Set("Cache-Control", "no-store")
 			_, _ = w.Write([]byte("{\"status\":\"ok\"}\n"))
 		case isProxied(r.URL.Path):
+			if oddPath(r) {
+				apierr.Write(w, http.StatusBadRequest, apierr.Validation, "the request path is not normalised")
+				return
+			}
 			rp.ServeHTTP(w, r)
 		default:
 			static.ServeHTTP(w, r)
 		}
 	}), nil
+}
+
+// oddPath reports a proxied path that the upstream might resolve differently
+// from the prefix check here: dot segments, or an encoded slash or backslash.
+func oddPath(r *http.Request) bool {
+	for _, seg := range strings.Split(r.URL.Path, "/") {
+		if seg == "." || seg == ".." {
+			return true
+		}
+	}
+	raw := strings.ToLower(r.URL.EscapedPath())
+	return strings.Contains(raw, "%2f") || strings.Contains(raw, "%5c") || strings.Contains(r.URL.Path, "\\")
 }
 
 func isProxied(p string) bool {

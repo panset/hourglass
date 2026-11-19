@@ -436,3 +436,72 @@ func TestEXT7_UserApprovedHookReceivesUser(t *testing.T) {
 		t.Errorf("events = %+v", evs)
 	}
 }
+
+// ADM-3 / RULE-4: a rules change shows the whole before and after list through
+// the audit API (the verifier's finding: both came back null).
+func TestADM3_RulesAuditShowsBeforeAndAfterLists(t *testing.T) {
+	e := newAdEnv(t)
+	uWantOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"tier=a","weight":2}]}`), 200)
+	uWantOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"tier=b","weight":3},{"selector":"","weight":1}]}`), 200)
+	es := adArr(t, uWantOK(t, e.get("/api/v1/admin/audit?action=rules.replace"), 200), "entries")
+	if len(es) != 2 {
+		t.Fatalf("entries = %v", es)
+	}
+	newest := adObjOf(t, es[0])
+	before, after := adArr(t, adObjOf(t, newest["before"]), "rules"), adArr(t, adObjOf(t, newest["after"]), "rules")
+	if len(before) != 1 || adObjOf(t, before[0])["selector"] != "tier=a" || uNum(t, adObjOf(t, before[0]), "weight") != 2 ||
+		len(after) != 2 || adObjOf(t, after[1])["selector"] != "" || adObjOf(t, after[0])["selector"] != "tier=b" {
+		t.Errorf("before %v after %v", before, after)
+	}
+	first := adObjOf(t, es[1])
+	if len(adArr(t, adObjOf(t, first["before"]), "rules")) != 0 || len(adArr(t, adObjOf(t, first["after"]), "rules")) != 1 {
+		t.Errorf("first change: %v", first)
+	}
+}
+
+// ADM-3: no audit action reads back with both sides null; each carries what
+// changed, as an object, through the API.
+func TestADM3_EveryAuditActionCarriesBeforeAndAfter(t *testing.T) {
+	e := newAdEnv(t)
+	d := e.dev("dev")
+	p := e.user("pend", store.StatusPending)
+	id := e.setup("s1", true, map[string]string{"tier": "a"})
+	sp := setupPath + "/" + uItoa(id)
+	uWantOK(t, e.send("PUT", sp, `{"name":"s1","labels":{"tier":"b"},"details":{},"enabled":true,"resource_name_override":null}`), 200)
+	uWantOK(t, e.send("PUT", settingsPath, fullSettings("default_allowance=1")), 200)
+	uWantOK(t, e.send("POST", "/api/v1/admin/users/"+uItoa(d.user.ID)+"/grants", `{"amount_tokens":1,"reason":"one"}`), 201)
+	uWantOK(t, e.send("POST", "/api/v1/admin/users/"+uItoa(p.user.ID)+"/reject", ""), 200)
+	uWantOK(t, e.send("PUT", "/api/v1/admin/users/"+uItoa(d.user.ID)+"/roles", `{"roles":["developer","admin"]}`), 200)
+	uWantOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"tier=b","weight":3}]}`), 200)
+	if rec := e.send("DELETE", sp, ""); rec.Code != 204 {
+		t.Fatalf("delete setup: %d %s", rec.Code, rec.Body)
+	}
+	es := adArr(t, uWantOK(t, e.get("/api/v1/admin/audit?limit=200"), 200), "entries")
+	seen := map[string]bool{}
+	for _, x := range es {
+		en := adObjOf(t, x)
+		act, _ := en["action"].(string)
+		seen[act] = true
+		b, a := en["before"], en["after"]
+		if b == nil && a == nil {
+			t.Errorf("%s: before and after are both null", act)
+		}
+		switch act {
+		case "setup.update", "setup.delete", "user.roles", "user.reject", "rules.replace", "settings.update", "ledger.grant":
+			if b == nil {
+				t.Errorf("%s: before is null", act)
+			}
+		}
+		switch act {
+		case "setup.create", "setup.update", "user.roles", "user.reject", "rules.replace", "settings.update", "ledger.grant":
+			if a == nil {
+				t.Errorf("%s: after is null", act)
+			}
+		}
+	}
+	for _, act := range []string{"setup.update", "setup.delete", "user.roles", "user.reject", "rules.replace", "settings.update", "ledger.grant"} {
+		if !seen[act] {
+			t.Errorf("no %s audit row seen", act)
+		}
+	}
+}
