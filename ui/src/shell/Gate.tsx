@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 import { Navigate, useLocation } from "react-router-dom";
+import { Alert, Button } from "../components";
 import ChangePassword from "../pages/change-password";
 import Login from "../pages/login";
 import Unauthorized from "../pages/unauthorized";
 import { Layout } from "./Layout";
+import { useState } from "react";
 import { useSessionState } from "./session";
 
 const PUBLIC_ONLY = new Set(["/login", "/unauthorized", "/change-password"]);
@@ -14,10 +16,12 @@ const PUBLIC_ONLY = new Set(["/login", "/unauthorized", "/change-password"]);
  * no roles -> only /unauthorized, whatever URL was requested; otherwise the app layout.
  */
 export function Gate() {
-  const { state } = useSessionState();
+  const { state, refresh } = useSessionState();
   const { pathname } = useLocation();
 
   if (state.status === "loading") return <p className="public-column muted">Loading…</p>;
+
+  if (state.status === "error") return <SessionError message={state.message} retry={refresh} />;
 
   if (state.status === "anonymous") {
     return pathname === "/login" ? <Login /> : <Navigate to="/login" replace />;
@@ -32,4 +36,27 @@ export function Gate() {
   }
   if (PUBLIC_ONLY.has(pathname)) return <Navigate to="/" replace />;
   return <Layout />;
+}
+
+/** The first GET /session failed for a reason other than 401, so we do not know whether the user is signed in. */
+function SessionError({ message, retry }: { message: string; retry: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="public-column">
+      <h1>Hourglass</h1>
+      <Alert tone="error">{message}</Alert>
+      <div>
+        <Button
+          variant="primary"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void retry().finally(() => setBusy(false));
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    </div>
+  );
 }

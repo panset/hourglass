@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { useState } from "react";
 import { Alert, Button, ConfirmDialog, Field, Input } from "../../components";
+import { usePanelFocus } from "../../hooks/usePanelFocus";
 import { errorText, useAction } from "../admin-shared/useAction";
 import shared from "../admin-shared/admin.module.css";
 import { createSetup, deleteSetup, forceRelease, updateSetup, type Setup, type SetupInput } from "./api";
@@ -52,6 +53,7 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
   const save = useAction();
   const del = useAction();
   const force = useAction();
+  const panelRef = usePanelFocus<HTMLElement>(onClose);
 
   const parsed = parseJson(details);
 
@@ -92,7 +94,7 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
 
   const title = setup ? `Edit ${setup.name}` : "Add setup";
   return (
-    <aside className={`${shared.panel} ${shared.side}`} aria-label={setup ? "Edit setup" : "Add setup"}>
+    <aside ref={panelRef} className={`${shared.panel} ${shared.side}`} aria-label={setup ? "Edit setup" : "Add setup"}>
       <h2>{title}</h2>
       <Field label="Name">{(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
 

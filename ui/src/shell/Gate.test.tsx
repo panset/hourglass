@@ -134,4 +134,30 @@ describe("UI-5 shell routing by session state", () => {
     const post = calls.find((c) => c.method === "POST");
     expect(post?.headers.get("X-CSRF-Token")).toBe("csrf-dana");
   });
+
+  it("a network failure on the first GET /session shows Cannot reach the server with Retry, not sign-in", async () => {
+    let fail = true;
+    mockApi({
+      "GET /api/v1/session": () => {
+        if (fail) throw new TypeError("Failed to fetch");
+        return developerSession;
+      },
+      ...barRoutes,
+    });
+    renderAt("/");
+    expect(await screen.findByText("Cannot reach the server.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in as admin" })).toBeNull();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("navigation", { name: "Main" })).toBeInTheDocument();
+  });
+
+  it("a render error in a page shows a message with Reload instead of a blank page", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockApi({ "GET /api/v1/session": developerSession, ...barRoutes, "GET /api/v1/me/usage": () => ({ days: null }) });
+    renderAt("/");
+    expect(await screen.findByRole("button", { name: "Reload" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+    spy.mockRestore();
+  });
 });

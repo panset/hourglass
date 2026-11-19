@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Audit log (ADM-3). No wireframe: built from the spec row.
 import { useState } from "react";
-import { Alert, Button, Field, Input, Select, Table } from "../../components";
+import { Alert, Button, Field, Input, Select, Table, Time, zoneLabel } from "../../components";
 import { useApi } from "../../hooks/useApi";
-import { formatDateTime } from "../../lib/format";
 import shared from "../admin-shared/admin.module.css";
 import { listActors, listAudit, type AuditEntry } from "./api";
 
@@ -103,7 +102,7 @@ export default function Page() {
           rowKey={(e) => e.id}
           emptyMessage="No audit entries match."
           columns={[
-            { key: "time", header: "Time", render: (e) => formatDateTime(e.created_at) },
+            { key: "time", header: `Time (${zoneLabel()})`, nowrap: true, render: (e) => <Time iso={e.created_at} /> },
             { key: "actor", header: "Actor", render: (e) => e.actor.name },
             { key: "action", header: "Action", render: (e) => <code>{e.action}</code> },
             { key: "target", header: "Target", render: (e) => <code>{e.target}</code> },

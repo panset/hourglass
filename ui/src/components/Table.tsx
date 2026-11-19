@@ -8,6 +8,8 @@ export interface Column<T> {
   header: string;
   render: (row: T) => ReactNode;
   align?: "left" | "right";
+  /** Keep the cell on one line (names, times); long text is cut with an ellipsis, see `Clip`. */
+  nowrap?: boolean;
 }
 
 export interface TableProps<T> {
@@ -54,7 +56,7 @@ export function Table<T>({
             rows.map((row) => (
               <tr key={rowKey(row)}>
                 {columns.map((c) => (
-                  <td key={c.key} className={c.align === "right" ? styles.right : undefined}>
+                  <td key={c.key} className={[c.align === "right" ? styles.right : "", c.nowrap ? styles.nowrap : ""].join(" ").trim() || undefined}>
                     {c.render(row)}
                   </td>
                 ))}
@@ -64,5 +66,14 @@ export function Table<T>({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** One-line text cut with an ellipsis when it is too long; the full text is the tooltip. */
+export function Clip({ text, max = 28 }: { text: string; max?: number }) {
+  return (
+    <span className={styles.clip} style={{ maxWidth: `${max}ch` }} title={text}>
+      {text}
+    </span>
   );
 }

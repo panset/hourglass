@@ -127,6 +127,26 @@ describe("LED-4 grant and LED-5 reset", () => {
     return screen.getByRole("complementary", { name: "Grant tokens" });
   }
 
+  it("moves focus into the Grant panel, traps Tab, and Escape closes it and returns focus to the button", async () => {
+    mockApi(routes());
+    renderPage();
+    await screen.findByRole("table", { name: "Users" });
+    const opener = screen.getByRole("button", { name: "Grant to Priya N." });
+    opener.focus();
+    await userEvent.click(opener);
+    const panel = screen.getByRole("complementary", { name: "Grant tokens" });
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    for (let i = 0; i < 12; i++) {
+      await userEvent.tab();
+      expect(panel).toContainElement(document.activeElement as HTMLElement);
+    }
+    await userEvent.tab({ shift: true });
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary", { name: "Grant tokens" })).toBeNull();
+    expect(opener).toHaveFocus();
+  });
+
   it("requires a reason and a non-zero amount before calling the API", async () => {
     const { calls } = mockApi(routes());
     renderPage();

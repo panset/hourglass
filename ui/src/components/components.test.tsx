@@ -111,13 +111,13 @@ describe("Modal and ConfirmDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Acquire" }));
     const confirm = screen.getByRole("button", { name: "Acquire now" });
     const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(cancel).toHaveFocus(); // the safe button, so a stray Enter does not confirm
+    await userEvent.tab();
     expect(confirm).toHaveFocus();
     await userEvent.tab();
     expect(cancel).toHaveFocus();
-    await userEvent.tab();
-    expect(confirm).toHaveFocus();
     await userEvent.tab({ shift: true });
-    expect(cancel).toHaveFocus();
+    expect(confirm).toHaveFocus();
   });
 
   it("confirm and cancel call back; errors and busy show", async () => {

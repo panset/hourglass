@@ -108,6 +108,19 @@ describe("SET-2, SET-3 add and edit", () => {
     expect(calls.some((c) => c.method === "PUT")).toBe(false);
   });
 
+  it("moves focus into the Edit panel, and Escape closes it and returns focus to Edit", async () => {
+    mockApi(routes());
+    render(<Page />);
+    const opener = await screen.findByRole("button", { name: "Edit setup-04" });
+    opener.focus();
+    await userEvent.click(opener);
+    const panel = screen.getByRole("complementary", { name: "Edit setup" });
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary", { name: "Edit setup" })).toBeNull();
+    expect(opener).toHaveFocus();
+  });
+
   it("surfaces the SET-3 label limit error from the API", async () => {
     mockApi(routes({ "PUT /api/v1/admin/setups/4": () => errorResponse(400, "validation", "label value longer than 63 characters", "labels.size") }));
     render(<Page />);

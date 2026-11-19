@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Hand-drawn SVG bars for tokens per day (no chart library). Heights are scaled to the API's numbers; nothing is derived.
-import { formatDate, formatTokens } from "../../lib/format";
+import { formatDay, formatTokens } from "../../lib/format";
 import type { UsageResponse } from "./holdApi";
 
 const W = 600;
@@ -27,7 +27,7 @@ export function BarChart({ days, label, highlightLast }: { days: UsageResponse["
             height={h}
             fill={today ? "#1D4ED8" : "#9CA3AF"}
           >
-            <title>{`${formatDate(`${d.date}T00:00:00Z`, { timeZone: "UTC" })}: ${formatTokens(d.debited_tokens)} tokens`}</title>
+            <title>{`${formatDay(d.date)}: ${formatTokens(d.debited_tokens)} tokens`}</title>
           </rect>
         );
       })}

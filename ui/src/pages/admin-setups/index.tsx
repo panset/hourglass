@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Setup inventory (SET-1..SET-6, SET-5). Every value shown is an API field (UI-1).
 import { useState } from "react";
-import { Alert, Badge, Button, Chip, Table } from "../../components";
+import { Alert, Badge, Button, Chip, Clip, Table, Time, zoneLabel } from "../../components";
 import { useApi } from "../../hooks/useApi";
-import { formatDateTime } from "../../lib/format";
 import { errorText, useAction } from "../admin-shared/useAction";
 import shared from "../admin-shared/admin.module.css";
 import { getCollector, listSetups, updateSetup, type Orphan, type Setup } from "./api";
@@ -86,7 +85,7 @@ export default function Page() {
             rowKey={(s) => s.id}
             emptyMessage="No setups yet. Add one to start."
             columns={[
-              { key: "name", header: "Setup", render: (s) => <span className={shared.name}>{s.name}</span> },
+              { key: "name", header: "Setup", nowrap: true, render: (s) => <span className={shared.name}><Clip text={s.name} max={32} /></span> },
               {
                 key: "labels",
                 header: "Labels",
@@ -107,8 +106,9 @@ export default function Page() {
               },
               {
                 key: "seen",
-                header: "Last seen by provider",
-                render: (s) => (s.admin?.last_seen_at ? formatDateTime(s.admin.last_seen_at) : "Not deployed"),
+                header: `Last seen by provider (${zoneLabel()})`,
+                nowrap: true,
+                render: (s) => (s.admin?.last_seen_at ? <Time iso={s.admin.last_seen_at} /> : "Not deployed"),
               },
               { key: "held", header: "Held by", render: (s) => s.holder?.name ?? "" },
               {
@@ -150,7 +150,7 @@ export default function Page() {
                 emptyMessage="No orphans."
                 columns={[
                   { key: "res", header: "Resource name reported", render: (o) => o.resource_name },
-                  { key: "first", header: "First seen", render: (o) => formatDateTime(o.first_seen_at) },
+                  { key: "first", header: `First seen (${zoneLabel()})`, nowrap: true, render: (o) => <Time iso={o.first_seen_at} /> },
                   {
                     key: "match",
                     header: "Matches",

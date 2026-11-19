@@ -52,6 +52,26 @@ export function formatDateTime(iso: string, o: FormatDateOptions = {}): string {
   return parts(iso, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, o.timeZone);
 }
 
+/** The zone abbreviation of the browser ("PST", "GMT+1"), or of `timeZone`. */
+export function localZoneAbbrev(timeZone?: string, at: Date = new Date()): string {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "short" }).formatToParts(at);
+  return p.find((x) => x.type === "timeZoneName")?.value ?? "";
+}
+
+/** "2026-11-18 17:30 UTC": the exact API instant, for tooltips. */
+export function formatUtc(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
+/** "2026-11-01" -> "Nov 1". The API's calendar date is used as given; no zone conversion. */
+export function formatDay(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return date;
+  return parts(`${m[1]}-${m[2]}-${m[3]}T12:00:00Z`, { month: "short", day: "numeric" }, "UTC");
+}
+
 /** "Nov 18" */
 export function formatDate(iso: string, o: FormatDateOptions = {}): string {
   return parts(iso, { month: "short", day: "numeric" }, o.timeZone);

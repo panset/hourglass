@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT
 import {
+  formatDay,
+  formatUtc,
+  localZoneAbbrev,
   formatDate,
   formatDateTime,
   formatDuration,
@@ -61,5 +64,17 @@ describe("pressure and rate", () => {
     expect(formatMultiplier(1.5)).toBe("1.5×");
     expect(formatPerHour(2)).toBe("2.0 / h");
     expect(formatPerHour(0.125)).toBe("0.125 / h");
+  });
+});
+
+describe("zones and day labels", () => {
+  it("formatUtc gives the UTC instant", () => {
+    expect(formatUtc("2026-11-01T00:00:00Z")).toBe("2026-11-01 00:00 UTC");
+  });
+  it("localZoneAbbrev names the zone", () => {
+    expect(localZoneAbbrev("UTC")).toBe("UTC");
+  });
+  it("formatDay uses the API date unchanged", () => {
+    expect(formatDay("2026-11-01")).toBe("Nov 1");
   });
 });

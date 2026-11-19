@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Settings (ADM-2, ADM-4, RULE-3). Nothing is saved implicitly (UI rules).
 import { useState } from "react";
-import { Alert, Button, Field, Input, Table } from "../../components";
+import { Alert, Button, Field, Input, Table, Time, zoneLabel } from "../../components";
 import { useApi } from "../../hooks/useApi";
-import { formatDateTime } from "../../lib/format";
 import shared from "../admin-shared/admin.module.css";
 import { errorText, useAction } from "../admin-shared/useAction";
 import { getCollector, getRules, getSettings, putRules, putSettings } from "./api";
@@ -23,7 +22,7 @@ function Collector() {
         <div className={shared.stat}>
           <span className={shared.sub}>Last successful poll</span>
           <span className={shared.statValue}>
-            {d.last_successful_poll_at ? formatDateTime(d.last_successful_poll_at) : "Never"}
+            {d.last_successful_poll_at ? <Time iso={d.last_successful_poll_at} /> : "Never"}
           </span>
         </div>
         <div className={shared.stat}>
@@ -44,7 +43,7 @@ function Collector() {
       </div>
       {d.last_error ? (
         <Alert tone="warning">
-          Last error ({formatDateTime(d.last_error.at)}): {d.last_error.message}
+          Last error (<Time iso={d.last_error.at} />): {d.last_error.message}
         </Alert>
       ) : (
         <p className={shared.note}>No collector error recorded.</p>
@@ -56,8 +55,8 @@ function Collector() {
         rowKey={(o) => o.started_at}
         emptyMessage="No outages."
         columns={[
-          { key: "s", header: "Started", render: (o) => formatDateTime(o.started_at) },
-          { key: "e", header: "Ended", render: (o) => (o.ended_at ? formatDateTime(o.ended_at) : "Ongoing") },
+          { key: "s", header: `Started (${zoneLabel()})`, nowrap: true, render: (o) => <Time iso={o.started_at} /> },
+          { key: "e", header: "Ended", nowrap: true, render: (o) => (o.ended_at ? <Time iso={o.ended_at} /> : "Ongoing") },
           { key: "d", header: "Duration (min)", render: (o) => o.duration_minutes },
         ]}
       />
@@ -70,7 +69,7 @@ function Collector() {
         columns={[
           { key: "t", header: "Event", render: (f) => f.event_type },
           { key: "h", header: "Hook", render: (f) => f.hook },
-          { key: "w", header: "When", render: (f) => formatDateTime(f.started_at) },
+          { key: "w", header: `When (${zoneLabel()})`, nowrap: true, render: (f) => <Time iso={f.started_at} /> },
           { key: "e", header: "Error", render: (f) => f.error },
         ]}
       />

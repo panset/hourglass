@@ -125,6 +125,21 @@ describe("Setups page", () => {
     expect(within(table).getByText("8.0 / h")).toBeInTheDocument();
   });
 
+  it("UI-1 not-yet-charging cost shows the API reason text, and nothing when it is null", async () => {
+    const waiting = (id: number, reason: string | null): Setup => ({
+      ...base, id, name: `wait-${id}`, labels: { size: "small" }, weight: 1, state: "held", deployed: false, held_since: "2026-11-16T10:00:00Z",
+      holder: { user_id: 3, hold_id: 90 + id, name: "Sam Lee", balance_tokens: 5, overdrawn: false, is_you: false },
+      metering: { active: false, started_at: null, expected_start_at: "2099-01-01T00:00:00Z", reason },
+      cost_per_hour_tokens: { now: 2, at_peak: 3 },
+    });
+    mockApi(routes({ "GET /api/v1/setups": list({}, [waiting(7, "Charging starts when deployed"), waiting(8, null)]) }));
+    mount();
+    const table = await screen.findByRole("table", { name: "All setups" });
+    expect(within(table).getByText("Charging starts when deployed")).toBeInTheDocument();
+    expect(within(table).queryByText(/Free for/)).toBeNull();
+    expect(within(table).queryByText("Not charging yet")).toBeNull();
+  });
+
   it("empty state", async () => {
     mockApi(routes({ "GET /api/v1/setups": list({}, []) }));
     mount();

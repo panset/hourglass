@@ -5,8 +5,7 @@ import { Alert } from "./Alert";
 import { Button } from "./Button";
 import styles from "./Modal.module.css";
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+import { FOCUSABLE } from "../hooks/usePanelFocus";
 
 export interface ModalProps {
   open: boolean;
@@ -25,6 +24,7 @@ export interface ModalProps {
 export function Modal({ open, title, onClose, children, footer }: ModalProps) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -32,7 +32,12 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
     const node = ref.current;
-    const first = node?.querySelector<HTMLElement>(FOCUSABLE);
+    // A field in the body first, then the element marked data-autofocus (the safe button of a
+    // confirmation, so a stray Enter does not confirm), then the first focusable element.
+    const first =
+      bodyRef.current?.querySelector<HTMLElement>(FOCUSABLE) ??
+      node?.querySelector<HTMLElement>("[data-autofocus]") ??
+      node?.querySelector<HTMLElement>(FOCUSABLE);
     (first ?? node)?.focus();
 
     const onKey = (e: KeyboardEvent) => {
@@ -70,7 +75,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
     <div className={styles.backdrop}>
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={styles.dialog}>
         <h2 id={titleId}>{title}</h2>
-        <div>{children}</div>
+        <div ref={bodyRef}>{children}</div>
         {footer ? <div className={styles.footer}>{footer}</div> : null}
       </div>
     </div>,
@@ -117,7 +122,7 @@ export function ConfirmDialog({
           <Button variant={destructive ? "destructive" : "primary"} disabled={busy} onClick={onConfirm}>
             {confirmLabel}
           </Button>
-          <Button disabled={busy} onClick={onCancel}>
+          <Button disabled={busy} onClick={onCancel} data-autofocus="">
             {cancelLabel}
           </Button>
         </>

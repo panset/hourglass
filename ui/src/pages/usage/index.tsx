@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { ApiError } from "../../api/client";
 import { getMe, getPressure } from "../../api/endpoints";
-import { Alert, Badge, Button, Chip, Select, Table, useToast } from "../../components";
+import { Alert, Badge, Button, Chip, Select, Table, Time, useToast, zoneLabel } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { POLL_INTERVAL_MS } from "../../hooks/usePolling";
 import {
   formatDate,
-  formatDateTime,
+  formatDay,
   formatMultiplier,
   formatPercent,
   formatPeriod,
@@ -247,9 +247,9 @@ export default function UsagePage() {
                           }`}
                         />
                         <div className={styles.axis}>
-                          <span>{formatDate(`${usage.data.days[0]!.date}T00:00:00Z`, { timeZone: "UTC" })}</span>
+                          <span>{formatDay(usage.data.days[0]!.date)}</span>
                           <span>
-                            {formatDate(`${usage.data.days[usage.data.days.length - 1]!.date}T00:00:00Z`, { timeZone: "UTC" })}
+                            {formatDay(usage.data.days[usage.data.days.length - 1]!.date)}
                           </span>
                         </div>
                       </>
@@ -269,7 +269,7 @@ export default function UsagePage() {
                     rowKey={(e) => e.id}
                     emptyMessage="No ledger entries for this period."
                     columns={[
-                      { key: "when", header: "When", render: (e) => formatDateTime(e.created_at) },
+                      { key: "when", header: `When (${zoneLabel()})`, nowrap: true, render: (e) => <Time iso={e.created_at} /> },
                       { key: "type", header: "Type", render: typeLabel },
                       { key: "detail", header: "Detail", render: detail },
                       { key: "amount", header: "Amount", align: "right", render: (e) => formatTokens(e.amount_tokens, { signed: true }) },

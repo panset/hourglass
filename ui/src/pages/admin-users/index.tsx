@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Users and grants (ADM-1, ADM-5, LED-4, LED-5). Every number shown is an API field (UI-1).
 import { useState } from "react";
-import { Alert, Badge, Button, ConfirmDialog, Field, Input, Table } from "../../components";
+import { Alert, Badge, Button, ConfirmDialog, Field, Input, Table, Time } from "../../components";
 import { useApi } from "../../hooks/useApi";
-import { formatDateTime, formatPerHour, formatTokens } from "../../lib/format";
+import { usePanelFocus } from "../../hooks/usePanelFocus";
+import { formatPerHour, formatTokens } from "../../lib/format";
 import { errorText, useAction } from "../admin-shared/useAction";
 import shared from "../admin-shared/admin.module.css";
 import { grantTokens, listPending, listUsers, rejectUser, resetBalance, setRoles, type AdminUser, type Role } from "./api";
@@ -45,7 +46,7 @@ function PendingRow({ user, onDone }: { user: AdminUser; onDone: () => void }) {
           <div className={shared.name}>{user.name}</div>
           <div className={shared.sub}>{user.email}</div>
         </div>
-        <div className={shared.sub}>First sign-in {formatDateTime(user.first_sign_in_at)}</div>
+        <div className={shared.sub}>First sign-in <Time iso={user.first_sign_in_at} /></div>
         <RoleBoxes id={user.name} value={roles} onChange={setPicked} />
         <Button
           variant="primary"
@@ -102,6 +103,7 @@ function GrantPanel({
   const [confirmReset, setConfirmReset] = useState(false);
   const grant = useAction();
   const reset = useAction();
+  const panelRef = usePanelFocus<HTMLElement>(onClose);
 
   const submitGrant = async () => {
     const n = Number(amount);
@@ -131,7 +133,7 @@ function GrantPanel({
   const holds = user.active_holds.map((h) => h.setup_name).join(", ");
 
   return (
-    <aside className={`${shared.panel} ${shared.side}`} aria-label="Grant tokens">
+    <aside ref={panelRef} className={`${shared.panel} ${shared.side}`} aria-label="Grant tokens">
       <h2>Grant tokens to {user.name}</h2>
       <p className={shared.sub}>
         Balance {formatTokens(user.balance_tokens)}
@@ -144,7 +146,7 @@ function GrantPanel({
         {(p) => <Input {...p} value={reason} onChange={(e) => setReason(e.target.value)} />}
       </Field>
       <p className={shared.sub}>
-        Unused tokens expire {formatDateTime(list.period_ends_at)}; debt carries into the next period. Both actions
+        Unused tokens expire <Time iso={list.period_ends_at} />; debt carries into the next period. Both actions
         are written to the audit log.
       </p>
       {grant.error ? <Alert tone="error">{errorText(grant.error)}</Alert> : null}

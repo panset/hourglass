@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { setCsrfToken, setUnauthorizedHandler } from "../api/client";
+import { ApiError, setCsrfToken, setUnauthorizedHandler } from "../api/client";
 import { getSession, logout } from "../api/endpoints";
 import type { Session } from "../api/types";
 
 export type SessionState =
   | { status: "loading"; session: undefined }
   | { status: "anonymous"; session: undefined }
+  /** The session could not be read for a reason other than 401 (server unreachable, 5xx): not "signed out". */
+  | { status: "error"; session: undefined; message: string }
   | { status: "ready"; session: Session };
 
 interface SessionApi {
@@ -32,8 +34,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       apply(await getSession());
-    } catch {
-      apply(undefined);
+    } catch (e) {
+      // Only a 401 means "not signed in". Anything else (network, 5xx) is an error with a retry.
+      if (e instanceof ApiError && e.status === 401) apply(undefined);
+      else {
+        setCsrfToken(undefined);
+        setState({
+          status: "error",
+          session: undefined,
+          message: e instanceof ApiError && e.code === "network" ? "Cannot reach the server." : "Could not load your session.",
+        });
+      }
     }
   }, [apply]);
 

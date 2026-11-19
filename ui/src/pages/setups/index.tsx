@@ -5,10 +5,10 @@ import { useState, type FormEvent } from "react";
 import { ApiError, api } from "../../api/client";
 import { getMe, getPressure } from "../../api/endpoints";
 import type { Me } from "../../api/types";
-import { Alert, Badge, Button, ConfirmDialog, Field, Input, Modal, Select, Table, useToast } from "../../components";
+import { Alert, Badge, Button, Clip, ConfirmDialog, Field, Input, Modal, Select, Table, useToast } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { POLL_INTERVAL_MS } from "../../hooks/usePolling";
-import { formatDuration, formatMultiplier, formatPerHour, formatTokens } from "../../lib/format";
+import { formatMultiplier, formatPerHour, formatTokens } from "../../lib/format";
 import { isAdmin, useSession } from "../../shell/session";
 import { elapsedSince, releaseHold, type Hold, type Setup, type SetupList } from "../usage/holdApi";
 import styles from "./setups.module.css";
@@ -113,9 +113,8 @@ export default function SetupsPage() {
   const costCell = (s: Setup) => {
     if (s.state === "free") return `${formatPerHour(s.cost_per_hour_tokens.now)} if acquired`;
     if (s.state === "held" && s.metering && !s.metering.active) {
-      const start = s.metering.expected_start_at ? Date.parse(s.metering.expected_start_at) : NaN;
-      if (!Number.isNaN(start) && start > Date.now()) return `Free for ${formatDuration((start - Date.now()) / 1000)} more`;
-      return s.metering.reason ?? "Not charging yet";
+      // The policy's own reason text from the API; nothing when it sends none.
+      return s.metering.reason ?? "";
     }
     return formatPerHour(s.cost_per_hour_tokens.now);
   };
@@ -124,9 +123,10 @@ export default function SetupsPage() {
     {
       key: "name",
       header: "Setup",
+      nowrap: true,
       render: (s: Setup) => (
         <>
-          <strong>{s.name}</strong>
+          <strong><Clip text={s.name} max={32} /></strong>
           {admin && s.state === "disabled" ? <> <Badge tone="grey">Disabled</Badge></> : null}
         </>
       ),
