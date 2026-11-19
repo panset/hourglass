@@ -1,0 +1,22 @@
+package mylab
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+	"github.com/panset/hourglass/pkg/hourglasstest"
+)
+
+func TestConformance(t *testing.T) {
+	hourglasstest.TestProvider(t, func() hourglass.ResourceProvider {
+		p, err := hourglass.NewProvider("fixed", json.RawMessage(`{"names":["a","b"]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	})
+	hourglasstest.TestPressureSource(t, func() hourglass.PressureSource { return heldCount{} })
+	hourglasstest.TestMeteringPolicy(t, func() hourglass.MeteringPolicy { return weekdays{} })
+	hourglasstest.TestHook(t, func() hourglass.Hook { return printer{} })
+}

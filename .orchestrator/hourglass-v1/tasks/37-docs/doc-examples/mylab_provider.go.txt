@@ -1,0 +1,52 @@
+package mylab
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// decode reads an extension's config block. The block is nil or empty when
+// the config file gives none.
+func decode(raw json.RawMessage, dst any) error {
+	if t := bytes.TrimSpace(raw); len(t) == 0 || string(t) == "null" {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+	return nil
+}
+
+// fixedProvider reports a fixed list of resources as deployed.
+type fixedProvider struct{ names []string }
+
+func (fixedProvider) Name() string { return "fixed" }
+
+func (p fixedProvider) List(ctx context.Context) ([]hourglass.Allocation, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]hourglass.Allocation, 0, len(p.names))
+	for _, n := range p.names {
+		out = append(out, hourglass.Allocation{ResourceName: n})
+	}
+	return out, nil
+}
+
+func init() {
+	hourglass.RegisterProvider("fixed", func(raw json.RawMessage) (hourglass.ResourceProvider, error) {
+		var c struct {
+			Names []string `json:"names"`
+		}
+		if err := decode(raw, &c); err != nil {
+			return nil, err
+		}
+		return fixedProvider{names: c.Names}, nil
+	})
+}

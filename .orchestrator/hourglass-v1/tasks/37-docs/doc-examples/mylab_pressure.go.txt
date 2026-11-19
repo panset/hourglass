@@ -1,0 +1,26 @@
+package mylab
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// heldCount is the share of enabled setups that are held, ignoring weights.
+type heldCount struct{}
+
+func (heldCount) Name() string { return "held-count" }
+
+func (heldCount) Pressure(ctx context.Context, s hourglass.Snapshot) (float64, error) {
+	if len(s.Setups) == 0 {
+		return 0, nil
+	}
+	return float64(len(s.Holds)) / float64(len(s.Setups)), nil
+}
+
+func init() {
+	hourglass.RegisterPressureSource("held-count", func(json.RawMessage) (hourglass.PressureSource, error) {
+		return heldCount{}, nil
+	})
+}

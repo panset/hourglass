@@ -1,0 +1,29 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+	_ "github.com/panset/hourglass/pkg/hourglass/server" // links hourglass.Run
+
+	_ "example.com/lab/mylab"
+	_ "github.com/panset/hourglass/policies/default"
+	_ "github.com/panset/hourglass/pressure/inventory"
+)
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := hourglass.Run(ctx, hourglass.Options{
+		DefaultPressureSource: "inventory",
+		DefaultMeteringPolicy: "default",
+		Args:                  os.Args[1:],
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}

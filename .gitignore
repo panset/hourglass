@@ -1,5 +1,11 @@
 # Go
 /bin/
+# Binaries from `go build` at the repository root
+/simulator
+/hourglassd
+/hourglassd-e2e
+/hourglass-ui
+/labd
 *.exe
 *.test
 *.out
@@ -38,3 +44,6 @@ test-results/
 
 # Local agent worktrees and settings
 /.claude/
+
+# e2e browser test output
+/e2e/out/

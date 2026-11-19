@@ -3,6 +3,8 @@ load("@gazelle//:def.bzl", "gazelle")
 
 # gazelle:prefix github.com/panset/hourglass
 # gazelle:exclude ui
+# gazelle:exclude .orchestrator
+# gazelle:exclude e2e/browser
 gazelle(name = "gazelle")
 
 # The UI-to-backend contract, read by //ui (generated-client drift test).

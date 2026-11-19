@@ -1,0 +1,34 @@
+package mylab
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// printer writes one JSON line per event to standard error and refuses to
+// let anyone acquire a setup labelled frozen=true.
+type printer struct{}
+
+func (printer) Name() string { return "printer" }
+
+func (printer) Handle(ctx context.Context, e hourglass.Event) error {
+	if e.Type == hourglass.EventHoldAcquiring && e.Setup != nil && e.Setup.Labels["frozen"] == "true" {
+		return fmt.Errorf("%s is frozen for maintenance", e.Setup.Name) // shown to the user
+	}
+	b, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr, string(b))
+	return nil
+}
+
+func init() {
+	hourglass.RegisterHook("printer", func(json.RawMessage) (hourglass.Hook, error) {
+		return printer{}, nil
+	})
+}

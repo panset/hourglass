@@ -1,0 +1,29 @@
+package mylab
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// weekdays meters only from Monday to Friday, in UTC. It leaves Weight at 0
+// so the rate rules decide the weight.
+type weekdays struct{}
+
+func (weekdays) Name() string { return "weekdays" }
+
+func (weekdays) Decide(ctx context.Context, h hourglass.HoldState, s hourglass.Snapshot) (hourglass.Decision, error) {
+	// Use the snapshot's time, not time.Now: the core may run on another clock.
+	switch s.Time.UTC().Weekday() {
+	case 0, 6:
+		return hourglass.Decision{Meter: false, Reason: "weekend: not metering"}, nil
+	}
+	return hourglass.Decision{Meter: true, Reason: "weekday"}, nil
+}
+
+func init() {
+	hourglass.RegisterMeteringPolicy("weekdays", func(json.RawMessage) (hourglass.MeteringPolicy, error) {
+		return weekdays{}, nil
+	})
+}
