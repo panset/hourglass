@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "api",
+    srcs = [
+        "api.go",
+        "handlers_admin.go",
+        "handlers_user.go",
+        "health.go",
+        "helpers.go",
+        "middleware.go",
+        "routes.go",
+    ],
+    importpath = "github.com/panset/hourglass/internal/api",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/api/apierr",
+        "//internal/auth",
+        "//internal/collector",
+        "//internal/events",
+        "//internal/holds",
+        "//internal/ledger",
+        "//internal/settings",
+        "//internal/store",
+    ],
+)
+
+go_test(
+    name = "api_test",
+    srcs = [
+        "helpers_test.go",
+        "router_test.go",
+        "testenv_test.go",
+    ],
+    embed = [":api"],
+    deps = [
+        "//internal/api/apierr",
+        "//internal/auth",
+        "//internal/events",
+        "//internal/holds",
+        "//internal/ledger",
+        "//internal/settings",
+        "//internal/store",
+    ],
+)

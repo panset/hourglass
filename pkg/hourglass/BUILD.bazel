@@ -8,10 +8,12 @@ go_library(
         "event_json.go",
         "events.go",
         "registry.go",
+        "run.go",
         "types.go",
     ],
     importpath = "github.com/panset/hourglass/pkg/hourglass",
     visibility = ["//visibility:public"],
+    deps = ["//internal/app/runhook"],
 )
 
 go_test(

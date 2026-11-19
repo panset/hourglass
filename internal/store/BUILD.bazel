@@ -4,6 +4,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "store",
     srcs = [
+        "app_queries.go",
         "collector_queries.go",
         "holds.go",
         "ledger.go",
@@ -30,6 +31,7 @@ go_library(
 go_test(
     name = "store_test",
     srcs = [
+        "app_queries_test.go",
         "collector_queries_test.go",
         "ledgersvc_queries_test.go",
         "store_test.go",

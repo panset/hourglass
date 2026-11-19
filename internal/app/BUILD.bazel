@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "app",
+    srcs = [
+        "app.go",
+        "metrics.go",
+        "seed.go",
+    ],
+    importpath = "github.com/panset/hourglass/internal/app",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/api",
+        "//internal/app/runhook",
+        "//internal/auth",
+        "//internal/collector",
+        "//internal/config",
+        "//internal/events",
+        "//internal/holds",
+        "//internal/ledger",
+        "//internal/rules",
+        "//internal/settings",
+        "//internal/store",
+        "//pkg/hourglass",
+    ],
+)
+
+go_test(
+    name = "app_test",
+    srcs = [
+        "app_test.go",
+        "metrics_test.go",
+        "seed_test.go",
+    ],
+    embed = [":app"],
+    deps = [
+        "//internal/app/runhook",
+        "//internal/collector",
+        "//internal/settings",
+        "//internal/store",
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)

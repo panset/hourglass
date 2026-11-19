@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "runhook",
+    srcs = ["runhook.go"],
+    importpath = "github.com/panset/hourglass/internal/app/runhook",
+    visibility = ["//:__subpackages__"],
+)
