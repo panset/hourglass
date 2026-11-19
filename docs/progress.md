@@ -1,53 +1,142 @@
 # Progress
 
-Last updated: 2026-11-19 (work paused at the owner's request)
+Last updated: 2026-11-19
 
-Status of Hourglass v1 against the spec in [SPEC.md](SPEC.md). The detailed
-task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
-[decisions.md](decisions.md).
+Status of Hourglass v1 against the spec in [SPEC.md](SPEC.md). Decisions are
+in [decisions.md](decisions.md). The task-by-task record (briefs, results,
+verification reports) is under `.orchestrator/hourglass-v1/`.
+
+## Summary
+
+All ten milestones are built, verified by agents that did not write the
+code, and pushed. The four "done" criteria hold:
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| From a clean checkout, `bazel build //...` and `bazel test //...` pass, and plain `go build ./...` gives an API-only binary | Yes | Fresh clone of the pushed repository: 254 targets built, 35 of 35 test targets pass; the `go build` binary answers `/healthz` and serves no UI. `./ci.sh` passes without `node_modules`. |
+| The spec's acceptance path passes end to end in bundled and split mode | Yes | `e2e/run.sh both`: all eight acceptance steps pass through the real UI in a headless browser in each mode (about 12 minutes per mode). |
+| HTTP tests cover every cell of the permissions table, including that a user with no role gets no data from any route | Yes | `internal/api/permissions_test.go`: every v1 cell of the table, and all 30 routes for each of 8 kinds of caller (240 combinations). A deliberately seeded leak turned the suite red. |
+| Everything is pushed and this file is current | Yes | `main` equals `origin/main` on `github.com/panset/hourglass`. |
+
+Nothing has been run against a real vCenter. See "First run against a real
+vCenter" below.
 
 ## Milestones
 
 | # | Milestone | Status |
 |---|---|---|
-| 0 | Repository: license, README stub, .gitignore, spec copy | done, pushed |
-| - | Spike: govmomi simulator resource pools and cluster figures | done; see decisions D5-D9 |
-| 1 | Build skeleton (Go module, Bazel bzlmod, rules_go, Gazelle, CI script) | verified from a fresh clone, pushed |
-| 2 | Pure core logic: selectors and rate rules, bands and smoothing, debits, ledger and rollover | verified, pushed |
-| 3 | SQLite store and migrations | verified, pushed |
-| 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | verified, pushed |
-| 5 | Collector and event queue | verified, pushed |
-| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | built, pushed, verified with findings; fixes for the five medium findings in progress (paused) |
-| 7 | React + TypeScript UI | built, pushed, verified with findings; fixes for two medium findings in progress (paused) |
-| 8 | vSphere provider and pressure source | verified, pushed |
-| 9 | Images, compose stacks, end-to-end acceptance path (bundled and split) | built and pushed; the acceptance path passes in both modes; to be re-run after the fixes |
-| 10 | Docs and `examples/custom` | documents, `examples/custom` and the license check built and pushed; final verification from a clean clone not started |
+| 0 | Repository: license, README stub, .gitignore, spec copy | Done |
+| - | Spike: govmomi simulator resource pools and cluster figures | Done (D5 to D8) |
+| 1 | Build skeleton: Go module, Bazel bzlmod, rules_go, Gazelle, CI script | Verified |
+| 2 | Pure core logic: selectors and rate rules, bands and smoothing, debits, ledger and rollover | Verified |
+| 3 | SQLite store and migrations | Verified |
+| 4 | Extension API, fakes, conformance suites, `inventory`, `default`, `static`, `webhook` | Verified |
+| 5 | Collector and event queue (plus settings, ledger service, hold rules) | Verified |
+| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | Verified |
+| 7 | React + TypeScript UI | Verified |
+| 8 | vSphere provider and pressure source, `check-provider` | Verified |
+| 9 | Images, compose stacks, end-to-end acceptance path in both modes | Verified |
+| 10 | README quick start, `docs/extending.md`, `docs/deploying.md`, `CONTRIBUTING.md`, `examples/custom` | Verified |
 
-## Finished and verified
+## What verification found and what was done about it
 
-- Step 0: repository pushed to `github.com/panset/hourglass` (public).
-- Spike: the govmomi simulator supports resource pools; its allocation figures are static (decisions D5-D8).
-- Milestone 1: `bazel build //...`, `bazel test //...`, `go build ./...` and `./ci.sh` pass from a fresh clone; a deliberately broken test and a file without an SPDX header were both caught.
-- Milestone 2: `internal/rules`, `internal/metering`, `internal/ledger`. An independent check found no bugs against the spec and caught 29 of 33 seeded mutations (2 were equivalent); its findings are fixed. Decisions D11-D17.
-- Milestone 3: `internal/store` matches the data model column for column. Verification found three defects (ledger rows replaceable, a panic leaving the write lock held, stale balance cache on out-of-order writes); all fixed with tests. Decision D10.
-- Milestone 4: `pkg/hourglass`, `pkg/hourglasstest`, and the `inventory`, `default`, `static` and `webhook` extensions. Verification confirmed the interfaces match the spec's declarations and that a third-party module builds against the public packages alone; its 11 findings are fixed except two accepted ones (event JSON compacts `details`; the term check is a plain substring match).
-- Milestone 5: events, settings, ledger service, collector and hold rules. An adversarial check walked the acceptance path at service level with every ledger amount matching hand-computed values; no high-severity findings, and the medium ones (backwards clock, rollover ordering at midnight, false outage on interval change) are fixed with regression tests. Decisions D19-D25.
-- Milestone 8: `providers/vsphere`, `hourglassd check-provider`, `pkg/hourglass/server`. Verification confirmed the provider only reads, the tests need nothing beyond localhost, and a main outside this module can call `hourglass.Run`; its low-severity findings are fixed. Decisions D27, D28.
-- Wireframe notes for the UI work: `docs/ui-notes.md`.
+Each milestone was checked by a separate agent working in a clean clone.
+The findings that mattered:
 
-## Not finished
+- **Store:** ledger rows could be rewritten with `INSERT OR REPLACE`; a
+  panic inside a transaction left the write lock held. Both fixed.
+- **Metering:** a clock stepping backwards could double-charge; a poll at
+  exactly midnight on the 1st could run ahead of the rollover. Both fixed.
+- **Security:** an admin could save a resource-name template that hung the
+  collector; a route registered outside the route table would have escaped
+  the permissions tests; rule changes were audited without before and after
+  values; deleting every setup would re-apply the seed. All fixed. No
+  critical or high findings; a user with no role got no data from any
+  route under attack, and planted secrets never appeared in logs, responses
+  or the database.
+- **Performance:** the admin Users list took about 0.6 s at spec scale
+  (200 users, 100 setups, 18 days of 5-minute polls) against the 0.5 s
+  limit. Fixed: every route now answers in under 0.5 s on that data (the
+  Users list in about 0.15 s) and a poll takes about 0.2 s. A scale test
+  guards it.
+- **Balance cache:** the first version of that performance fix let the
+  cached balance drift after a rollover that closed two or more months.
+  Verification caught it before it was pushed. Fixed and re-verified with
+  200 randomised operation sequences: the cached balance equalled the
+  ledger after every step. The ledger itself was never wrong.
+- **UI:** a failed page load left a blank page; side panels did not take
+  keyboard focus. Both fixed. The pages were viewed in a real browser at
+  two desktop widths with no clipped, overlapping or missing content.
 
-- Fixes for the security verification findings (template that can hang the collector, permissions-test coverage of routes registered outside the route table, empty before/after in rule-change audit rows, seed re-applied after all setups are deleted, config validated only after the database is created) and for the UI findings (blank page when a page chunk fails to load, side panels not taking keyboard focus). Both were stopped part-way; the partial edits are uncommitted in the local working tree.
-- `./ci.sh` from a fresh clone needs `ui/node_modules` for the license check; part of the same fix round.
-- Re-run of the end-to-end acceptance test after those fixes.
-- Final verification against "Done means" from a clean clone of the pushed repository.
-- A compiled 32 MB `simulator` binary was committed by mistake in `b349a63` and removed in `74c76ba`; it remains in the pushed history. Removing it needs a history rewrite, which only the owner can authorise.
+## Not finished, not verified, or left as is
 
-## Waiting on the owner
+- **Real vCenter:** nothing has been run against one. All vSphere code is
+  tested against a hand-written fake and the govmomi simulator only.
+- **Stray binary in history:** a compiled 32 MB `simulator` binary was
+  committed by mistake in `b349a63` and removed in `74c76ba`. It is still in
+  the pushed history; removing it needs a history rewrite (D39).
+- **Commit size:** several commits are milestone-sized (thousands of lines)
+  rather than small.
+- **Admin lockout:** the local admin sign-in limit is per account, so
+  anyone who can reach the sign-in route can keep it locked out (D31).
+- **Debt and role removal:** debt is not carried for a user who has no role
+  at the moment of a rollover (D23).
+- **Two processes on one database:** two rollovers running at the same
+  instant could write a carry-over twice. The spec is single-instance and
+  the process serialises its own rollovers, so this needs two processes on
+  one database file, which `docs/deploying.md` says not to do.
+- **Reference scenario settings:** the resource-name template
+  (`{{.SetupName}}_RP`) and the `size` display column are admin settings,
+  set once in Settings after first start; the seed file covers setups and
+  rate rules only (D33).
+- **Not covered:** mobile screen widths; accessibility beyond keyboard
+  focus in dialogs and panels; a browser download quirk on this machine
+  (Playwright's Chromium install can hang; `e2e/README.md` has the
+  workaround).
+- **Out of scope by the spec:** deploying or tearing down anything, the
+  manager role and team budgets, notifications, token transfers.
 
-- Word to resume.
-- Whether to rewrite history to drop the 32 MB binary.
+## First run against a real vCenter
+
+Mocks cannot settle these (from the spec, with what was learned):
+
+- [ ] The read-only vCenter role has every privilege the provider needs
+      (the built-in Read-only role appears sufficient; inferred, not run).
+- [ ] The real resource pool layout matches the template. Clusters inside
+      host sub-folders are not discovered (D27).
+- [ ] The pressure source's cluster numbers agree with what vCenter shows.
+      They are read as reservations, not live usage (D6).
+- [ ] TLS and certificate settings work against the real endpoint with
+      `insecure_skip_verify: false`.
+- [ ] A poll finishes well inside the poll interval at real inventory size.
+
+`hourglassd check-provider` supports that run.
 
 ## Decisions to review
 
-See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19, D22, D23, D27, D28, D29, D30, D31.
+All decisions are in [decisions.md](decisions.md). The ones marked
+**REVIEW** there:
+
+| Decision | In one line |
+|---|---|
+| D3 | Orchestration files (`.orchestrator/`) are tracked in this public repository. |
+| D6 | vSphere "allocation" is read as reservations. |
+| D8 | The local stacks use a simulator image built from this repository. |
+| D10 | An `outages` table was added to the spec's 15 tables. |
+| D11 | Band lower bounds are inclusive (exactly 50% gives 1x). |
+| D12 | A gap longer than twice the poll interval is not charged at all. |
+| D13 | Label values with spaces or punctuation cannot be named in a rule. |
+| D19 | Charging starts at the poll after metering starts; time between the last poll and a release is not charged. |
+| D22 | A debit is booked in the month of its poll. |
+| D23 | Debt is not carried for a user with no role at rollover. |
+| D27 | Clusters inside vCenter folders are not discovered. |
+| D28 | Third-party builds import `pkg/hourglass/server` as well as `pkg/hourglass`. |
+| D29 | The end-to-end run uses a test main with a movable clock. |
+| D30 | Three build- or test-only npm packages with licenses outside the spec's list are allowlisted. |
+| D31 | The local admin sign-in limit is per account. |
+| D39 | The stray binary stays in history unless you ask for a rewrite. |
+
+Also worth a look, though not marked: D33 (reference-scenario settings are
+not seedable), D34 and D38 (what the end-to-end test does outside the UI),
+D35 (the OIDC callback always redirects to `/`), D36 (how the balance
+cache is kept).
