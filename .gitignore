@@ -35,3 +35,6 @@ test-results/
 .idea/
 .vscode/
 *.swp
+
+# Local agent worktrees and settings
+/.claude/
