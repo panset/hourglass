@@ -49,7 +49,7 @@ type burningJSON struct {
 
 type meJSON struct {
 	Period            string        `json:"period"`
-	PeriodEndsAt      time.Time     `json:"period_ends_at"`
+	PeriodEndsAt      string        `json:"period_ends_at"`
 	Balance           *float64      `json:"balance_tokens"`
 	Allowance         float64       `json:"allowance_tokens"`
 	Granted           float64       `json:"granted_tokens"`
@@ -58,11 +58,15 @@ type meJSON struct {
 	BurnPerHour       float64       `json:"burn_per_hour_tokens"`
 	Burning           []burningJSON `json:"burning"`
 	Projection        string        `json:"projection"`
-	ProjectedRunoutAt *time.Time    `json:"projected_runout_at"`
+	ProjectedRunoutAt *string       `json:"projected_runout_at"`
 	HoldCount         int           `json:"hold_count"`
 	HoldLimit         int           `json:"hold_limit"`
 	Enforcement       bool          `json:"enforcement"`
 	Overdrawn         bool          `json:"overdrawn"`
+	// CanAcquire and CannotAcquireReason come from holds.AcquireBlock, the rule
+	// Acquire itself applies (UI-1): the UI shows them and decides nothing.
+	CanAcquire          bool    `json:"can_acquire"`
+	CannotAcquireReason *string `json:"cannot_acquire_reason"`
 }
 
 // Projection values of the Me schema.
@@ -88,15 +92,17 @@ func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	period := ledger.PeriodOf(l.now, a.d.Location)
+	periodEnd := ledger.NextBoundary(l.now, a.d.Location)
 	me := meJSON{
 		Period:       period,
-		PeriodEndsAt: ledger.NextBoundary(l.now, a.d.Location).UTC(),
+		PeriodEndsAt: ts(periodEnd),
 		Burning:      []burningJSON{},
 		Projection:   projectionNotBurning,
 		Enforcement:  l.set.Enforcement,
 	}
 	if auth.IsLocalAdmin(u.User) {
 		// No balance, no allowance, cannot hold (LED-1).
+		me.CannotAcquireReason = nullIfEmpty(holds.AcquireBlock(true, l.set.Enforcement, 0, 0, 0))
 		writeJSON(w, http.StatusOK, me)
 		return
 	}
@@ -163,10 +169,11 @@ func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
 	me.BurnPerHour = tokens(burnMT)
 	me.HoldCount, me.HoldLimit = count, l.set.MaxHoldsPerUser
 	me.Overdrawn = balance <= 0
+	reason := holds.AcquireBlock(false, l.set.Enforcement, balance, count, l.set.MaxHoldsPerUser)
+	me.CanAcquire, me.CannotAcquireReason = reason == "", nullIfEmpty(reason)
 	if at, ok := metering.ProjectedRunOut(balance, burn24, l.now); ok {
-		if at.Before(me.PeriodEndsAt) {
-			t := at.UTC()
-			me.Projection, me.ProjectedRunoutAt = projectionDate, &t
+		if at.Before(periodEnd) {
+			me.Projection, me.ProjectedRunoutAt = projectionDate, tsPtr(&at)
 		} else {
 			me.Projection = projectionNotThisMonth
 		}
@@ -215,17 +222,17 @@ func (a *API) listMyHolds(w http.ResponseWriter, r *http.Request) {
 // ---- GET /api/v1/me/ledger ----
 
 type ledgerEntryJSON struct {
-	ID           int64     `json:"id"`
-	CreatedAt    time.Time `json:"created_at"`
-	Period       string    `json:"period"`
-	Type         string    `json:"type"`
-	Amount       float64   `json:"amount_tokens"`
-	BalanceAfter float64   `json:"balance_after_tokens"`
-	Multiplier   *float64  `json:"multiplier"`
-	SetupName    *string   `json:"setup_name"`
-	HoldID       *int64    `json:"hold_id"`
-	ActorName    *string   `json:"actor_name"`
-	Reason       *string   `json:"reason"`
+	ID           int64    `json:"id"`
+	CreatedAt    string   `json:"created_at"`
+	Period       string   `json:"period"`
+	Type         string   `json:"type"`
+	Amount       float64  `json:"amount_tokens"`
+	BalanceAfter float64  `json:"balance_after_tokens"`
+	Multiplier   *float64 `json:"multiplier"`
+	SetupName    *string  `json:"setup_name"`
+	HoldID       *int64   `json:"hold_id"`
+	ActorName    *string  `json:"actor_name"`
+	Reason       *string  `json:"reason"`
 }
 
 // availablePeriods lists the user's periods with ledger entries, newest
@@ -297,7 +304,7 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 	var running int64
 	for i, e := range rows {
 		running += e.AmountMT
-		v := ledgerEntryJSON{ID: e.ID, CreatedAt: utcTime(e.CreatedAt), Period: e.Period, Type: e.Type,
+		v := ledgerEntryJSON{ID: e.ID, CreatedAt: ts(e.CreatedAt), Period: e.Period, Type: e.Type,
 			Amount: tokens(e.AmountMT), BalanceAfter: tokens(running), HoldID: e.HoldID, Reason: nullIfEmpty(e.Reason)}
 		if m, ok := mults[e.ID]; ok {
 			v.Multiplier = &m
@@ -398,10 +405,10 @@ type bandStepJSON struct {
 }
 
 type pressurePointJSON struct {
-	At         time.Time `json:"at"`
-	Raw        float64   `json:"raw"`
-	Smoothed   float64   `json:"smoothed"`
-	Multiplier float64   `json:"multiplier"`
+	At         string  `json:"at"`
+	Raw        float64 `json:"raw"`
+	Smoothed   float64 `json:"smoothed"`
+	Multiplier float64 `json:"multiplier"`
 }
 
 // pressureHistory is how far back GET /api/v1/pressure reports samples.
@@ -426,7 +433,7 @@ func (a *API) getPressure(w http.ResponseWriter, r *http.Request) {
 	}
 	history := make([]pressurePointJSON, len(samples))
 	for i, s := range samples {
-		history[i] = pressurePointJSON{At: utcTime(s.PolledAt), Raw: s.Raw, Smoothed: s.Smoothed, Multiplier: s.Multiplier}
+		history[i] = pressurePointJSON{At: ts(s.PolledAt), Raw: s.Raw, Smoothed: s.Smoothed, Multiplier: s.Multiplier}
 	}
 	steps := make([]bandStepJSON, len(l.set.Bands.Steps))
 	for i, s := range l.set.Bands.Steps {
@@ -436,12 +443,12 @@ func (a *API) getPressure(w http.ResponseWriter, r *http.Request) {
 		"raw": 0.0, "smoothed": 0.0, "multiplier": l.mult,
 		"bands":      map[string]any{"base": l.set.Bands.Base, "steps": steps},
 		"source":     a.d.Runtime.PressureSource,
-		"updated_at": (*time.Time)(nil),
+		"updated_at": (*string)(nil),
 		"history":    history,
 	}
 	if s := l.sample; s != nil {
 		out["raw"], out["smoothed"], out["source"] = s.Raw, s.Smoothed, s.Source
-		out["updated_at"] = utcTime(s.PolledAt)
+		out["updated_at"] = ts(s.PolledAt)
 	}
 	setups, err := a.d.Store.ListSetups(ctx, true)
 	if err != nil {
@@ -475,11 +482,11 @@ type holderJSON struct {
 }
 
 type setupAdminJSON struct {
-	Enabled      bool       `json:"enabled"`
-	ResourceName string     `json:"resource_name"`
-	Override     *string    `json:"resource_name_override"`
-	LastSeenAt   *time.Time `json:"last_seen_at"`
-	MatchedRule  *string    `json:"matched_rule_selector"`
+	Enabled      bool    `json:"enabled"`
+	ResourceName string  `json:"resource_name"`
+	Override     *string `json:"resource_name_override"`
+	LastSeenAt   *string `json:"last_seen_at"`
+	MatchedRule  *string `json:"matched_rule_selector"`
 }
 
 type setupJSON struct {
@@ -489,7 +496,7 @@ type setupJSON struct {
 	Weight      float64           `json:"weight"`
 	State       string            `json:"state"`
 	Holder      *holderJSON       `json:"holder"`
-	HeldSince   *time.Time        `json:"held_since"`
+	HeldSince   *string           `json:"held_since"`
 	Deployed    bool              `json:"deployed"`
 	Metering    *meteringJSON     `json:"metering"`
 	CostPerHour costJSON          `json:"cost_per_hour_tokens"`
@@ -577,7 +584,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 		case held:
 			v.State = "held"
 			hu := d.users[h.UserID]
-			at := utcTime(h.AcquiredAt)
+			at := ts(h.AcquiredAt)
 			m := meteringOf(h, l.view)
 			v.HeldSince, v.Metering = &at, &m
 			v.Holder = &holderJSON{UserID: h.UserID, HoldID: h.ID, Name: userDisplayName(hu), Balance: tokens(hu.BalanceMT),
@@ -594,7 +601,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 			adm := &setupAdminJSON{Enabled: s.Enabled, ResourceName: res, Override: nullIfEmpty(s.ResourceNameOverride),
 				MatchedRule: nullIfEmpty(matched)}
 			if t, ok := l.view.LastSeen[s.Name]; ok {
-				adm.LastSeenAt = utcTimePtr(&t)
+				adm.LastSeenAt = tsPtr(&t)
 			}
 			v.Admin = adm
 		}

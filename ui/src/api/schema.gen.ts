@@ -34,7 +34,8 @@ export interface paths {
          * @description Exchanges the code, creates or refreshes the user (AUTH-2), sets the
          *     session cookie and redirects (302) to the UI: `/` for a user with a
          *     role, `/unauthorized` for one without. On failure it redirects to
-         *     `/login?error=<code>` using an error code from `ErrorCode`.
+         *     `/login?error=<code>` using an error code from `ErrorCode`; every
+         *     failure of the flow is such a redirect, never a JSON error.
          *
          */
         get: operations["oidcCallback"];
@@ -83,7 +84,8 @@ export interface paths {
          * Change the local admin password
          * @description Minimum 12 characters (AUTH-7). Allowed while `must_change_password`
          *     is true. A wrong `current_password` or a short new one returns 400
-         *     `validation` with `field`. Returns the refreshed session.
+         *     `validation` with `field`; wrong passwords count toward the same
+         *     5-failures-per-15-minutes limit as sign-in (429 `rate_limited`). Returns the refreshed session.
          *
          */
         post: operations["changeLocalPassword"];
@@ -743,6 +745,13 @@ export interface components {
             enforcement: boolean;
             /** @description Balance is zero or below. */
             overdrawn: boolean;
+            /** @description Whether this user may acquire a setup now, apart from the setup itself (taken, disabled, hook veto). Computed by the same rule as acquire (UI-1); the UI shows it and decides nothing. */
+            can_acquire: boolean;
+            /**
+             * @description Why `can_acquire` is false; null when it is true. `local_admin` is the operator account, which cannot hold setups.
+             * @enum {string|null}
+             */
+            cannot_acquire_reason: "insufficient_tokens" | "hold_limit" | "local_admin" | null;
         };
         /** @description Metering status of a hold. */
         MeteringState: {
@@ -1370,14 +1379,13 @@ export interface operations {
             302: {
                 headers: {
                     Location?: string;
-                    /** @description Session cookie (HttpOnly, Secure, SameSite=Lax). */
+                    /** @description Session cookie (HttpOnly, Secure, SameSite=Lax), set only when sign-in succeeded. */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            400: components["responses"]["BadRequest"];
-            500: components["responses"]["InternalError"];
+            404: components["responses"]["NotFound"];
         };
     };
     localSignIn: {
@@ -1437,6 +1445,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };

@@ -43,6 +43,8 @@ const me: Me = {
   hold_limit: 2,
   enforcement: true,
   overdrawn: false,
+  can_acquire: true,
+  cannot_acquire_reason: null,
 };
 
 const pressure: Pressure = {

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/panset/hourglass/internal/api/apierr"
 	"github.com/panset/hourglass/internal/events"
@@ -206,3 +207,18 @@ func userDisplayName(u store.User) string {
 }
 
 func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }
+
+// ts renders a time as RFC 3339 UTC with millisecond precision and a Z suffix,
+// e.g. 2026-11-19T10:00:00.000Z. It is the one format of every timestamp the
+// API emits (api/openapi.yaml "Conventions"); handlers never marshal a
+// time.Time directly.
+func ts(t time.Time) string { return store.FormatTime(t) }
+
+// tsPtr is ts for a nullable time: nil stays null.
+func tsPtr(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := ts(*t)
+	return &s
+}

@@ -417,13 +417,13 @@ func TestHealthz_ReportsDatabaseAndPollAge(t *testing.T) {
 		t.Fatalf("before first poll: %d %s", code, raw)
 	}
 	// A failed run does not count.
-	id, _ := e.st.StartCollectorRun(ctx, time.Now().Add(-time.Minute))
-	_ = e.st.FinishCollectorRun(ctx, id, time.Now(), false, "boom")
+	id, _ := e.st.StartCollectorRun(ctx, e.clk.Now().Add(-time.Minute))
+	_ = e.st.FinishCollectorRun(ctx, id, e.clk.Now(), false, "boom")
 	if _, h, _ := get(); h.Age != nil {
 		t.Errorf("failed poll counted: %v", *h.Age)
 	}
-	id, _ = e.st.StartCollectorRun(ctx, time.Now().Add(-90*time.Second))
-	_ = e.st.FinishCollectorRun(ctx, id, time.Now().Add(-89*time.Second), true, "")
+	id, _ = e.st.StartCollectorRun(ctx, e.clk.Now().Add(-90*time.Second))
+	_ = e.st.FinishCollectorRun(ctx, id, e.clk.Now().Add(-89*time.Second), true, "")
 	code, h, raw = get()
 	if code != 200 || h.Age == nil || *h.Age < 89 || *h.Age > 95 {
 		t.Fatalf("after poll: %d %s", code, raw)

@@ -70,8 +70,8 @@ func TestLED2_MeShape(t *testing.T) {
 	e, dev, _, hid := meteringScenario(t)
 	m := uWantOK(t, e.get("/api/v1/me", &dev), 200)
 	uWantKeys(t, "me", m, "period", "period_ends_at", "balance_tokens", "allowance_tokens", "granted_tokens", "carryover_tokens",
-		"debited_tokens", "burn_per_hour_tokens", "burning", "projection", "projected_runout_at", "hold_count", "hold_limit", "enforcement", "overdrawn")
-	if m["period"] != "2026-11" || m["period_ends_at"] != "2026-12-01T00:00:00Z" {
+		"debited_tokens", "burn_per_hour_tokens", "burning", "projection", "projected_runout_at", "hold_count", "hold_limit", "enforcement", "overdrawn", "can_acquire", "cannot_acquire_reason")
+	if m["period"] != "2026-11" || m["period_ends_at"] != "2026-12-01T00:00:00.000Z" {
 		t.Errorf("period %v ends %v", m["period"], m["period_ends_at"])
 	}
 	// 300 allowance, two debits of 600 x 2 x 5/60 = 100 tokens each.
@@ -97,7 +97,7 @@ func TestLED2_MeShape(t *testing.T) {
 		t.Errorf("counts %v %v %v %v", m["hold_count"], m["hold_limit"], m["enforcement"], m["overdrawn"])
 	}
 	// 100 tokens left, 200 tokens burnt in 24 h: 12 hours from now (10:10).
-	if m["projection"] != "date" || m["projected_runout_at"] != "2026-11-19T22:10:00Z" {
+	if m["projection"] != "date" || m["projected_runout_at"] != "2026-11-19T22:10:00.000Z" {
 		t.Errorf("projection %v at %v", m["projection"], m["projected_runout_at"])
 	}
 }
@@ -163,7 +163,7 @@ func TestHOLD3_MyHoldsShapeAndStateFilter(t *testing.T) {
 		h["setup_labels"].(ujobj)["tier"] != "a" || h["active"] != true || uNum(t, h, "weight") != 600 {
 		t.Errorf("hold %v", h)
 	}
-	if h["acquired_at"] != "2026-11-19T10:00:00Z" || h["released_at"] != nil || h["released_by"] != nil || h["release_reason"] != nil || h["forced"] != false {
+	if h["acquired_at"] != "2026-11-19T10:00:00.000Z" || h["released_at"] != nil || h["released_by"] != nil || h["release_reason"] != nil || h["forced"] != false {
 		t.Errorf("hold times/release %v", h)
 	}
 	if h["deployed"] != true || h["deployed_at"] == nil || h["metering_started_at"] == nil {
@@ -232,7 +232,7 @@ func TestLED2_MyLedger(t *testing.T) {
 		"setup_name", "hold_id", "actor_name", "reason")
 	if first["type"] != "debit" || !uNear(uNum(t, first, "amount_tokens"), -100) || !uNear(uNum(t, first, "balance_after_tokens"), 100) ||
 		uNum(t, first, "multiplier") != 2 || first["setup_name"] != "lab-01" || int64(uNum(t, first, "hold_id")) != hid ||
-		first["actor_name"] != nil || first["created_at"] != "2026-11-19T10:10:00Z" {
+		first["actor_name"] != nil || first["created_at"] != "2026-11-19T10:10:00.000Z" {
 		t.Errorf("newest entry %v", first)
 	}
 	if last["type"] != "allowance" || uNum(t, last, "balance_after_tokens") != 300 || last["multiplier"] != nil || last["hold_id"] != nil || last["setup_name"] != nil {
@@ -339,7 +339,7 @@ func TestMET2_PressureBeforeAndAfterPolls(t *testing.T) {
 	e.step(5 * time.Minute)
 	p = uWantOK(t, e.get("/api/v1/pressure", &dev), 200)
 	// Smoothed (0.6 + 0.8) / 2 = 0.7 is in the 1x band although raw is in 2x.
-	if p["raw"].(float64) != 0.8 || uNum(t, p, "multiplier") != 1 || p["updated_at"] != "2026-11-19T10:05:00Z" {
+	if p["raw"].(float64) != 0.8 || uNum(t, p, "multiplier") != 1 || p["updated_at"] != "2026-11-19T10:05:00.000Z" {
 		t.Errorf("after polls: %v", p)
 	}
 	if s := p["smoothed"].(float64); s <= 0.6 || s >= 0.8 {
@@ -349,7 +349,7 @@ func TestMET2_PressureBeforeAndAfterPolls(t *testing.T) {
 		t.Errorf("counts %v %v", p["setups_enabled"], p["setups_deployed"])
 	}
 	h := p["history"].([]any)
-	if len(h) != 2 || h[0].(ujobj)["at"] != "2026-11-19T10:00:00Z" || h[1].(ujobj)["multiplier"].(float64) != 1 {
+	if len(h) != 2 || h[0].(ujobj)["at"] != "2026-11-19T10:00:00.000Z" || h[1].(ujobj)["multiplier"].(float64) != 1 {
 		t.Errorf("history %v", h)
 	}
 	uWantKeys(t, "history point", h[0].(ujobj), "at", "raw", "smoothed", "multiplier")
@@ -391,7 +391,7 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 	sa := ss[0].(ujobj)
 	uWantKeys(t, "setup", sa, "id", "name", "labels", "weight", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
 	if sa["name"] != "lab-a" || sa["state"] != "held" || uNum(t, sa, "weight") != 2 || sa["deployed"] != true || sa["admin"] != nil ||
-		sa["held_since"] != "2026-11-19T10:00:00Z" || sa["labels"].(ujobj)["site"] != "x" {
+		sa["held_since"] != "2026-11-19T10:00:00.000Z" || sa["labels"].(ujobj)["site"] != "x" {
 		t.Errorf("held setup %v", sa)
 	}
 	h := sa["holder"].(ujobj)
@@ -437,7 +437,7 @@ func TestSET6_SetupsListForAdminHasAdminFieldsAndDisabled(t *testing.T) {
 	a := ss[0].(ujobj)["admin"].(ujobj)
 	uWantKeys(t, "admin", a, "enabled", "resource_name", "resource_name_override", "last_seen_at", "matched_rule_selector")
 	if a["enabled"] != true || a["resource_name"] != "lab-a_RP" || a["resource_name_override"] != nil ||
-		a["last_seen_at"] != "2026-11-19T10:00:00Z" || a["matched_rule_selector"] != "tier=a" {
+		a["last_seen_at"] != "2026-11-19T10:00:00.000Z" || a["matched_rule_selector"] != "tier=a" {
 		t.Errorf("admin fields %v", a)
 	}
 	off := ss[1].(ujobj)
@@ -496,7 +496,7 @@ func TestHOLD1_AcquireSuccess(t *testing.T) {
 	dev := e.dev("dev", store.RoleDeveloper)
 	rec := e.post("/api/v1/setups/"+uItoa(sid)+"/acquire", &dev, "")
 	h := uWantOK(t, rec, http.StatusCreated)
-	if h["setup_name"] != "lab-a" || h["active"] != true || int64(uNum(t, h, "user_id")) != dev.user.ID || h["acquired_at"] != "2026-11-19T10:00:00Z" ||
+	if h["setup_name"] != "lab-a" || h["active"] != true || int64(uNum(t, h, "user_id")) != dev.user.ID || h["acquired_at"] != "2026-11-19T10:00:00.000Z" ||
 		h["metering_started_at"] != nil || h["deployed"] != false || uNum(t, h, "charged_tokens") != 0 {
 		t.Errorf("hold %v", h)
 	}
@@ -655,5 +655,45 @@ func TestMET_ReasonComesFromTheLastPollDecision(t *testing.T) {
 	h := uWantOK(t, e.post("/api/v1/holds/"+uItoa(hid)+"/release", &dev, ""), 200)
 	if m := h["metering"].(ujobj); m["reason"] != nil {
 		t.Errorf("released hold metering %v", m)
+	}
+}
+
+// TestHOLD1_MeCanAcquireFollowsTheAcquireRule: GET /api/v1/me says what
+// acquire would do, from the same rule (holds.AcquireBlock), so the UI derives
+// nothing (UI-1).
+func TestHOLD1_MeCanAcquireFollowsTheAcquireRule(t *testing.T) {
+	e := defaultEnv(t)
+	a, b, c := e.setup("a", true, nil), e.setup("b", true, nil), e.setup("c", true, nil)
+	dev, broke := e.dev("dev", store.RoleDeveloper), e.dev("broke", store.RoleDeveloper)
+	check := func(label string, s *usess, can bool, reason any) {
+		t.Helper()
+		m := uWantOK(t, e.get("/api/v1/me", s), 200)
+		if m["can_acquire"] != can || m["cannot_acquire_reason"] != reason {
+			t.Errorf("%s: can_acquire=%v reason=%v, want %v %v", label, m["can_acquire"], m["cannot_acquire_reason"], can, reason)
+		}
+		// The rule and the route agree: a refusal here is the code acquire returns.
+		if !can {
+			rec := e.post("/api/v1/setups/"+uItoa(c)+"/acquire", s, "")
+			uWantErr(t, rec, rec.Code, reason.(string))
+		}
+	}
+	check("fresh developer", &dev, true, nil)
+	e.acquire(&dev, a)
+	check("one of two holds", &dev, true, nil)
+	e.acquire(&dev, b)
+	check("at the hold limit", &dev, false, "hold_limit")
+
+	// Out of tokens: refused with enforcement on, allowed in shadow mode (MET-6).
+	if _, err := e.st.AppendLedger(uBg, store.LedgerEntry{UserID: broke.user.ID, Period: "2026-11", Type: "grant", AmountMT: -300000, Reason: "x"}, "2026-11", e.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	check("no tokens, shadow mode", &broke, true, nil)
+	e.setting("enforcement", "true")
+	check("no tokens, enforcement", &broke, false, "insufficient_tokens")
+
+	adm := e.adminSess()
+	m := uWantOK(t, e.get("/api/v1/me", &adm), 200)
+	if m["can_acquire"] != false || m["cannot_acquire_reason"] != "local_admin" {
+		t.Errorf("local admin: %v %v", m["can_acquire"], m["cannot_acquire_reason"])
 	}
 }

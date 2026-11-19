@@ -20,10 +20,10 @@ import (
 // are always present and null, as the schema says.
 
 type meteringJSON struct {
-	Active          bool       `json:"active"`
-	StartedAt       *time.Time `json:"started_at"`
-	ExpectedStartAt *time.Time `json:"expected_start_at"` // always null: the UI shows the reason text
-	Reason          *string    `json:"reason"`
+	Active          bool    `json:"active"`
+	StartedAt       *string `json:"started_at"`
+	ExpectedStartAt *string `json:"expected_start_at"` // always null: the UI shows the reason text
+	Reason          *string `json:"reason"`
 }
 
 type costJSON struct {
@@ -44,10 +44,10 @@ type holdJSON struct {
 	UserID            int64             `json:"user_id"`
 	Active            bool              `json:"active"`
 	Weight            float64           `json:"weight"`
-	AcquiredAt        time.Time         `json:"acquired_at"`
-	MeteringStartedAt *time.Time        `json:"metering_started_at"`
-	DeployedAt        *time.Time        `json:"deployed_at"`
-	ReleasedAt        *time.Time        `json:"released_at"`
+	AcquiredAt        string            `json:"acquired_at"`
+	MeteringStartedAt *string           `json:"metering_started_at"`
+	DeployedAt        *string           `json:"deployed_at"`
+	ReleasedAt        *string           `json:"released_at"`
 	Deployed          bool              `json:"deployed"`
 	Metering          meteringJSON      `json:"metering"`
 	CostPerHour       *costJSON         `json:"cost_per_hour_tokens"`
@@ -55,17 +55,6 @@ type holdJSON struct {
 	ReleasedBy        *userRefJSON      `json:"released_by"`
 	ReleaseReason     *string           `json:"release_reason"`
 	Forced            bool              `json:"forced"`
-}
-
-// utcTime returns t in UTC (RFC 3339 "Z" form on the wire).
-func utcTime(t time.Time) time.Time { return t.UTC() }
-
-func utcTimePtr(t *time.Time) *time.Time {
-	if t == nil {
-		return nil
-	}
-	u := t.UTC()
-	return &u
 }
 
 // lab is the per-request view of the lab every user route needs: settings,
@@ -194,7 +183,7 @@ func (l *lab) holdWeight(h store.Hold, s store.Setup, d *holdData) (float64, err
 // own words from the latest successful poll that saw the hold; null before
 // such a poll (and for a released hold).
 func meteringOf(h store.Hold, view collector.PollView) meteringJSON {
-	m := meteringJSON{Active: h.MeteringStartedAt != nil, StartedAt: utcTimePtr(h.MeteringStartedAt)}
+	m := meteringJSON{Active: h.MeteringStartedAt != nil, StartedAt: tsPtr(h.MeteringStartedAt)}
 	if dec, ok := view.Decisions[h.ID]; ok && h.ReleasedAt == nil {
 		m.Reason = nullIfEmpty(dec.Reason)
 	}
@@ -217,8 +206,8 @@ func (a *API) holdViews(ctx context.Context, l *lab, holds []store.Hold) ([]hold
 		}
 		v := holdJSON{
 			ID: h.ID, SetupID: h.SetupID, SetupName: s.Name, SetupLabels: labelsNonNil(s.Labels), UserID: h.UserID,
-			Active: h.ReleasedAt == nil, Weight: w, AcquiredAt: utcTime(h.AcquiredAt),
-			MeteringStartedAt: utcTimePtr(h.MeteringStartedAt), DeployedAt: utcTimePtr(h.DeployedAt), ReleasedAt: utcTimePtr(h.ReleasedAt),
+			Active: h.ReleasedAt == nil, Weight: w, AcquiredAt: ts(h.AcquiredAt),
+			MeteringStartedAt: tsPtr(h.MeteringStartedAt), DeployedAt: tsPtr(h.DeployedAt), ReleasedAt: tsPtr(h.ReleasedAt),
 			Metering:      meteringOf(h, l.view),
 			ChargedTokens: tokens(d.charges[h.ID]),
 			ReleaseReason: nullIfEmpty(h.ReleaseReason),

@@ -11,7 +11,11 @@ info:
     **Conventions**
     - Token amounts are JSON numbers with up to three decimals, in whole
       tokens (the API converts from milli-tokens). Field names end in `_tokens`.
-    - Timestamps are RFC 3339 UTC strings. Ids are integers. Periods are `YYYY-MM`.
+    - Every timestamp is an RFC 3339 UTC string with millisecond precision and
+      a `Z` suffix, for example `2026-11-19T10:00:00.000Z`, in every response and
+      in the `before`/`after` of audit entries; one helper formats them all and
+      the contract test checks every `date-time` field. Ids are integers.
+      Periods are `YYYY-MM`.
     - Pressure values are fractions from 0 to 1 (0.82 is 82%).
     - Dates without a time (`YYYY-MM-DD`) are in the configured timezone.
     - Sessions are cookie based. State-changing requests of a signed-in user
@@ -92,7 +96,8 @@ paths:
         Exchanges the code, creates or refreshes the user (AUTH-2), sets the
         session cookie and redirects (302) to the UI: `/` for a user with a
         role, `/unauthorized` for one without. On failure it redirects to
-        `/login?error=<code>` using an error code from `ErrorCode`.
+        `/login?error=<code>` using an error code from `ErrorCode`; every
+        failure of the flow is such a redirect, never a JSON error.
       security: []
       x-roles: public
       parameters:
@@ -107,11 +112,9 @@ paths:
               schema: {type: string}
             Set-Cookie:
               schema: {type: string}
-              description: Session cookie (HttpOnly, Secure, SameSite=Lax).
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
+              description: Session cookie (HttpOnly, Secure, SameSite=Lax), set only when sign-in succeeded.
+        '404':
+          $ref: '#/components/responses/NotFound'
   /auth/local:
     post:
       operationId: localSignIn
@@ -155,7 +158,8 @@ paths:
       description: |
         Minimum 12 characters (AUTH-7). Allowed while `must_change_password`
         is true. A wrong `current_password` or a short new one returns 400
-        `validation` with `field`. Returns the refreshed session.
+        `validation` with `field`; wrong passwords count toward the same
+        5-failures-per-15-minutes limit as sign-in (429 `rate_limited`). Returns the refreshed session.
       x-roles: local-admin
       x-csrf: true
       parameters:
@@ -177,6 +181,8 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
   /auth/logout:
@@ -1106,7 +1112,7 @@ components:
         tokens_per_hour: {$ref: '#/components/schemas/Tokens'}
     Me:
       type: object
-      required: [period, period_ends_at, balance_tokens, allowance_tokens, granted_tokens, carryover_tokens, debited_tokens, burn_per_hour_tokens, burning, projection, projected_runout_at, hold_count, hold_limit, enforcement, overdrawn]
+      required: [period, period_ends_at, balance_tokens, allowance_tokens, granted_tokens, carryover_tokens, debited_tokens, burn_per_hour_tokens, burning, projection, projected_runout_at, hold_count, hold_limit, enforcement, overdrawn, can_acquire, cannot_acquire_reason]
       properties:
         period: {type: string, example: '2026-11'}
         period_ends_at:
@@ -1153,6 +1159,14 @@ components:
         overdrawn:
           type: boolean
           description: Balance is zero or below.
+        can_acquire:
+          type: boolean
+          description: Whether this user may acquire a setup now, apart from the setup itself (taken, disabled, hook veto). Computed by the same rule as acquire (UI-1); the UI shows it and decides nothing.
+        cannot_acquire_reason:
+          type: string
+          nullable: true
+          enum: [insufficient_tokens, hold_limit, local_admin, null]
+          description: Why `can_acquire` is false; null when it is true. `local_admin` is the operator account, which cannot hold setups.
     MeteringState:
       type: object
       description: Metering status of a hold.

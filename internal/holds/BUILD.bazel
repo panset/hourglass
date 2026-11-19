@@ -16,7 +16,10 @@ go_library(
 
 go_test(
     name = "holds_test",
-    srcs = ["holds_test.go"],
+    srcs = [
+        "block_test.go",
+        "holds_test.go",
+    ],
     embed = [":holds"],
     deps = [
         "//internal/events",

@@ -9,10 +9,19 @@ Policy: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, plus the justified exc
 | --- | --- | --- |
 | github.com/coreos/go-oidc/v3 | v3.21.0 | Apache-2.0 |
 | github.com/dustin/go-humanize | v1.1.0 | MIT |
+| github.com/getkin/kin-openapi | v0.132.0 | MIT |
 | github.com/go-jose/go-jose/v4 | v4.1.4 | Apache-2.0 |
+| github.com/go-openapi/jsonpointer | v0.21.0 | Apache-2.0 |
+| github.com/go-openapi/swag | v0.23.0 | Apache-2.0 |
 | github.com/google/uuid | v1.6.0 | BSD-3-Clause |
+| github.com/josharian/intern | v1.0.0 | MIT |
+| github.com/mailru/easyjson | v0.7.7 | MIT |
 | github.com/mattn/go-isatty | v0.0.24 | MIT |
+| github.com/mohae/deepcopy | v0.0.0-20170929034955-c48cc78d4826 | MIT |
 | github.com/ncruces/go-strftime | v1.1.0 | MIT |
+| github.com/oasdiff/yaml | v0.0.0-20250309154309-f31be36b4037 | BSD-3-Clause AND MIT |
+| github.com/oasdiff/yaml3 | v0.0.0-20250309153720-d2182401db90 | Apache-2.0 AND MIT |
+| github.com/perimeterx/marshmallow | v1.1.5 | MIT |
 | github.com/remyoudompheng/bigfft | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause |
 | github.com/vmware/govmomi | v0.56.2 | Apache-2.0 |
 | golang.org/x/crypto | v0.59.0 | BSD-3-Clause |

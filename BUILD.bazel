@@ -6,4 +6,7 @@ load("@gazelle//:def.bzl", "gazelle")
 gazelle(name = "gazelle")
 
 # The UI-to-backend contract, read by //ui (generated-client drift test).
-exports_files(["api/openapi.yaml"])
+exports_files([
+    "api/openapi.yaml",
+    "docs/SPEC.md",  # read by the permissions meta-test (//internal/api:api_test)
+])

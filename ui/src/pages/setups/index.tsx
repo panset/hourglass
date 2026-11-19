@@ -25,12 +25,17 @@ function stateOf(s: Setup): Exclude<StateFilter, ""> {
   return s.deployed ? "deployed" : "acquired";
 }
 
-/** Why the Acquire buttons are disabled, from the API's own fields on GET /api/v1/me. */
+/** Why the Acquire buttons are disabled: the API decides (`can_acquire`), the page only words the reason. */
 function acquireBlock(me: Me | undefined): string | undefined {
-  if (!me) return undefined;
-  if (me.enforcement && me.overdrawn) return "Your balance is zero or below, so you cannot acquire setups.";
-  if (me.hold_count >= me.hold_limit) return `You already hold ${me.hold_count} of ${me.hold_limit} allowed setups.`;
-  return undefined;
+  if (!me || me.can_acquire) return undefined;
+  switch (me.cannot_acquire_reason) {
+    case "insufficient_tokens":
+      return "Your balance is zero or below, so you cannot acquire setups.";
+    case "hold_limit":
+      return `You already hold ${me.hold_count} of ${me.hold_limit} allowed setups.`;
+    default:
+      return "You cannot acquire setups.";
+  }
 }
 
 export default function SetupsPage() {

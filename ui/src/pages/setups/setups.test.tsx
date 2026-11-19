@@ -90,6 +90,8 @@ const me: Me = {
   hold_limit: 2,
   enforcement: true,
   overdrawn: false,
+  can_acquire: true,
+  cannot_acquire_reason: null,
 };
 const pressure = { raw: 0.8, smoothed: 0.82, multiplier: 2, bands: { base: 0, steps: [] }, source: "x", updated_at: null, setups_enabled: 11, setups_deployed: 9, history: [] } as Pressure;
 
@@ -202,7 +204,7 @@ describe("Setups page", () => {
   });
 
   it("HOLD-1 Acquire is disabled with the reason at zero balance with enforcement on", async () => {
-    mockApi(routes({ "GET /api/v1/me": { ...me, balance_tokens: 0, overdrawn: true } }));
+    mockApi(routes({ "GET /api/v1/me": { ...me, balance_tokens: 0, overdrawn: true, can_acquire: false, cannot_acquire_reason: "insufficient_tokens" } }));
     mount();
     expect(await screen.findByRole("button", { name: "Acquire setup-05" })).toBeDisabled();
     expect(await screen.findByText("Your balance is zero or below, so you cannot acquire setups.")).toBeInTheDocument();
@@ -215,7 +217,7 @@ describe("Setups page", () => {
   });
 
   it("HOLD-1 Acquire is disabled with the reason at the hold limit", async () => {
-    mockApi(routes({ "GET /api/v1/me": { ...me, hold_count: 2, hold_limit: 2 } }));
+    mockApi(routes({ "GET /api/v1/me": { ...me, hold_count: 2, hold_limit: 2, can_acquire: false, cannot_acquire_reason: "hold_limit" } }));
     mount();
     expect(await screen.findByRole("button", { name: "Acquire setup-05" })).toBeDisabled();
     expect(await screen.findByText("You already hold 2 of 2 allowed setups.")).toBeInTheDocument();

@@ -197,14 +197,14 @@ func (s *Service) Acquire(ctx context.Context, userID, setupID int64) (Hold, err
 	if err != nil {
 		return Hold{}, err
 	}
-	if cfg.Enforcement && u.BalanceMT <= 0 { // MET-6: shadow mode never blocks
-		return Hold{}, refuse(CodeInsufficientTokens, "Your token balance is zero or below.")
-	}
 	n, err := st.CountActiveHolds(ctx, userID)
 	if err != nil {
 		return Hold{}, err
 	}
-	if n >= cfg.MaxHoldsPerUser {
+	switch AcquireBlock(false, cfg.Enforcement, u.BalanceMT, n, cfg.MaxHoldsPerUser) { // MET-6: shadow mode never blocks
+	case CodeInsufficientTokens:
+		return Hold{}, refuse(CodeInsufficientTokens, "Your token balance is zero or below.")
+	case CodeHoldLimit:
 		return Hold{}, limitErr(cfg.MaxHoldsPerUser)
 	}
 
@@ -244,6 +244,27 @@ func (s *Service) Acquire(ctx context.Context, userID, setupID int64) (Hold, err
 	}
 	s.emit(hourglass.Event{Type: hourglass.EventHoldAcquired, Time: now, User: hu, Setup: hs, Hold: hgHold(h, setup.Name)})
 	return h, nil
+}
+
+// BlockLocalAdmin is the AcquireBlock reason of the local admin account, which
+// is an operator account and cannot hold setups (LED-1).
+const BlockLocalAdmin = "local_admin"
+
+// AcquireBlock is the rule that decides whether a user may acquire a setup,
+// apart from the setup itself: "" when allowed, else BlockLocalAdmin,
+// CodeInsufficientTokens (enforcement on and balance zero or below, MET-6) or
+// CodeHoldLimit. The checks run in that order. Acquire uses it, and so does
+// GET /api/v1/me, so the two cannot disagree.
+func AcquireBlock(localAdmin, enforcement bool, balanceMT int64, activeHolds, maxHolds int) string {
+	switch {
+	case localAdmin:
+		return BlockLocalAdmin
+	case enforcement && balanceMT <= 0:
+		return CodeInsufficientTokens
+	case activeHolds >= maxHolds:
+		return CodeHoldLimit
+	}
+	return ""
 }
 
 func limitErr(max int) error {
@@ -319,9 +340,16 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 			return err
 		}
 		if opts.Force {
+			// Times in the audit row are in the API's one timestamp format (RFC 3339 UTC, milliseconds, Z).
+			stamp := func(t *time.Time) any {
+				if t == nil {
+					return nil
+				}
+				return store.FormatTime(*t)
+			}
 			before, _ := json.Marshal(map[string]any{"hold_id": holdID, "setup": setup.Name, "user_id": h.UserID,
-				"acquired_at": h.AcquiredAt, "metering_started_at": h.MeteringStartedAt, "deployed_at": h.DeployedAt,
-				"released_at": nil})
+				"acquired_at": store.FormatTime(h.AcquiredAt), "metering_started_at": stamp(h.MeteringStartedAt),
+				"deployed_at": stamp(h.DeployedAt), "released_at": nil})
 			after, _ := json.Marshal(map[string]any{"hold_id": holdID, "setup": setup.Name, "user_id": h.UserID, "reason": reason})
 			if _, err := tx.AppendAudit(ctx, store.AuditEntry{ActorID: &actorID, Action: AuditForceRelease,
 				Target: fmt.Sprintf("hold:%d", holdID), BeforeJSON: string(before), AfterJSON: string(after)}, now); err != nil {

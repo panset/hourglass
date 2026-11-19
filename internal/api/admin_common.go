@@ -62,17 +62,6 @@ func adminCaller(w http.ResponseWriter, r *http.Request) (*auth.User, bool) {
 	return u, true
 }
 
-// ts renders a time as RFC 3339 UTC with milliseconds.
-func ts(t time.Time) string { return store.FormatTime(t) }
-
-func tsPtr(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := ts(*t)
-	return &s
-}
-
 // putAudit appends one audit row inside the caller's transaction. before and
 // after are marshalled as JSON; nil means null. Callers pass only values that
 // are safe to store (never secrets, never setup details).
