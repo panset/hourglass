@@ -1,0 +1,34 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:gazelle (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 1.128s, Critical Path: 0.00s
+INFO: 1 process: 1 internal.
+INFO: Build completed successfully, 1 total action
+INFO: Running command line: bazel-bin/gazelle internal/metering
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 2 targets (1 packages loaded, 0 targets configured)
+Analyzing: 2 targets (1 packages loaded, 0 targets configured)
+
+INFO: Analyzed 2 targets (1 packages loaded, 4 targets configured).
+[10 / 11] [Prepa] Testing //internal/metering:metering_test
+INFO: Found 1 target and 1 test target...
+INFO: Elapsed time: 2.533s, Critical Path: 1.42s
+INFO: 11 processes: 4 internal, 7 darwin-sandbox.
+INFO: Build completed successfully, 11 total actions
+//internal/metering:metering_test                                        PASSED in 0.3s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

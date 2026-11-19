@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "metering",
+    srcs = ["metering.go"],
+    importpath = "github.com/panset/hourglass/internal/metering",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "metering_test",
+    srcs = ["metering_test.go"],
+    embed = [":metering"],
+)
