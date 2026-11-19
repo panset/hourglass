@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
@@ -776,9 +777,13 @@ func TestRULE4_ChangesApplyFromNextPollNotRetroactive(t *testing.T) {
 	if s[1].Weight != 2 || s[1].DebitMT != 167 || s[2].Weight != 4 || s[2].Multiplier != 2 {
 		t.Fatalf("samples %+v", s)
 	}
-	e.setting(settings.KeyPollInterval, `"1m"`) // gap cap follows the new interval at the next poll
+	e.setting(settings.KeyPollInterval, `"1m"`) // the wait already scheduled used 5m: this poll is still charged
 	e.step(poll)
-	if d := e.debits(u); len(d) != 2 {
+	if d := e.debits(u); len(d) != 3 {
+		t.Fatalf("first poll after shortening should be charged: %v", d)
+	}
+	e.step(poll) // now the previous poll ran under 1m: a 5 min gap is an outage
+	if d := e.debits(u); len(d) != 3 {
 		t.Fatalf("5 min gap with a 1 min interval should be an outage: %v", d)
 	}
 }
@@ -860,5 +865,169 @@ func TestMET1_RunPollsImmediatelyThenEveryInterval(t *testing.T) {
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run returned %v", err)
+	}
+}
+
+// holds.PollView is satisfied directly by the collector's view.
+var _ holds.PollView = HoldsView{}
+var _ holds.PollView = PollView{}.ForHolds()
+
+func TestHOLD2_PollViewForHoldsAdapter(t *testing.T) {
+	e := newEnv(t, true)
+	u, _ := e.basic()
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "lab-01"})
+	_ = u
+	if e.c.LastPoll().ForHolds().OK() {
+		t.Fatal("OK before first poll")
+	}
+	e.runOK()
+	pv := e.c.LastPoll().ForHolds()
+	if !pv.OK() || !pv.Reported("lab-01") || pv.Reported("zz") {
+		t.Fatalf("view %+v", pv)
+	}
+}
+
+// MET-4/MET-5 (finding 1): a clock stepped backwards charges nothing, even
+// at the polls that follow it until time passes the newest successful poll.
+func TestMET4_ClockBackwardsChargesNothing(t *testing.T) {
+	e := newEnv(t, false)
+	u, h := e.basic()
+	e.runOK()
+	e.step(poll) // 167
+	e.step(poll) // 167
+	if d := e.debits(u); !eqInts(d, []int64{167, 167}) {
+		t.Fatalf("debits %v", d)
+	}
+	e.clk.Advance(-3 * time.Minute) // 10:07 after polls at :00 :05 :10
+	e.runOK()
+	e.step(time.Minute) // 10:08, still behind 10:10
+	if d := e.debits(u); !eqInts(d, []int64{167, 167}) {
+		t.Fatalf("backwards clock charged: %v (samples %v)", d, e.samples(h.ID))
+	}
+	e.clk.Advance(2 * time.Minute) // 10:10 again: same instant as the newest poll
+	e.runOK()
+	e.step(poll) // 10:15 charges 10:10 -> 10:15 only
+	if d := e.debits(u); !eqInts(d, []int64{167, 167, 167}) {
+		t.Fatalf("debits %v", d)
+	}
+}
+
+// ADM-2 (finding 4): shortening poll_interval must not turn the next poll,
+// already scheduled under the old interval, into an outage.
+func TestADM2_PollIntervalShortenedNoFalseOutage(t *testing.T) {
+	e := newEnv(t, false)
+	u, _ := e.basic()
+	e.runOK()
+	e.step(poll)
+	e.setting(settings.KeyPollInterval, `"1m"`)
+	e.step(poll) // 5 min gap under a 1m setting
+	if d := e.debits(u); !eqInts(d, []int64{167, 167}) {
+		t.Fatalf("debits %v", d)
+	}
+	if o, _ := e.st.ListOutages(bg, 10); len(o) != 0 {
+		t.Fatalf("false outage %+v", o)
+	}
+	// Once a poll ran under 1m, a 5-minute gap is a real outage.
+	e.step(poll)
+	if d := e.debits(u); !eqInts(d, []int64{167, 167}) {
+		t.Fatalf("debits %v", d)
+	}
+	if o, _ := e.st.ListOutages(bg, 10); len(o) != 1 {
+		t.Fatalf("outages %+v", o)
+	}
+}
+
+// After a restart the in-memory previous interval is unknown: the current
+// setting applies.
+func TestADM2_PollIntervalAfterRestartUsesCurrentSetting(t *testing.T) {
+	e := newEnv(t, false)
+	u, _ := e.basic()
+	e.runOK()
+	e.step(poll)
+	e.setting(settings.KeyPollInterval, `"1m"`)
+	e.c = e.newCollector()
+	e.step(poll)
+	if d := e.debits(u); !eqInts(d, []int64{167}) {
+		t.Fatalf("debits %v", d)
+	}
+	if o, _ := e.st.ListOutages(bg, 10); len(o) != 1 {
+		t.Fatalf("outages %+v", o)
+	}
+}
+
+// releasingPolicy releases the hold while the poll is deciding, between the
+// collector's reads and its transaction.
+type releasingPolicy struct {
+	*hourglasstest.FakePolicy
+	st   *store.Store
+	arm  bool
+	hold int64
+}
+
+func (p *releasingPolicy) Decide(ctx context.Context, h hourglass.HoldState, s hourglass.Snapshot) (hourglass.Decision, error) {
+	if p.arm {
+		p.arm = false
+		if err := p.st.ReleaseHold(ctx, p.hold, nil, "test", time.Now()); err != nil {
+			return hourglass.Decision{}, err
+		}
+	}
+	return p.FakePolicy.Decide(ctx, h, s)
+}
+
+// MET-3 (finding 5, mutation M10): a hold released after the poll read it,
+// before its transaction, is not charged.
+func TestMET3_ReleasedDuringPollNotCharged(t *testing.T) {
+	e := newEnv(t, false)
+	u, h := e.basic()
+	pol := &releasingPolicy{FakePolicy: e.policy, st: e.st, hold: h.ID}
+	e.c = New(Deps{Store: e.st, Pressure: e.pressure, Policy: pol, Events: e.rec, Ledger: e.led, Clock: e.clk,
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	e.runOK()
+	e.step(poll)
+	pol.arm = true
+	e.step(poll)
+	if d := e.debits(u); !eqInts(d, []int64{167}) {
+		t.Fatalf("hold released mid-poll was charged: %v", d)
+	}
+	if n := len(e.samples(h.ID)); n != 2 {
+		t.Fatalf("samples %d, want 2", n)
+	}
+}
+
+// LED-3 (finding 2/3): a poll exactly at 00:00 on the 1st, with a user in
+// debt, opens the period first. The cache equals the new period's sum and
+// acquire is not refused.
+func TestLED3_PollAtMidnightOpensPeriodFirst(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(time.Date(2026, 11, 30, 23, 55, 0, 0, time.UTC))
+	u, _ := e.basic()
+	e.allowance(u)
+	admin, err := e.st.CreateLocalAdmin(bg, "admin", "x", false, e.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.led.Grant(bg, admin.ID, u, -340000, "to -40 tokens"); err != nil {
+		t.Fatal(err)
+	}
+	e.runOK() // 23:55: metering starts
+	e.setting("enforcement", "true")
+	e.clk.Set(time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC))
+	e.runOK() // debits 167 into 2026-12
+	want := int64(300000 - 40000 - 167)
+	sum, err := e.st.SumLedger(bg, u, "2026-12", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	usr, err := e.st.GetUser(bg, u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum != want || usr.BalanceMT != want {
+		t.Fatalf("2026-12 sum %d, cache %d, want %d", sum, usr.BalanceMT, want)
+	}
+	svc := holds.NewService(holds.Deps{Store: e.st, Clock: e.clk})
+	s2 := e.setup("lab-02", true, nil)
+	if _, err := svc.Acquire(bg, u, s2); err != nil {
+		t.Fatalf("acquire refused after the midnight poll: %v", err)
 	}
 }

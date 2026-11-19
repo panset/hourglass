@@ -224,3 +224,33 @@ func TestSET6_DisplayLabelKeysValid(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// stampRec records the updated_at passed to PutSetting.
+type stampRec struct{ at []time.Time }
+
+func (r *stampRec) PutSetting(_ context.Context, _, _ string, _ *int64, at time.Time) error {
+	r.at = append(r.at, at)
+	return nil
+}
+
+// Clock rule (finding 7): SaveAt stamps with the supplied time, and Save
+// delegates to it.
+func TestSaveAtUsesSuppliedTime(t *testing.T) {
+	old := Defaults()
+	next := old
+	next.Enforcement = !old.Enforcement
+	at := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
+	r := &stampRec{}
+	ch, err := SaveAt(context.Background(), r, old, next, 7, at)
+	if err != nil || len(ch) != 1 || len(r.at) != 1 || !r.at[0].Equal(at) {
+		t.Fatalf("changes %v err %v stamps %v", ch, err, r.at)
+	}
+	saved := now
+	t.Cleanup(func() { now = saved })
+	fixed := time.Date(2031, 5, 6, 7, 8, 9, 0, time.UTC)
+	now = func() time.Time { return fixed }
+	r = &stampRec{}
+	if _, err := Save(context.Background(), r, old, next, 7); err != nil || len(r.at) != 1 || !r.at[0].Equal(fixed) {
+		t.Fatalf("Save stamps %v err %v", r.at, err)
+	}
+}

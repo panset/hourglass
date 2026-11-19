@@ -522,3 +522,38 @@ func TestLED_ServiceBurnLast24h(t *testing.T) {
 		t.Errorf("burn %d %v", got, err)
 	}
 }
+
+// LED-3 says every user who has a role: a user whose roles were removed
+// before the boundary is skipped, so their debt is not carried, and a role
+// given back later starts from a full allowance. Documents a decision.
+func TestLED3_RolelessUserSkippedAtRollover_DebtNotCarried(t *testing.T) {
+	e := newEnv(t, time.UTC, nov)
+	dev := e.user("dev", store.RoleDeveloper)
+	indebted := e.user("indebted", store.RoleDeveloper)
+	e.seed(dev, "2026-11", TypeAllowance, 300*tok)
+	e.seed(indebted, "2026-11", TypeAllowance, 300*tok)
+	e.seed(indebted, "2026-11", TypeDebit, -340*tok) // -40 tokens
+	if err := e.st.SetUserRoles(bg, indebted, nil); err != nil {
+		t.Fatal(err)
+	}
+	e.clk.Set(time.Date(2026, 12, 1, 1, 0, 0, 0, time.UTC))
+	if _, err := e.svc.RolloverDue(bg); err != nil {
+		t.Fatal(err)
+	}
+	if es, _ := e.st.ListLedger(bg, indebted, "2026-12"); len(es) != 0 {
+		t.Fatalf("role-less user got rollover entries: %+v", es)
+	}
+	if e.sum(dev, "2026-12") != 300*tok {
+		t.Fatal("developer missing allowance")
+	}
+	// The role comes back: a fresh full allowance, the debt is gone.
+	if err := e.st.SetUserRoles(bg, indebted, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.Tx(bg, func(tx *store.Tx) error { return e.svc.EnsureFirstAllowanceTx(tx, indebted, e.clk.Now()) }); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.sum(indebted, "2026-12"); got != 300*tok {
+		t.Fatalf("balance %d, want a full allowance %d", got, 300*tok)
+	}
+}

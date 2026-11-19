@@ -4,6 +4,7 @@ package holds
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strconv"
@@ -492,6 +493,13 @@ func TestHOLD2_ForceReleaseNeedsAdminAndReasonAndIsAudited(t *testing.T) {
 		t.Fatalf("hold %+v", out)
 	}
 	rows, _ := e.st.ListAudit(bg, store.AuditFilter{})
+	if len(rows) == 1 {
+		var before map[string]any
+		if err := json.Unmarshal([]byte(rows[0].BeforeJSON), &before); err != nil || before["released_at"] != nil ||
+			before["hold_id"] != float64(h.ID) || before["setup"] != "s" || before["user_id"] != float64(dev) {
+			t.Fatalf("before_json %q (%v)", rows[0].BeforeJSON, err)
+		}
+	}
 	if len(rows) != 1 || rows[0].Action != AuditForceRelease || rows[0].ActorID == nil || *rows[0].ActorID != admin {
 		t.Fatalf("audit %+v", rows)
 	}
@@ -578,5 +586,61 @@ func TestHOLD1_ReleasedSetupCanBeAcquiredAgain(t *testing.T) {
 	}
 	if _, err := e.svc.Acquire(bg, b, s); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// gateDispatcher holds every Veto until n callers are inside it, so all of
+// them are past the pre-check before any creates its hold.
+type gateDispatcher struct {
+	n       int
+	mu      sync.Mutex
+	in      int
+	release chan struct{}
+}
+
+func (g *gateDispatcher) Veto(context.Context, hourglass.Event) error {
+	g.mu.Lock()
+	g.in++
+	if g.in == g.n {
+		close(g.release)
+	}
+	g.mu.Unlock()
+	<-g.release
+	return nil
+}
+func (g *gateDispatcher) Emit(hourglass.Event) {}
+
+// HOLD-1 (finding 6, mutation M4): two acquires both pass the pre-check
+// (one hold of a limit of two) and both are past the veto before either
+// writes; the in-transaction re-check must still keep the user at the limit.
+func TestHOLD1_LimitRecheckedInTransactionDeterministic(t *testing.T) {
+	e := newEnv(t)
+	g := &gateDispatcher{n: 2, release: make(chan struct{})}
+	e.build(g)
+	u := e.user("u", 10, store.RoleDeveloper)
+	if _, err := e.st.CreateHold(bg, e.setup("held", true), u, e.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s1, s2 := e.setup("a", true), e.setup("b", true)
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, s := range []int64{s1, s2} {
+		wg.Add(1)
+		go func(i int, s int64) { defer wg.Done(); _, errs[i] = e.svc.Acquire(bg, u, s) }(i, s)
+	}
+	wg.Wait()
+	if n := e.countHolds(u); n != 2 {
+		t.Fatalf("holds = %d, want the limit 2 (errors %v)", n, errs)
+	}
+	won := 0
+	for _, err := range errs {
+		if err == nil {
+			won++
+		} else if CodeOf(err) != CodeHoldLimit {
+			t.Fatalf("loser got %v", err)
+		}
+	}
+	if won != 1 {
+		t.Fatalf("winners = %d, want 1", won)
 	}
 }

@@ -332,7 +332,7 @@ type Change struct {
 	After  string
 }
 
-// now is replaceable in tests.
+// now stamps updated_at for Save; SaveAt takes the time explicitly.
 var now = time.Now
 
 // Load reads every stored setting. Missing keys take defaults; unknown keys
@@ -357,11 +357,17 @@ func Load(ctx context.Context, r Reader) (Settings, error) {
 // Save validates next and writes only the keys whose JSON value differs from
 // old, attributing them to actorID. It returns the changes for the audit log.
 func Save(ctx context.Context, w Writer, old, next Settings, actorID int64) ([]Change, error) {
+	return SaveAt(ctx, w, old, next, actorID, now())
+}
+
+// SaveAt is Save with the updated_at timestamp supplied by the caller, so
+// production code can pass its injected clock.
+func SaveAt(ctx context.Context, w Writer, old, next Settings, actorID int64, at time.Time) ([]Change, error) {
 	if err := next.Validate(); err != nil {
 		return nil, err
 	}
 	var changes []Change
-	t := now()
+	t := at
 	for _, k := range keyOrder {
 		before, err := old.encodeKey(k)
 		if err != nil {

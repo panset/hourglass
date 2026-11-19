@@ -78,6 +78,16 @@ type PollView struct {
 	Multiplier       float64
 }
 
+// HoldsView adapts a PollView to holds.PollView, whose OK is a method (a
+// struct cannot have both a field and a method named OK).
+type HoldsView struct{ PollView }
+
+// OK reports whether a successful poll exists (holds.PollView).
+func (v HoldsView) OK() bool { return v.PollView.OK }
+
+// ForHolds returns v as a holds.PollView.
+func (v PollView) ForHolds() HoldsView { return HoldsView{v} }
+
 // Reported reports whether the provider reported resourceName in the
 // latest successful poll.
 func (v PollView) Reported(resourceName string) bool { return v.Resources[resourceName] }
@@ -103,6 +113,9 @@ type Collector struct {
 	runMu     sync.Mutex // serialises polls and prunes
 	lastSeen  map[string]time.Time
 	lastPrune time.Time
+	// lastInterval is the poll interval in force at the previous successful
+	// poll of this process (zero after a restart).
+	lastInterval time.Duration
 
 	viewMu sync.RWMutex
 	view   PollView
@@ -130,17 +143,12 @@ func (c *Collector) LastPoll() PollView {
 }
 
 // Run polls immediately, then every poll interval (re-read each cycle) until
-// ctx ends. Before each poll it runs the ledger rollover; once a day it
+// ctx ends. RunOnce runs the ledger rollover before each poll; once a day it
 // prunes old rows. It returns ctx.Err().
 func (c *Collector) Run(ctx context.Context) error {
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
-		}
-		if closed, err := c.d.Ledger.RolloverDue(ctx); err != nil {
-			c.log.Error("ledger rollover failed", "err", err)
-		} else if len(closed) > 0 {
-			c.log.Info("ledger periods closed", "periods", closed)
 		}
 		_ = c.RunOnce(ctx) // failures are recorded, logged and emitted by RunOnce
 		c.pruneIfDue(ctx)
@@ -190,6 +198,13 @@ func (c *Collector) pruneIfDue(ctx context.Context) {
 func (c *Collector) RunOnce(ctx context.Context) error {
 	c.runMu.Lock()
 	defer c.runMu.Unlock()
+	// Open any due period first so this poll's debit never lands in a period
+	// that has not been opened (LED-3).
+	if closed, err := c.d.Ledger.RolloverDue(ctx); err != nil {
+		c.log.Error("ledger rollover failed", "err", err)
+	} else if len(closed) > 0 {
+		c.log.Info("ledger periods closed", "periods", closed)
+	}
 	t := c.d.Clock.Now().UTC().Truncate(time.Millisecond) // the store keeps milliseconds
 	runID, err := c.d.Store.StartCollectorRun(ctx, t)
 	if err != nil {
@@ -228,6 +243,7 @@ func (c *Collector) fail(ctx context.Context, runID int64, t time.Time, err erro
 }
 
 func (c *Collector) publish(r *result) {
+	c.lastInterval = r.interval
 	for name, at := range r.seen {
 		c.lastSeen[name] = at
 	}
@@ -246,6 +262,8 @@ type result struct {
 	events []hourglass.Event
 	holds  int
 	debits int
+	// interval is the poll interval setting this poll ran under.
+	interval time.Duration
 }
 
 // setupInfo is one setup resolved for this poll.
@@ -284,7 +302,9 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 		return nil, fmt.Errorf("list active holds: %w", err)
 	}
 	var prev time.Time
-	switch run, err := st.LastSuccessfulRunBefore(ctx, t); {
+	// The newest successful poll of any time, so a clock stepped backwards
+	// cannot charge the same interval twice.
+	switch run, err := st.LastSuccessfulRunBefore(ctx, t.AddDate(100, 0, 0)); {
 	case err == nil:
 		prev = run.StartedAt
 	case !errors.Is(err, store.ErrNotFound):
@@ -415,14 +435,22 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 	mult := cfg.Bands.Multiplier(smoothed)
 
 	// 7. Chargeable time since the previous successful poll (MET-4, D12).
-	elapsed, outage := metering.ChargeableElapsed(prev, t, cfg.PollInterval)
+	if t.Before(prev) {
+		c.log.Warn("clock is before the previous successful poll; nothing charged", "time", t, "previous", prev)
+	}
+	capInterval := cfg.PollInterval
+	if c.lastInterval > capInterval {
+		// The wait before this poll was scheduled under the longer interval.
+		capInterval = c.lastInterval
+	}
+	elapsed, outage := metering.ChargeableElapsed(prev, t, capInterval)
 
 	// 8. One transaction for everything this poll writes.
 	res := &result{
 		view: PollView{OK: true, Time: t, ProviderConfigured: c.d.Provider != nil, Resources: map[string]bool{},
 			RawPressure: raw, SmoothedPressure: smoothed, Multiplier: mult},
 		seen:  map[string]time.Time{},
-		holds: len(holds),
+		holds: len(holds), interval: cfg.PollInterval,
 	}
 	for name := range reported {
 		res.view.Resources[name] = true
@@ -440,7 +468,7 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 		}
 		if outage {
 			reason := fmt.Sprintf("no successful poll for %s (more than twice the poll interval of %s); the gap was not charged",
-				t.Sub(prev), cfg.PollInterval)
+				t.Sub(prev), capInterval)
 			if _, err := tx.InsertOutage(ctx, store.Outage{StartedAt: prev, EndedAt: t, Reason: reason}); err != nil {
 				return fmt.Errorf("outage: %w", err)
 			}

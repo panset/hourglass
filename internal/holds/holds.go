@@ -315,9 +315,12 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 			return err
 		}
 		if opts.Force {
+			before, _ := json.Marshal(map[string]any{"hold_id": holdID, "setup": setup.Name, "user_id": h.UserID,
+				"acquired_at": h.AcquiredAt, "metering_started_at": h.MeteringStartedAt, "deployed_at": h.DeployedAt,
+				"released_at": nil})
 			after, _ := json.Marshal(map[string]any{"hold_id": holdID, "setup": setup.Name, "user_id": h.UserID, "reason": reason})
 			if _, err := tx.AppendAudit(ctx, store.AuditEntry{ActorID: &actorID, Action: AuditForceRelease,
-				Target: fmt.Sprintf("hold:%d", holdID), AfterJSON: string(after)}, now); err != nil {
+				Target: fmt.Sprintf("hold:%d", holdID), BeforeJSON: string(before), AfterJSON: string(after)}, now); err != nil {
 				return err
 			}
 		}
