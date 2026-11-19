@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: MIT */
+.region { display: flex; flex-direction: column; gap: var(--gap-region); }
+.titleRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gap-control); }
+.titleRow h1 { margin: 0; }
+.month { display: flex; align-items: center; gap: var(--gap-control); font-size: var(--fs-13); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--gap-card); }
+.card { border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: var(--card-pad); }
+.caption { font-size: var(--fs-12); color: var(--color-muted); }
+.value { font-size: var(--fs-28); font-weight: 600; }
+.sub { font-size: var(--fs-13); color: var(--color-muted); }
+.bar { display: flex; position: relative; height: 12px; border: 1px solid var(--color-border); border-radius: 6px; margin: 8px 0; overflow: hidden; }
+.marker { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--color-amber); }
+.section h2 { font-size: var(--fs-16); margin: 0 0 12px; }
+.note { font-size: var(--fs-13); color: var(--color-muted); margin: 8px 0 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: var(--gap-col); align-items: start; }
+.chart { border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: var(--card-pad); }
+.axis { display: flex; justify-content: space-between; font-size: var(--fs-12); color: var(--color-muted); }
+.total { font-size: var(--fs-13); color: var(--color-muted); margin: 0 0 8px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }

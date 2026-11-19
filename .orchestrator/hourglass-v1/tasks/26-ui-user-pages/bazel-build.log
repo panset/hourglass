@@ -1,0 +1,13 @@
+Another command (pid=91235) is running. Waiting for it to complete on the server (server_pid=12622)...
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 9 targets (1 packages loaded, 0 targets configured)
+Analyzing: 9 targets (1 packages loaded, 0 targets configured)
+
+INFO: Analyzed 9 targets (1 packages loaded, 827 targets configured).
+[1,331 / 1,332] Vite ui/dist; 1s darwin-sandbox
+INFO: Found 9 targets...
+INFO: Elapsed time: 8.482s, Critical Path: 2.17s
+INFO: 10 processes: 7 internal, 1 darwin-sandbox, 2 local.
+INFO: Build completed successfully, 10 total actions

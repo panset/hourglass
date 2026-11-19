@@ -1,0 +1,63 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 9 targets (1 packages loaded, 0 targets configured)
+Analyzing: 9 targets (1 packages loaded, 5 targets configured)
+
+INFO: Analyzed 9 targets (1 packages loaded, 826 targets configured).
+[1,329 / 1,332] 1 / 3 tests; Vite ui/dist; 1s darwin-sandbox ... (3 actions running)
+[1,330 / 1,332] 1 / 3 tests; Testing //ui:typecheck; 3s darwin-sandbox ... (2 actions running)
+[1,330 / 1,332] 1 / 3 tests; Testing //ui:typecheck; 6s darwin-sandbox ... (2 actions running)
+FAIL: //ui:typecheck (see /private/var/tmp/_bazel_tejaspanse/3ea4304224e7c36a43df0c9a9984c1ef/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/ui/typecheck/test.log)
+INFO: From Testing //ui:typecheck:
+==================== Test output for //ui:typecheck:
+src/pages/form.ts(3,57): error TS2307: Cannot find module './api' or its corresponding type declarations.
+src/pages/form.ts(29,31): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/pages/form.ts(91,23): error TS7006: Parameter 'x' implicitly has an 'any' type.
+src/pages/index.tsx(4,52): error TS2307: Cannot find module '../../components' or its corresponding type declarations.
+src/pages/index.tsx(5,24): error TS2307: Cannot find module '../../hooks/useApi' or its corresponding type declarations.
+src/pages/index.tsx(6,32): error TS2307: Cannot find module '../../lib/format' or its corresponding type declarations.
+src/pages/index.tsx(8,38): error TS2307: Cannot find module '../admin-shared/useAction' or its corresponding type declarations.
+src/pages/index.tsx(9,76): error TS2307: Cannot find module './api' or its corresponding type declarations.
+src/pages/index.tsx(56,18): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/pages/index.tsx(59,51): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/pages/index.tsx(60,49): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/pages/index.tsx(61,58): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/pages/index.tsx(68,18): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/pages/index.tsx(71,49): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/pages/index.tsx(72,48): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/pages/index.tsx(73,48): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/pages/index.tsx(74,49): error TS7006: Parameter 'f' implicitly has an 'any' type.
+src/pages/index.tsx(242,17): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(242,91): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(245,17): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(245,90): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(248,17): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(248,66): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(259,17): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(259,70): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(270,19): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(270,121): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(276,21): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(282,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(289,21): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(295,34): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(319,19): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(319,120): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(322,19): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/index.tsx(322,73): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(353,42): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(368,42): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/pages/index.tsx(411,51): error TS7006: Parameter 's' implicitly has an 'any' type.
+================================================================================
+INFO: Found 6 targets and 3 test targets...
+INFO: Elapsed time: 7.855s, Critical Path: 7.24s
+INFO: 13 processes: 5 internal, 5 darwin-sandbox, 3 local.
+INFO: Build completed, 1 test FAILED, 13 total actions
+//ui:api_schema_drift_test                                      (cached) PASSED in 0.2s
+//ui:test                                                                PASSED in 6.8s
+//ui:typecheck                                                           FAILED in 6.2s
+  /private/var/tmp/_bazel_tejaspanse/3ea4304224e7c36a43df0c9a9984c1ef/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/ui/typecheck/test.log
+
+Executed 2 out of 3 tests: 2 tests pass and 1 fails locally.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
