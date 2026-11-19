@@ -1,0 +1,1 @@
+- 2026-11-19 cloned, ran go/race/nocgo/bazel tests (all green), wrote throwaway tests (evidence/*.go.txt), ran 5 mutations, scale test. RESULT.md written.

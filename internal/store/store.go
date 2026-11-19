@@ -38,7 +38,10 @@ var (
 // timestamp, so that text order equals time order.
 const TimeLayout = "2006-01-02T15:04:05.000Z"
 
-// FormatTime renders t in the stored timestamp format (UTC, milliseconds).
+// FormatTime renders t in the stored timestamp format: UTC, millisecond
+// precision, fixed width (24 characters). Sub-millisecond precision is
+// truncated, not rounded, so a time with nanoseconds does not round-trip;
+// callers must not rely on finer than millisecond resolution.
 func FormatTime(t time.Time) string { return t.UTC().Format(TimeLayout) }
 
 // ParseTime parses a stored timestamp.
@@ -106,16 +109,25 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.sqldb.Close() }
 
 // Tx runs fn in a write transaction, committing if it returns nil and rolling
-// back otherwise.
+// back otherwise. A panic in fn rolls back, releases the connection and is
+// re-raised.
 func (s *Store) Tx(ctx context.Context, fn func(*Tx) error) error {
 	tx, err := s.sqldb.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
+	done := false
+	defer func() {
+		if !done {
+			_ = tx.Rollback()
+		}
+	}()
 	if err := fn(&Tx{queries{db: tx}}); err != nil {
+		done = true
 		_ = tx.Rollback()
 		return err
 	}
+	done = true
 	return tx.Commit()
 }
 

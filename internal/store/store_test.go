@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 1 {
+	if n != 2 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -462,7 +462,7 @@ func TestUsageSumsAndPrune(t *testing.T) {
 func TestLED_TriggersRejectUpdateDelete(t *testing.T) {
 	s := openTemp(t)
 	u := newUser(t, s, "u")
-	s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "allowance", AmountMT: 300000}, t0)
+	s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "allowance", AmountMT: 300000}, "2026-11", t0)
 	if _, err := s.sqldb.Exec(`UPDATE ledger SET amount_mt = 1`); err == nil {
 		t.Error("UPDATE allowed")
 	}
@@ -474,13 +474,98 @@ func TestLED_TriggersRejectUpdateDelete(t *testing.T) {
 	}
 }
 
+func TestLED1_RejectsInsertOrReplace(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	e, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "allowance", AmountMT: 5000}, "2026-11", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`INSERT OR REPLACE INTO ledger (id, user_id, period, type, amount_mt, created_at) VALUES (?, ?, '2026-11', 'allowance', 1, 'x')`,
+		`REPLACE INTO ledger (id, user_id, period, type, amount_mt, created_at) VALUES (?, ?, '2026-11', 'allowance', 1, 'x')`,
+		`INSERT OR IGNORE INTO ledger (id, user_id, period, type, amount_mt, created_at) VALUES (?, ?, '2026-11', 'allowance', 1, 'x')`,
+	} {
+		if _, err := s.sqldb.Exec(stmt, e.ID, u.ID); err == nil {
+			t.Errorf("allowed: %s", stmt)
+		}
+	}
+	if n, _ := s.SumLedger(ctx, u.ID, "2026-11", ""); n != 5000 {
+		t.Errorf("sum %d", n)
+	}
+	// A fresh id still inserts.
+	if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "grant", AmountMT: 1}, "2026-11", t0); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStoreTxPanicRollsBackAndReleases(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	func() {
+		defer func() {
+			if r := recover(); r != "boom" {
+				t.Errorf("recovered %v", r)
+			}
+		}()
+		s.Tx(ctx, func(tx *Tx) error {
+			tx.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "grant", AmountMT: 5}, "2026-11", t0)
+			panic("boom")
+		})
+	}()
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "grant", AmountMT: 7}, "2026-11", t0)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("write blocked after panic in Tx")
+	}
+	if n, _ := s.SumLedger(ctx, u.ID, "2026-11", ""); n != 7 {
+		t.Errorf("sum %d (panicked tx not rolled back)", n)
+	}
+}
+
+func TestLED2_CacheIsCurrentPeriodForAnyEntryPeriod(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	add := func(period, typ string, amt int64) {
+		t.Helper()
+		if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: period, Type: typ, AmountMT: amt}, "2026-12", t0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache := func() int64 { g, _ := s.GetUser(ctx, u.ID); return g.BalanceMT }
+	add("2026-11", "allowance", 300000)
+	add("2026-12", "allowance", 300000)
+	add("2026-12", "debit", -1000)
+	// Expiry of the old period written after the new allowance.
+	add("2026-11", "expiry", -300000)
+	if cache() != 299000 {
+		t.Errorf("after late expiry %d", cache())
+	}
+	// Late grant to a past period.
+	add("2026-11", "grant", 7000)
+	if cache() != 299000 {
+		t.Errorf("after late past grant %d", cache())
+	}
+	if n, _ := s.RebuildBalance(ctx, u.ID, "2026-12"); n != 299000 || cache() != 299000 {
+		t.Errorf("rebuild %d cache %d", n, cache())
+	}
+}
+
 func TestLED2_BalanceCacheMatchesLedger(t *testing.T) {
 	s := openTemp(t)
 	u := newUser(t, s, "u")
 	admin := newUser(t, s, "adm")
 	h := must(s.CreateHold(ctx, newSetup(t, s, "s"), u.ID, t0))
 	add := func(typ string, amt int64, actor *int64, hold *int64) {
-		if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: typ, AmountMT: amt, ActorID: actor, HoldID: hold, Reason: "x"}, t0); err != nil {
+		if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: typ, AmountMT: amt, ActorID: actor, HoldID: hold, Reason: "x"}, "2026-11", t0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -515,14 +600,14 @@ func TestLED2_BalanceCacheMatchesLedger(t *testing.T) {
 	if g, _ := s.GetUser(ctx, u.ID); g.BalanceMT != 0 {
 		t.Errorf("after expiry %d", g.BalanceMT)
 	}
-	s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-12", Type: "allowance", AmountMT: 300000}, t0)
+	s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-12", Type: "allowance", AmountMT: 300000}, "2026-12", t0)
 	if g, _ := s.GetUser(ctx, u.ID); g.BalanceMT != 300000 {
 		t.Errorf("new period %d", g.BalanceMT)
 	}
-	if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "bad", Type: "grant"}, t0); err == nil {
+	if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "bad", Type: "grant"}, "2026-12", t0); err == nil {
 		t.Error("bad period accepted")
 	}
-	if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-12", Type: "nope"}, t0); err == nil {
+	if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-12", Type: "nope"}, "2026-12", t0); err == nil {
 		t.Error("bad type accepted")
 	}
 	if g, _ := s.GetUser(ctx, u.ID); g.BalanceMT != 300000 {
@@ -535,7 +620,7 @@ func TestLedgerAppendInsideTxRollsBack(t *testing.T) {
 	u := newUser(t, s, "u")
 	boom := errors.New("boom")
 	err := s.Tx(ctx, func(tx *Tx) error {
-		tx.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "grant", AmountMT: 5}, t0)
+		tx.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "grant", AmountMT: 5}, "2026-11", t0)
 		return boom
 	})
 	if !errors.Is(err, boom) {

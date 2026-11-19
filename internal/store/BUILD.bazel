@@ -13,7 +13,10 @@ go_library(
         "usage.go",
         "users.go",
     ],
-    embedsrcs = ["migrations/0001_init.sql"],
+    embedsrcs = [
+        "migrations/0001_init.sql",
+        "migrations/0002_ledger_no_replace.sql",
+    ],
     importpath = "github.com/panset/hourglass/internal/store",
     visibility = ["//:__subpackages__"],
     deps = [

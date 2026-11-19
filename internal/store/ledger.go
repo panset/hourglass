@@ -39,10 +39,11 @@ func scanLedger(r rowScanner) (LedgerEntry, error) {
 }
 
 // AppendLedger appends an entry and, in the same transaction, sets
-// users.balance_mt to the sum of the user's ledger entries for the entry's
-// period (LED-2: the cache is the current period's sum, and the period of the
-// newest entry is the current one). CreatedAt is set from now.
-func (q *queries) AppendLedger(ctx context.Context, e LedgerEntry, now time.Time) (LedgerEntry, error) {
+// users.balance_mt to the sum of the user's ledger entries for currentPeriod
+// (LED-2: the cache is the current period's sum), whatever period the entry
+// itself belongs to. The caller computes currentPeriod (YYYY-MM) from the
+// configured timezone. CreatedAt is set from now.
+func (q *queries) AppendLedger(ctx context.Context, e LedgerEntry, currentPeriod string, now time.Time) (LedgerEntry, error) {
 	var out LedgerEntry
 	err := q.atomic(ctx, func(q *queries) error {
 		res, err := q.db.ExecContext(ctx, `INSERT INTO ledger (user_id, period, type, amount_mt, hold_id, actor_id, reason, created_at)
@@ -52,7 +53,7 @@ func (q *queries) AppendLedger(ctx context.Context, e LedgerEntry, now time.Time
 			return mapErr(err)
 		}
 		id, _ := res.LastInsertId()
-		if _, err := q.RebuildBalance(ctx, e.UserID, e.Period); err != nil {
+		if _, err := q.RebuildBalance(ctx, e.UserID, currentPeriod); err != nil {
 			return err
 		}
 		out, err = scanLedger(q.db.QueryRowContext(ctx, `SELECT `+ledgerCols+` FROM ledger WHERE id = ?`, id))
@@ -81,13 +82,13 @@ func (q *queries) SumLedger(ctx context.Context, userID int64, period, typ strin
 	return n.Int64, err
 }
 
-// RebuildBalance recomputes users.balance_mt from the ledger for period
-// (LED-2) and returns it.
-func (q *queries) RebuildBalance(ctx context.Context, userID int64, period string) (int64, error) {
+// RebuildBalance recomputes users.balance_mt from the ledger for
+// currentPeriod (LED-2) and returns it.
+func (q *queries) RebuildBalance(ctx context.Context, userID int64, currentPeriod string) (int64, error) {
 	var sum int64
 	err := q.atomic(ctx, func(q *queries) error {
 		var err error
-		if sum, err = q.SumLedger(ctx, userID, period, ""); err != nil {
+		if sum, err = q.SumLedger(ctx, userID, currentPeriod, ""); err != nil {
 			return err
 		}
 		res, err := q.db.ExecContext(ctx, `UPDATE users SET balance_mt = ? WHERE id = ?`, sum, userID)

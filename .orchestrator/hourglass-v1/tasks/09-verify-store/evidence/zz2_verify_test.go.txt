@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: MIT
+
+package store
+
+import (
+	"fmt"
+	"testing"
+	"time"
+)
+
+func TestZZBalanceOrders(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "a")
+	ap := func(p, ty string, amt int64) {
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: p, Type: ty, AmountMT: amt}, t0))
+	}
+	bal := func() int64 { return must(s.GetUser(ctx, u.ID)).BalanceMT }
+	// LED-3 positive: expiry(old) then allowance(new)
+	ap("2026-10", "allowance", 300000); ap("2026-10", "debit", -50000)
+	ap("2026-10", "expiry", -250000)
+	t.Logf("after expiry old: cache=%d (cur period sum=%d)", bal(), must(s.SumLedger(ctx, u.ID, "2026-11", "")))
+	ap("2026-11", "allowance", 300000)
+	t.Logf("after allowance new: cache=%d sum=%d", bal(), must(s.SumLedger(ctx, u.ID, "2026-11", "")))
+	// late correction to past period
+	ap("2026-10", "grant", 7000)
+	t.Logf("after late past grant: cache=%d sum(Nov)=%d", bal(), must(s.SumLedger(ctx, u.ID, "2026-11", "")))
+	// reversed order: carryover/allowance first then expiry
+	ap("2026-11", "debit", -1000)
+	ap("2026-10", "expiry", -7000)
+	t.Logf("after expiry written last: cache=%d sum(Nov)=%d", bal(), must(s.SumLedger(ctx, u.ID, "2026-11", "")))
+}
+
+func TestZZScale(t *testing.T) {
+	s := openTemp(t)
+	base := time.Date(2025, 10, 19, 0, 0, 0, 0, time.UTC)
+	err := s.Tx(ctx, func(tx *Tx) error {
+		for i := 1; i <= 200; i++ {
+			if _, err := tx.CreateOIDCUser(ctx, fmt.Sprint("u", i), "e", "n", base); err != nil { return err }
+		}
+		for i := 1; i <= 100; i++ {
+			id, err := tx.CreateSetup(ctx, Setup{Name: fmt.Sprint("s", i), Enabled: true, Labels: map[string]string{"size": "L", "n": fmt.Sprint(i)}})
+			if err != nil { return err }
+			h, err := tx.CreateHold(ctx, id, int64(i), base)
+			if err != nil { return err }
+			for j := 0; j < 2000; j++ {
+				at := base.Add(time.Duration(j) * 5 * time.Minute * 280 / 1) // spread over ~13 months? 2000*1400min
+				_, err := tx.InsertUsageSample(ctx, UsageSample{HoldID: h.ID, PolledAt: at, Weight: 1, Pressure: .5, Multiplier: 1, DebitMT: 10})
+				if err != nil { return err }
+			}
+		}
+		return nil
+	})
+	if err != nil { t.Fatal(err) }
+	// heavy user: user 150 with 112k samples on a released hold of setup 1
+	var hid int64
+	err = s.Tx(ctx, func(tx *Tx) error {
+		h, err := tx.CreateHold(ctx, 1, 150, base); _ = err
+		_ = h
+		return nil
+	})
+	t.Logf("(setup1 already held: %v)", err)
+	s.sqldb.Exec(`INSERT INTO holds (setup_id,user_id,acquired_at,released_at) VALUES (1,150,'2025-10-19T00:00:00.000Z','2026-11-01T00:00:00.000Z')`)
+	s.sqldb.QueryRow(`SELECT MAX(id) FROM holds`).Scan(&hid)
+	s.Tx(ctx, func(tx *Tx) error {
+		for j := 0; j < 112000; j++ {
+			tx.InsertUsageSample(ctx, UsageSample{HoldID: hid, PolledAt: base.Add(time.Duration(j) * 5 * time.Minute), Weight: 1, Pressure: .5, Multiplier: 1, DebitMT: 10})
+		}
+		return nil
+	})
+	s.sqldb.Exec(`ANALYZE`)
+	var n int
+	s.sqldb.QueryRow(`SELECT COUNT(*) FROM usage_samples`).Scan(&n)
+	t.Logf("samples=%d", n)
+	tm := func(name string, f func()) {
+		best := time.Hour
+		for i := 0; i < 5; i++ { st := time.Now(); f(); if d := time.Since(st); d < best { best = d } }
+		t.Logf("%s: %.2f ms", name, float64(best.Microseconds())/1000)
+	}
+	from := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC); to := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	for _, uid := range []int64{5, 150} {
+		tm(fmt.Sprintf("DailyDebits user %d month", uid), func() { must(s.DailyDebits(ctx, uid, from, to)) })
+		tm(fmt.Sprintf("SumDebitsSince user %d", uid), func() { must(s.SumDebitsSince(ctx, uid, from)) })
+	}
+	tm("ActiveHolds", func() { must(s.ActiveHolds(ctx)) })
+	tm("ListSetups", func() { must(s.ListSetups(ctx, false)) })
+	tm("PruneUsageSamples(no-op cutoff)", func() { must(s.PruneUsageSamples(ctx, base.Add(-time.Hour))) })
+	for _, q := range []string{
+		`SELECT substr(u.polled_at,1,10) d, SUM(u.debit_mt) FROM usage_samples u JOIN holds h ON h.id=u.hold_id WHERE h.user_id=150 AND u.polled_at>='2026-03-01T00:00:00.000Z' AND u.polled_at<'2026-04-01T00:00:00.000Z' GROUP BY d ORDER BY d`,
+		`SELECT id FROM holds WHERE released_at IS NULL ORDER BY id`,
+		`SELECT setup_id,key,value FROM setup_labels`,
+	} {
+		r, _ := s.sqldb.Query(`EXPLAIN QUERY PLAN `+q)
+		for r.Next() { var a, b, c int; var d string; r.Scan(&a, &b, &c, &d); t.Logf("PLAN: %s", d) }
+		r.Close()
+	}
+}

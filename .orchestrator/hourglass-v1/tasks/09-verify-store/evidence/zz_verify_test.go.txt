@@ -1,0 +1,230 @@
+// SPDX-License-Identifier: MIT
+
+package store
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+)
+
+func TestZZSchemaDump(t *testing.T) {
+	s := openTemp(t)
+	rows, _ := s.sqldb.Query(`SELECT type, name, tbl_name, COALESCE(sql,'') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND type IN ('index','trigger') ORDER BY tbl_name,name`)
+	for rows.Next() {
+		var a, b, c, d string
+		rows.Scan(&a, &b, &c, &d)
+		t.Logf("%s %s on %s: %s", a, b, c, d)
+	}
+	rows.Close()
+	tables, _ := s.sqldb.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+	var names []string
+	for tables.Next() { var n string; tables.Scan(&n); names = append(names, n) }
+	tables.Close()
+	for _, n := range names {
+		r, _ := s.sqldb.Query(`SELECT name, type, "notnull", pk FROM pragma_table_info(?)`, n)
+		out := ""
+		for r.Next() { var a, b string; var nn, pk int; r.Scan(&a, &b, &nn, &pk); out += fmt.Sprintf("%s:%s:nn%d:pk%d ", a, b, nn, pk) }
+		r.Close()
+		t.Logf("%s: %s", n, out)
+	}
+}
+
+func TestZZPragmasEveryConn(t *testing.T) {
+	s := openTemp(t)
+	s.sqldb.SetMaxOpenConns(0)
+	var conns []*sql.Conn
+	for i := 0; i < 12; i++ {
+		c, err := s.sqldb.Conn(ctx)
+		if err != nil { t.Fatal(err) }
+		conns = append(conns, c)
+	}
+	for i, c := range conns {
+		var fk, bt int; var jm string
+		c.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&fk)
+		c.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&jm)
+		c.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&bt)
+		if fk != 1 || jm != "wal" || bt != 10000 { t.Errorf("conn %d fk=%d jm=%s bt=%d", i, fk, jm, bt) }
+		c.Close()
+	}
+}
+
+func TestZZLedgerBypass(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "a")
+	e := must(s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-11", Type: "grant", AmountMT: 5000}, t0))
+	for _, q := range []string{
+		`UPDATE ledger SET amount_mt=1`, `DELETE FROM ledger`,
+		`UPDATE OR REPLACE ledger SET amount_mt=1`,
+		`INSERT INTO ledger (id,user_id,period,type,amount_mt,created_at) VALUES (1,1,'2026-11','grant',1,'x') ON CONFLICT(id) DO UPDATE SET amount_mt=2`,
+	} {
+		_, err := s.sqldb.Exec(q)
+		t.Logf("%s -> %v", q, err)
+		if err == nil { t.Errorf("accepted: %s", q) }
+	}
+	_, err := s.sqldb.Exec(`INSERT OR REPLACE INTO ledger (id,user_id,period,type,amount_mt,created_at) VALUES (?,?,?,?,?,?)`, e.ID, u.ID, "2026-11", "grant", 1, "2026-11-19T10:00:00.000Z")
+	t.Logf("INSERT OR REPLACE -> %v", err)
+	if err == nil {
+		var a int64
+		s.sqldb.QueryRow(`SELECT amount_mt FROM ledger WHERE id=?`, e.ID).Scan(&a)
+		t.Errorf("BYPASS: INSERT OR REPLACE rewrote ledger row, amount now %d", a)
+	}
+	_, err = s.sqldb.Exec(`DELETE FROM users WHERE id=?`, u.ID)
+	t.Logf("delete user with ledger -> %v", err)
+}
+
+func TestZZSampleDup(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "a"); sid := newSetup(t, s, "s")
+	h := must(s.CreateHold(ctx, sid, u.ID, t0))
+	smp := UsageSample{HoldID: h.ID, PolledAt: t0, DebitMT: 5}
+	a, _ := s.InsertUsageSample(ctx, smp)
+	smp.DebitMT = 9
+	b, err := s.InsertUsageSample(ctx, smp)
+	l := must(s.ListUsageSamples(ctx, h.ID))
+	t.Logf("%v %v %v n=%d debit=%d", a, b, err, len(l), l[0].DebitMT)
+	if !a || b || len(l) != 1 || l[0].DebitMT != 5 { t.Error("bad") }
+}
+
+func TestZZSetupDup(t *testing.T) {
+	s := openTemp(t)
+	newSetup(t, s, "x")
+	_, err := s.CreateSetup(ctx, Setup{Name: "x"})
+	if !errors.Is(err, ErrConflict) { t.Errorf("dup: %v", err) }
+	id2 := newSetup(t, s, "y")
+	err = s.UpdateSetup(ctx, Setup{ID: id2, Name: "x"})
+	if !errors.Is(err, ErrConflict) { t.Errorf("update dup: %v", err) }
+	// delete with labels
+	if err := s.DeleteSetup(ctx, id2); err != nil { t.Errorf("delete labelled: %v", err) }
+	var n int
+	s.sqldb.QueryRow(`SELECT COUNT(*) FROM setup_labels WHERE setup_id=?`, id2).Scan(&n)
+	if n != 0 { t.Errorf("labels left %d", n) }
+	// with holds (active and released)
+	u := newUser(t, s, "a"); id3 := newSetup(t, s, "z")
+	h := must(s.CreateHold(ctx, id3, u.ID, t0))
+	if err := s.DeleteSetup(ctx, id3); !errors.Is(err, ErrConflict) { t.Errorf("held delete: %v", err) }
+	s.ReleaseHold(ctx, h.ID, nil, "r", t0)
+	if err := s.DeleteSetup(ctx, id3); !errors.Is(err, ErrConflict) { t.Errorf("released-hold delete: %v", err) }
+	if err := s.DeleteSetup(ctx, 9999); !errors.Is(err, ErrNotFound) { t.Errorf("nf: %v", err) }
+	// release then re-hold works
+	if _, err := s.CreateHold(ctx, id3, u.ID, t0); err != nil { t.Errorf("rehold: %v", err) }
+}
+
+func TestZZReopenAndNewer(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "h.db")
+	s, _ := Open(p)
+	var c1 int
+	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&c1)
+	s.sqldb.Exec(`INSERT INTO schema_migrations VALUES (99,'future','x')`)
+	s.Close()
+	_, err := Open(p)
+	t.Logf("higher: %v", err)
+	if err == nil { t.Error("opened newer") }
+	s2, _ := Open(filepath.Join(t.TempDir(), "k.db")); s2.Close()
+	k := filepath.Join(t.TempDir(), "m.db")
+	a, _ := Open(k); a.Close(); b, err := Open(k)
+	if err != nil { t.Fatal(err) }
+	b.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&c1)
+	if c1 != 1 { t.Errorf("migrations rows %d", c1) }
+	b.Close()
+	// failed open must not leave a locked file / leak
+	_, err = Open(filepath.Join(t.TempDir(), "nodir", "x.db"))
+	t.Logf("bad path: %v", err)
+}
+
+func TestZZTime(t *testing.T) {
+	s := openTemp(t)
+	loc := time.FixedZone("X", 5*3600+1800)
+	times := []time.Time{
+		time.Date(2026, 1, 1, 10, 0, 0, 123456789, loc),
+		time.Date(2026, 1, 1, 4, 30, 0, 500_000_000, time.UTC),
+		time.Date(2026, 1, 1, 4, 30, 0, 0, time.UTC),
+		time.Date(2026, 1, 1, 4, 30, 0, 999_000_000, time.UTC),
+		time.Date(2025, 12, 31, 23, 59, 59, 999_999_999, time.UTC),
+	}
+	for _, x := range times {
+		got := must(ParseTime(FormatTime(x)))
+		t.Logf("%s -> %s loc=%v diff=%v", x, FormatTime(x), got.Location(), x.UTC().Sub(got))
+	}
+	// lexical order == chronological for stored
+	u := newUser(t, s, "a")
+	for _, x := range times { s.InsertPressureSample(ctx, PressureSample{PolledAt: x, Source: "s"}) }
+	rows, _ := s.sqldb.Query(`SELECT polled_at FROM pressure_samples ORDER BY polled_at`)
+	var prev string
+	for rows.Next() { var p string; rows.Scan(&p); if p < prev { t.Error("order") }; if len(p) != 24 { t.Errorf("width %q", p) }; prev = p }
+	rows.Close()
+	_ = u
+	// precision loss: sub-ms truncated
+	x := time.Date(2026, 1, 1, 0, 0, 0, 999_999_999, time.UTC)
+	if g := must(ParseTime(FormatTime(x))); !g.Equal(x) { t.Logf("NOTE truncation to ms: %v -> %v", x, g) }
+	// two polls in same ms collide? 
+	a, _ := s.InsertUsageSample(ctx, UsageSample{HoldID: 0})
+	_ = a
+}
+
+func TestZZTxRollbackAndPanic(t *testing.T) {
+	s := openTemp(t)
+	boom := errors.New("boom")
+	err := s.Tx(ctx, func(tx *Tx) error { tx.CreateSetup(ctx, Setup{Name: "r"}); return boom })
+	if err != boom { t.Error(err) }
+	if l := must(s.ListSetups(ctx, false)); len(l) != 0 { t.Error("not rolled back on error") }
+	func() {
+		defer func() { t.Logf("recovered: %v", recover()) }()
+		s.Tx(ctx, func(tx *Tx) error { tx.CreateSetup(ctx, Setup{Name: "p"}); panic("x") })
+	}()
+	if l := must(s.ListSetups(ctx, false)); len(l) != 0 { t.Error("visible after panic") }
+	done := make(chan error, 1)
+	go func() { _, err := s.CreateSetup(ctx, Setup{Name: "after"}); done <- err }()
+	select {
+	case err := <-done:
+		if err != nil { t.Errorf("write after panic: %v", err) }
+	case <-time.After(5 * time.Second):
+		t.Error("DEADLOCK/BLOCKED: write after panicking Tx did not complete in 5s (tx leaked holding write lock)")
+	}
+}
+
+func TestZZConcurrentReaders(t *testing.T) {
+	s := openTemp(t)
+	for i := 0; i < 20; i++ { newSetup(t, s, fmt.Sprint("s", i)) }
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var errs []error
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select { case <-stop: return; default: }
+				if _, err := s.ListSetups(ctx, false); err != nil { mu.Lock(); errs = append(errs, err); mu.Unlock(); return }
+			}
+		}()
+	}
+	err := s.Tx(ctx, func(tx *Tx) error {
+		for i := 0; i < 200; i++ {
+			if _, err := tx.CreateSetup(ctx, Setup{Name: fmt.Sprint("w", i), Labels: map[string]string{"a": "b"}}); err != nil { return err }
+			if i%50 == 0 { time.Sleep(50 * time.Millisecond) }
+		}
+		time.Sleep(300 * time.Millisecond)
+		return nil
+	})
+	close(stop); wg.Wait()
+	if err != nil { t.Error(err) }
+	if len(errs) > 0 { t.Errorf("reader errors: %v (%d)", errs[0], len(errs)) }
+}
+
+func TestZZConcurrentHoldsTwoGoroutines(t *testing.T) {
+	for r := 0; r < 20; r++ {
+		s := openTemp(t)
+		sid := newSetup(t, s, "s"); a := newUser(t, s, "a"); b := newUser(t, s, "b")
+		var wg sync.WaitGroup; errs := make([]error, 2)
+		for i, u := range []User{a, b} { wg.Add(1); go func() { defer wg.Done(); _, errs[i] = s.CreateHold(ctx, sid, u.ID, t0) }() }
+		wg.Wait()
+		if (errs[0] == nil) == (errs[1] == nil) { t.Fatalf("%v %v", errs[0], errs[1]) }
+		for _, e := range errs { if e != nil && !errors.Is(e, ErrSetupHeld) { t.Fatal(e) } }
+	}
+}
