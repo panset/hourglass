@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "settings",
+    srcs = [
+        "resourcename.go",
+        "settings.go",
+    ],
+    importpath = "github.com/panset/hourglass/internal/settings",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/metering",
+        "//internal/rules",
+        "//internal/store",
+    ],
+)
+
+go_test(
+    name = "settings_test",
+    srcs = ["settings_test.go"],
+    embed = [":settings"],
+    deps = [
+        "//internal/metering",
+        "//internal/store",
+    ],
+)

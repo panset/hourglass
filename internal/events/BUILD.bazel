@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "events",
+    srcs = ["events.go"],
+    importpath = "github.com/panset/hourglass/internal/events",
+    visibility = ["//:__subpackages__"],
+    deps = ["//pkg/hourglass"],
+)
+
+go_test(
+    name = "events_test",
+    srcs = ["events_test.go"],
+    embed = [":events"],
+    deps = [
+        "//internal/store",
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)

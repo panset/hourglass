@@ -1,0 +1,1 @@
+- 2026-11-19 all done, see RESULT.md
