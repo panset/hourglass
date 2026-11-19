@@ -1,0 +1,31 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/signal"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+	_ "github.com/panset/hourglass/pkg/hourglass/server"
+)
+
+type toy struct{}
+
+func (toy) Name() string { return "toy" }
+func (toy) Pressure(context.Context, hourglass.Snapshot) (float64, error) { return 0.6, nil }
+
+func init() {
+	hourglass.RegisterPressureSource("toy", func(json.RawMessage) (hourglass.PressureSource, error) { return toy{}, nil })
+}
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	err := hourglass.Run(ctx, hourglass.Options{DefaultPressureSource: "toy", DefaultMeteringPolicy: "default", Args: os.Args[1:]})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "ERR:", err)
+		os.Exit(1)
+	}
+}

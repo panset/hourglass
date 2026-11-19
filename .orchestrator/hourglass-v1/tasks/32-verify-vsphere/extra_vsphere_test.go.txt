@@ -1,0 +1,214 @@
+// SPDX-License-Identifier: MIT
+
+package vsphere
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+func mk(name string, cu, cm int64, capDS, freeDS int64, acc bool) clusterFigures {
+	return clusterFigures{Name: name, CPU: resource{cu, 1000}, Memory: resource{cm, 1000},
+		Datastores: []datastore{{Name: "d", Capacity: capDS, FreeSpace: freeDS, Accessible: acc}}}
+}
+
+func pr(t *testing.T, cl []clusterFigures, clusters ...string) (float64, error) {
+	return newTestPressure(&fakeClient{clusters: cl}, clusters...).Pressure(context.Background(), hourglass.Snapshot{})
+}
+
+func TestV_Pressure(t *testing.T) {
+	// storage 0.1 (free .9), cpu .3, mem .2 -> cpu wins
+	cases := []struct {
+		name string
+		cl   []clusterFigures
+		want float64
+		err  bool
+	}{
+		{"cpu wins", []clusterFigures{mk("a", 600, 200, 100, 90, true)}, 0.6, false},
+		{"mem wins", []clusterFigures{mk("a", 200, 700, 100, 90, true)}, 0.7, false},
+		{"storage wins", []clusterFigures{mk("a", 200, 300, 100, 20, true)}, 0.8, false},
+		{"multi", []clusterFigures{mk("a", 100, 100, 100, 90, true), mk("b", 900, 100, 100, 90, true), mk("c", 500, 100, 100, 90, true)}, 0.9, false},
+		{"0.5", []clusterFigures{mk("a", 500, 0, 100, 100, true)}, 0.5, false},
+		{"0.75", []clusterFigures{mk("a", 0, 750, 100, 100, true)}, 0.75, false},
+		{"0.9 storage", []clusterFigures{mk("a", 0, 0, 1000, 100, true)}, 0.9, false},
+		{"clamp>1", []clusterFigures{mk("a", 5000, 10, 100, 90, true)}, 1, false},
+		{"clamp storage free<0", []clusterFigures{mk("a", 0, 0, 100, -50, true)}, 1, false},
+		{"all inaccessible", []clusterFigures{mk("a", 300, 100, 100, 0, false)}, 0.3, false},
+		{"inaccessible not counted", []clusterFigures{mk("a", 100, 100, 100, 0, false)}, 0.1, false},
+		{"no datastores", []clusterFigures{{Name: "a", CPU: resource{100, 1000}, Memory: resource{50, 1000}}}, 0.1, false},
+		{"zero cpu cap", []clusterFigures{{Name: "a", CPU: resource{0, 0}, Memory: resource{1, 1000}}}, 0, true},
+		{"zero mem cap", []clusterFigures{{Name: "a", CPU: resource{1, 1000}, Memory: resource{0, 0}}}, 0, true},
+		{"one zero cluster poisons", []clusterFigures{mk("a", 1, 1, 100, 90, true), {Name: "b", CPU: resource{1, 0}, Memory: resource{1, 1}}}, 0, true},
+		{"none", nil, 0, true},
+	}
+	for _, c := range cases {
+		got, err := pr(t, c.cl)
+		if (err != nil) != c.err || (!c.err && !near(got, c.want)) {
+			t.Errorf("%s: got %v err %v want %v err=%v", c.name, got, err, c.want, c.err)
+		}
+	}
+	// scope
+	two := []clusterFigures{mk("a", 100, 0, 100, 100, true), mk("b", 900, 0, 100, 100, true)}
+	if got, err := pr(t, two, "a"); err != nil || !near(got, 0.1) {
+		t.Errorf("scope a: %v %v", got, err)
+	}
+	if _, err := pr(t, two, "a", "ghost"); err == nil {
+		t.Error("unknown cluster must error")
+	}
+	if _, err := pr(t, two, "ghost"); err == nil {
+		t.Error("only unknown cluster must error")
+	}
+	// out-of-scope cluster with zero cap must not poison
+	bad := []clusterFigures{mk("a", 100, 0, 100, 100, true), {Name: "b"}}
+	if got, err := pr(t, bad, "a"); err != nil || !near(got, 0.1) {
+		t.Errorf("out of scope bad cluster: %v %v", got, err)
+	}
+}
+
+func TestV_Pools(t *testing.T) {
+	f := &fakeClient{pools: seededPools()}
+	list := func(clusters ...string) []hourglass.Allocation {
+		got, err := newTestProvider(f, clusters...).List(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	all := list()
+	if len(all) != 3 {
+		t.Fatalf("%v", all)
+	}
+	n := 0
+	for _, a := range all {
+		if a.ResourceName == "Resources" {
+			t.Error("root listed")
+		}
+		if a.ResourceName == "lab-01_RP" {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Errorf("duplicates %d", n)
+	}
+	if got := list("C2"); len(got) != 1 || got[0].Labels["cluster"] != "C2" {
+		t.Errorf("scope %v", got)
+	}
+	if got := list("ghost"); len(got) != 0 {
+		t.Errorf("unknown cluster (provider) %v", got)
+	}
+	// a non-root pool genuinely named "Resources" nested must still be listed
+	f.pools = append(f.pools, pool{Name: "Resources", Path: "/DC0/host/C1/Resources/lab-01_RP/Resources", Parent: "lab-01_RP", Cluster: "C1"})
+	if got := list("C1"); len(got) != 3 {
+		t.Errorf("nested pool named Resources: %v", got)
+	}
+}
+
+func TestV_Sim(t *testing.T) {
+	s := startSim(t, false)
+	p, err := NewProvider(s.cfgJSON(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, _ := NewPressureSource(s.cfgJSON(nil))
+	if p.(*provider).cl != src.(*pressureSource).cl {
+		t.Fatal("not shared")
+	}
+	a := s.createPool(t, s.root, "lab-01_RP")
+	s.createPool(t, s.root, "lab-02_RP")
+	s.createPool(t, a, "nested_RP")
+	got := listNames(t, p)
+	if len(got) != 3 || got["nested_RP"].Labels["parent"] != "lab-01_RP" || got["lab-02_RP"].Labels["parent"] != "Resources" {
+		t.Fatalf("%+v", got)
+	}
+	task, _ := a.Destroy(context.Background()) // destroys nested too
+	if err := task.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got = listNames(t, p)
+	if len(got) != 2 || got["nested_RP"].Labels["parent"] != "Resources" { // vSphere re-parents children on destroy
+		t.Fatalf("after destroy %+v", got)
+	}
+	// session invalidated: shared client, both extensions recover
+	g := p.(*provider).cl.(*govmomiClient)
+	g.mu.Lock()
+	sm := g.sm
+	g.mu.Unlock()
+	if err := sm.Logout(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := src.Pressure(context.Background(), hourglass.Snapshot{}); err != nil || v <= 0 || v > 1 {
+		t.Fatalf("pressure after invalidation %v %v", v, err)
+	}
+	if got := listNames(t, p); len(got) != 2 {
+		t.Fatalf("%v", got)
+	}
+}
+
+func TestV_Secrets(t *testing.T) {
+	const P = "Zq9-sentinel-pw-123"
+	bad := func(what string, v any) {
+		for _, f := range []string{"%v", "%+v", "%#v", "%s"} {
+			if s := fmt.Sprintf(f, v); strings.Contains(s, P) {
+				t.Errorf("%s %s leaks: %s", what, f, s)
+			}
+		}
+	}
+	raw, _ := json.Marshal(map[string]any{"url": "https://127.0.0.1:1/sdk", "username": "u", "password": P})
+	c, _ := parseConfig("x", raw)
+	bad("config", c)
+	bad("&config", &c)
+	bad("key", c.key())
+	bad("connKey ptr", &[]connKey{c.key()})
+	if b, _ := json.Marshal(c); strings.Contains(string(b), P) {
+		t.Error("json")
+	}
+	p, _ := NewProvider(raw)
+	src, _ := NewPressureSource(raw)
+	bad("provider", p)
+	bad("source", src)
+	bad("client", p.(*provider).cl)
+	bad("map", map[string]any{"c": c, "p": p})
+	bad("sharedMap", shared)
+	// unreachable
+	_, err := p.List(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	bad("unreachable err", err)
+	t.Log("unreachable:", err)
+	// bad urls
+	for _, u := range []string{"https://%zz", "ftp://x", "https://u:" + P + "@h/sdk", "://" + P, P} {
+		r, _ := json.Marshal(map[string]any{"url": u, "username": "u", "password": P})
+		_, err := NewProvider(r)
+		if err == nil {
+			t.Errorf("url %q accepted", u)
+			continue
+		}
+		bad("url err", err)
+	}
+	// bad json containing password in wrong type
+	_, err = NewProvider(json.RawMessage(`{"url":"https://h","username":"u","password":["` + P + `"]}`))
+	bad("type err", err)
+	t.Log("type err:", err)
+	_, err = NewProvider(json.RawMessage(`{"url":"https://h","username":"u","password":"` + P + `","bogus":1}`))
+	bad("unknown field", err)
+	// wrong password against simulator; password also as username-ish
+	s := startSim(t, false)
+	_ = s
+}
+
+func TestV_WrongPwAndTLSErrs(t *testing.T) {
+	s := startSim(t, true)
+	r, _ := json.Marshal(map[string]any{"url": s.url, "username": "u", "password": "Zq9-pw", "insecure_skip_verify": false})
+	p, _ := NewProvider(r)
+	_, err := p.List(context.Background())
+	t.Log("tls:", err)
+	if strings.Contains(err.Error(), "Zq9-pw") {
+		t.Error("leak")
+	}
+}
