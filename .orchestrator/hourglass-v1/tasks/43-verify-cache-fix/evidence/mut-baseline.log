@@ -1,0 +1,20 @@
+== repo tests (baseline)
+== v43 tests (baseline)
+    v43_random_test.go:325: seeds 200 failed 0; ops 12000 map[days:1070 failpoll:1122 grant:1087 minutes:1097 months:1127 neggrant:1080 poll:1080 reset:1078 restart:1150 roleoff:1080 roleon:1029]; hard 0; window mismatches 11489 (unexplained 0); restarts 1150; failed polls 1122; rollover polls 387; gating checks 602 failed 0
+--- PASS: TestV43_RandomisedCacheEqualsLedger (10.62s)
+--- PASS: TestV43_StartupRebuild200Users (7.86s)
+--- PASS: TestV43_StartupRebuildEmptyDatabase (0.01s)
+--- PASS: TestV43_StartupRebuildPre0003Database (0.06s)
+--- PASS: TestV43_RepairConcurrentWithWrites (0.46s)
+--- PASS: TestV43_GatingAfterOriginalScenarios (0.01s)
+--- PASS: TestV43_TimezoneOrigWithStartupRepair (0.03s)
+ok  	github.com/panset/hourglass/internal/collector	19.254s
+== v43 tests, restart without start-up repair (baseline)
+    v43_random_test.go:325: seeds 200 failed 0; ops 12000 map[days:1070 failpoll:1122 grant:1087 minutes:1097 months:1127 neggrant:1080 poll:1080 reset:1078 restart:1150 roleoff:1080 roleon:1029]; hard 0; window mismatches 15773 (unexplained 0); restarts 1150; failed polls 1122; rollover polls 387; gating checks 602 failed 0
+--- PASS: TestV43_RandomisedCacheEqualsLedger (18.85s)
+--- FAIL: TestV43_TimezoneOrigWithStartupRepair (0.07s)
+    --- FAIL: TestV43_TimezoneOrigWithStartupRepair/backwards (0.03s)
+    --- FAIL: TestV43_TimezoneOrigWithStartupRepair/forwards (0.04s)
+FAIL
+FAIL	github.com/panset/hourglass/internal/collector	19.034s
+FAIL

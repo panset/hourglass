@@ -1,0 +1,230 @@
+core-genericity: OK (138 core files, 154 Go files checked, no violations)
+license check ok: 25 Go modules, 267 npm packages
+Starting local Bazel server and connecting to it...
+Computing main repo mapping: 
+WARNING: For repository 'bazel_skylib', the root module requires module version bazel_skylib@1.7.1, but got bazel_skylib@1.8.1 in the resolved dependency graph.
+WARNING: For repository 'platforms', the root module requires module version platforms@0.0.10, but got platforms@1.0.0 in the resolved dependency graph.
+Loading: 
+Loading: 0 packages loaded
+Loading: 0 packages loaded
+    currently loading: 
+Analyzing: target //:gazelle (1 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (1 packages loaded, 0 targets configured)
+
+Analyzing: target //:gazelle (73 packages loaded, 33 targets configured)
+
+Analyzing: target //:gazelle (125 packages loaded, 5427 targets configured)
+
+Analyzing: target //:gazelle (126 packages loaded, 5435 targets configured)
+
+Analyzing: target //:gazelle (132 packages loaded, 11478 targets configured)
+
+Analyzing: target //:gazelle (132 packages loaded, 11510 targets configured)
+
+Analyzing: target //:gazelle (143 packages loaded, 11550 targets configured)
+
+Analyzing: target //:gazelle (148 packages loaded, 11573 targets configured)
+
+INFO: Analyzed target //:gazelle (150 packages loaded, 11621 targets configured).
+[17 / 69] GoToolchainBinaryBuild external/rules_go~~go_sdk~main___download_0/builder [for tool]; 0s darwin-sandbox
+[17 / 69] GoToolchainBinaryBuild external/rules_go~~go_sdk~main___download_0/builder [for tool]; 11s darwin-sandbox
+[18 / 69] [Prepa] Creating symlink bazel-out/darwin_arm64-opt-exec-ST-d57f47055a04/bin/external/rules_go~~go_sdk~main___download_0/pack_reset/pack.exe [for tool] ... (2 actions, 0 running)
+[20 / 69] GoStdlib external/rules_go~/stdlib_/pkg [for tool]; 1s darwin-sandbox ... (2 actions running)
+[20 / 69] GoStdlib external/rules_go~/stdlib_/pkg [for tool]; 11s darwin-sandbox ... (2 actions running)
+[21 / 69] GoStdlib external/rules_go~/stdlib_/pkg; 19s darwin-sandbox ... (4 actions, 1 running)
+[47 / 69] GoCompilePkg external/gazelle~~go_deps~com_github_bazelbuild_buildtools/build/build.a; 0s darwin-sandbox ... (2 actions running)
+[68 / 69] GoLink external/gazelle~/cmd/gazelle/gazelle_/gazelle; 0s darwin-sandbox
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 58.445s, Critical Path: 36.54s
+INFO: 69 processes: 19 internal, 50 darwin-sandbox.
+INFO: Build completed successfully, 69 total actions
+INFO: Running command line: bazel-bin/gazelle update '-mode=diff' '-build_file_name=BUILD.bazel'
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (36 packages loaded, 0 targets configured)
+Analyzing: 254 targets (36 packages loaded, 0 targets configured)
+
+Analyzing: 254 targets (60 packages loaded, 1982 targets configured)
+[116 / 181] checking cached actions
+Analyzing: 254 targets (109 packages loaded, 2388 targets configured)
+[128 / 215] GoTestGenTest policies/default/default_test_/testmain.go; 0s darwin-sandbox ... (4 actions running)
+Analyzing: 254 targets (182 packages loaded, 3171 targets configured)
+[133 / 215] checking cached actions
+Analyzing: 254 targets (230 packages loaded, 5869 targets configured)
+[162 / 215] GoLink examples/custom/businesshours/businesshours_test_/businesshours_test; 0s darwin-sandbox ... (8 actions running)
+Analyzing: 254 targets (292 packages loaded, 10156 targets configured)
+[182 / 215] GoLink pkg/hourglass/hourglass_test_/hourglass_test; 0s darwin-sandbox
+Analyzing: 254 targets (354 packages loaded, 13024 targets configured)
+[241 / 288] Extracting npm package typescript@5.6.3; 0s darwin-sandbox ... (7 actions, 6 running)
+Analyzing: 254 targets (382 packages loaded, 15192 targets configured)
+[339 / 369] Extracting npm package @redocly/openapi-core@1.34.24_supports-color_9.4.0; 0s darwin-sandbox ... (8 actions running)
+Analyzing: 254 targets (383 packages loaded, 23708 targets configured)
+[1,096 / 1,375] JsRunBinary ui/schema.fresh.ts; 0s darwin-sandbox ... (8 actions running)
+Analyzing: 254 targets (387 packages loaded, 27259 targets configured)
+[1,261 / 1,527] JsRunBinary ui/schema.fresh.ts; 1s darwin-sandbox ... (8 actions running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[1,457 / 2,391] JsRunBinary ui/schema.fresh.ts; 2s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[1,533 / 2,449] JsRunBinary ui/schema.fresh.ts; 3s darwin-sandbox ... (8 actions running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[1,699 / 3,228] JsRunBinary ui/schema.fresh.ts; 4s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[1,801 / 3,262] JsRunBinary ui/schema.fresh.ts; 5s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[2,130 / 3,299] GoStdlib external/rules_go~/stdlib_/pkg; 4s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[2,452 / 3,364] GoStdlib external/rules_go~/stdlib_/pkg; 5s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[2,736 / 3,410] GoStdlib external/rules_go~/stdlib_/pkg; 6s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (387 packages loaded, 28215 targets configured)
+[2,995 / 3,471] GoStdlib external/rules_go~/stdlib_/pkg; 7s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (412 packages loaded, 29123 targets configured)
+[3,032 / 3,504] GoStdlib external/rules_go~/stdlib_/pkg; 8s darwin-sandbox ... (8 actions, 7 running)
+Analyzing: 254 targets (418 packages loaded, 30105 targets configured)
+[3,155 / 3,549] GoStdlib external/rules_go~/stdlib_/pkg; 9s darwin-sandbox ... (8 actions running)
+INFO: Analyzed 254 targets (418 packages loaded, 30209 targets configured).
+[3,287 / 3,745] GoStdlib external/rules_go~/stdlib_/pkg; 10s darwin-sandbox ... (8 actions, 7 running)
+[3,424 / 4,121] GoStdlib external/rules_go~/stdlib_/pkg; 11s darwin-sandbox ... (8 actions, 7 running)
+[3,496 / 4,174] GoStdlib external/rules_go~/stdlib_/pkg; 12s darwin-sandbox ... (8 actions, 7 running)
+[3,638 / 4,280] GoStdlib external/rules_go~/stdlib_/pkg; 13s darwin-sandbox ... (8 actions, 7 running)
+[3,669 / 4,350] GoStdlib external/rules_go~/stdlib_/pkg; 14s darwin-sandbox ... (8 actions, 7 running)
+[3,674 / 4,350] GoStdlib external/rules_go~/stdlib_/pkg; 15s darwin-sandbox ... (8 actions, 7 running)
+[3,684 / 4,353] GoStdlib external/rules_go~/stdlib_/pkg; 16s darwin-sandbox ... (8 actions, 7 running)
+[3,705 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 17s darwin-sandbox ... (8 actions, 7 running)
+[3,717 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 18s darwin-sandbox ... (8 actions, 7 running)
+[3,729 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 19s darwin-sandbox ... (8 actions, 7 running)
+[3,750 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 20s darwin-sandbox ... (8 actions, 6 running)
+[3,753 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 22s darwin-sandbox ... (8 actions, 7 running)
+[3,756 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 23s darwin-sandbox ... (8 actions, 7 running)
+[3,762 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 24s darwin-sandbox ... (8 actions, 7 running)
+[3,767 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 25s darwin-sandbox ... (8 actions, 7 running)
+[3,774 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 26s darwin-sandbox ... (8 actions, 7 running)
+[3,777 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 27s darwin-sandbox ... (8 actions running)
+[3,778 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 29s darwin-sandbox ... (8 actions, 7 running)
+[3,781 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 31s darwin-sandbox ... (8 actions running)
+[3,782 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 32s darwin-sandbox ... (8 actions, 7 running)
+[3,791 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 33s darwin-sandbox ... (8 actions, 7 running)
+[3,804 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 34s darwin-sandbox ... (8 actions, 7 running)
+[3,808 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 36s darwin-sandbox ... (8 actions, 7 running)
+[3,813 / 4,364] GoStdlib external/rules_go~/stdlib_/pkg; 37s darwin-sandbox ... (8 actions running)
+[3,829 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 25s darwin-sandbox ... (8 actions running)
+[3,843 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 26s darwin-sandbox ... (8 actions running)
+[3,860 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 27s darwin-sandbox ... (8 actions running)
+[3,873 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 28s darwin-sandbox ... (8 actions running)
+[3,890 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 29s darwin-sandbox ... (8 actions running)
+[3,900 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 30s darwin-sandbox ... (8 actions running)
+[3,908 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 31s darwin-sandbox ... (8 actions running)
+[3,916 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 8s darwin-sandbox ... (8 actions running)
+[3,927 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 9s darwin-sandbox ... (8 actions running)
+[3,938 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 10s darwin-sandbox ... (8 actions running)
+[3,950 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 11s darwin-sandbox ... (8 actions running)
+[3,954 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 12s darwin-sandbox ... (8 actions running)
+[3,963 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 13s darwin-sandbox ... (8 actions running)
+[3,965 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 14s darwin-sandbox ... (8 actions running)
+[3,967 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 15s darwin-sandbox ... (8 actions running)
+[3,970 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 15s darwin-sandbox ... (8 actions running)
+[3,977 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 16s darwin-sandbox ... (8 actions running)
+[3,985 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 17s darwin-sandbox ... (8 actions running)
+[3,990 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 16s darwin-sandbox ... (8 actions running)
+[3,998 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 17s darwin-sandbox ... (8 actions running)
+[4,008 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 18s darwin-sandbox ... (8 actions running)
+[4,016 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 19s darwin-sandbox ... (8 actions running)
+[4,027 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 20s darwin-sandbox ... (8 actions running)
+[4,035 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 21s darwin-sandbox ... (8 actions running)
+[4,046 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 19s darwin-sandbox ... (8 actions running)
+[4,060 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 11s darwin-sandbox ... (8 actions running)
+[4,077 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 12s darwin-sandbox ... (8 actions running)
+[4,095 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 13s darwin-sandbox ... (8 actions running)
+[4,110 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 14s darwin-sandbox ... (8 actions running)
+[4,123 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 15s darwin-sandbox ... (8 actions running)
+[4,131 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 16s darwin-sandbox ... (8 actions, 7 running)
+[4,150 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 11s darwin-sandbox ... (7 actions, 6 running)
+[4,164 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 12s darwin-sandbox ... (8 actions, 7 running)
+[4,178 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 13s darwin-sandbox ... (8 actions, 7 running)
+[4,182 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 14s darwin-sandbox ... (8 actions, 7 running)
+[4,190 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 15s darwin-sandbox ... (8 actions, 7 running)
+[4,197 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 16s darwin-sandbox ... (8 actions, 7 running)
+[4,203 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 15s darwin-sandbox ... (8 actions, 7 running)
+[4,209 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 16s darwin-sandbox ... (8 actions running)
+[4,219 / 4,364] GoCompilePkg external/gazelle~~go_deps~org_modernc_sqlite/lib/lib.a; 17s darwin-sandbox ... (7 actions running)
+[4,231 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 18s darwin-sandbox ... (5 actions running)
+[4,245 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 5s darwin-sandbox ... (5 actions running)
+[4,263 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 6s darwin-sandbox ... (5 actions running)
+[4,276 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 7s darwin-sandbox ... (5 actions running)
+[4,282 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 8s darwin-sandbox ... (3 actions running)
+[4,284 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 9s darwin-sandbox ... (3 actions running)
+[4,287 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/types/types.a; 10s darwin-sandbox ... (3 actions running)
+[4,295 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/vim25/mo/mo.a; 0s darwin-sandbox ... (4 actions running)
+[4,317 / 4,364] GoCompilePkg external/gazelle~~go_deps~com_github_vmware_govmomi/object/object.a; 0s darwin-sandbox ... (2 actions running)
+[4,330 / 4,364] GoLink deploy/images/hourglass_bin_amd64_/hourglass_bin_amd64; 0s darwin-sandbox ... (4 actions running)
+[4,346 / 4,364] OCI Image //deploy/images:hourglass-e2e_amd64; 0s darwin-sandbox ... (4 actions running)
+INFO: Found 254 targets...
+INFO: Elapsed time: 101.382s, Critical Path: 73.83s
+INFO: 3399 processes: 1494 internal, 1679 darwin-sandbox, 226 local.
+INFO: Build completed successfully, 3399 total actions
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed 254 targets (0 packages loaded, 0 targets configured).
+[124 / 152] 8 / 35 tests; Testing //e2e/simulator:simulator_test; 0s darwin-sandbox ... (8 actions running)
+[128 / 152] 12 / 35 tests; Testing //providers/vsphere:vsphere_test; 2s darwin-sandbox ... (8 actions running)
+[137 / 152] 20 / 35 tests; Testing //providers/vsphere:vsphere_test; 3s darwin-sandbox ... (8 actions running)
+[145 / 152] 28 / 35 tests; Testing //ui:typecheck; 4s darwin-sandbox ... (7 actions running)
+[147 / 152] 30 / 35 tests; Testing //ui:typecheck; 5s darwin-sandbox ... (5 actions running)
+[148 / 152] 31 / 35 tests; Testing //ui:typecheck; 6s darwin-sandbox ... (4 actions running)
+[148 / 152] 31 / 35 tests; Testing //ui:typecheck; 9s darwin-sandbox ... (4 actions running)
+[149 / 152] 32 / 35 tests; Testing //internal/api:api_test; 9s darwin-sandbox ... (3 actions running)
+[149 / 152] 33 / 35 tests; Testing //internal/api:api_test; 12s darwin-sandbox ... (3 actions running)
+[150 / 152] 33 / 35 tests; Testing //internal/api:api_test; 13s darwin-sandbox ... (2 actions running)
+[151 / 152] 34 / 35 tests; Testing //internal/api:api_test; 15s darwin-sandbox
+[151 / 152] 35 / 35 tests; Testing //internal/api:api_test; 20s darwin-sandbox
+INFO: Found 219 targets and 35 test targets...
+INFO: Elapsed time: 22.270s, Critical Path: 21.00s
+INFO: 36 processes: 37 darwin-sandbox, 2 local.
+INFO: Build completed successfully, 36 total actions
+//cmd/hourglass-ui:hourglass-ui_test                                     PASSED in 0.4s
+//cmd/hourglassd:ui_modes_test                                           PASSED in 2.3s
+//e2e/hourglassd-e2e:hourglassd-e2e_test                                 PASSED in 0.6s
+//e2e/simulator:simulator_test                                           PASSED in 1.5s
+//examples/custom/busiestsite:busiestsite_test                           PASSED in 0.3s
+//examples/custom/businesshours:businesshours_test                       PASSED in 0.5s
+//examples/custom/cmd/labd:labd_test                                     PASSED in 0.9s
+//examples/custom/filedir:filedir_test                                   PASSED in 0.2s
+//examples/custom/logfile:logfile_test                                   PASSED in 0.2s
+//hooks/webhook:webhook_test                                             PASSED in 0.6s
+//internal/api:api_test                                                  PASSED in 21.0s
+//internal/api/apierr:apierr_test                                        PASSED in 0.3s
+//internal/app:app_test                                                  PASSED in 3.6s
+//internal/auth:auth_test                                                PASSED in 12.8s
+//internal/collector:collector_test                                      PASSED in 1.3s
+//internal/config:config_test                                            PASSED in 0.3s
+//internal/events:events_test                                            PASSED in 0.7s
+//internal/holds:holds_test                                              PASSED in 0.5s
+//internal/ledger:ledger_test                                            PASSED in 0.4s
+//internal/metering:metering_test                                        PASSED in 0.2s
+//internal/rules:rules_test                                              PASSED in 0.2s
+//internal/settings:settings_test                                        PASSED in 0.3s
+//internal/store:store_test                                              PASSED in 1.6s
+//internal/uiserve:uiserve_test                                          PASSED in 0.3s
+//internal/uiserve:uiserve_ui_test                                       PASSED in 0.3s
+//internal/version:version_test                                          PASSED in 0.2s
+//pkg/hourglass:hourglass_test                                           PASSED in 0.3s
+//pkg/hourglasstest:hourglasstest_test                                   PASSED in 1.3s
+//policies/default:default_test                                          PASSED in 0.4s
+//pressure/inventory:inventory_test                                      PASSED in 0.2s
+//providers/static:static_test                                           PASSED in 0.2s
+//providers/vsphere:vsphere_test                                         PASSED in 3.6s
+//ui:api_schema_drift_test                                               PASSED in 0.3s
+//ui:test                                                                PASSED in 9.5s
+//ui:typecheck                                                           PASSED in 8.2s
+
+Executed 35 out of 35 tests: 35 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
+exit 0

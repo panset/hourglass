@@ -1,0 +1,374 @@
+// SPDX-License-Identifier: MIT
+
+// Verification task 43: start-up rebuild (2c) and rebuild concurrency (2b).
+// Not product code.
+package collector
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"math/rand/v2"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/settings"
+	"github.com/panset/hourglass/internal/store"
+)
+
+func (e *env) v43inv(strictRoleless bool) []string {
+	us, err := e.st.ListUsers(bg, "")
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	cur := e.led.CurrentPeriod()
+	var bad []string
+	for _, u := range us {
+		sum, err := e.st.SumLedger(bg, u.ID, cur, "")
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		if sum != u.BalanceMT {
+			bad = append(bad, fmt.Sprintf("user %d cache %d sum(%s) %d", u.ID, u.BalanceMT, cur, sum))
+		}
+	}
+	return bad
+}
+
+// 200 users, 3 periods of entries, half the caches corrupted; one start-up rebuild.
+func TestV43_StartupRebuild200Users(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 19, 12, 0))
+	r := rand.New(rand.NewPCG(43, 2))
+	cur := "2026-11"
+	var ids []int64
+	rows := 0
+	for i := 0; i < 200; i++ {
+		u := e.user(fmt.Sprintf("s%03d", i))
+		ids = append(ids, u)
+		for _, p := range []string{"2026-09", "2026-10", "2026-11"} {
+			if _, err := e.st.AppendLedger(bg, store.LedgerEntry{UserID: u, Period: p, Type: "allowance", AmountMT: 300000}, cur, e.clk.Now()); err != nil {
+				t.Fatal(err)
+			}
+			rows++
+			for k := 0; k < 30; k++ {
+				typ, amt := "debit", -int64(1+r.IntN(5000))
+				if k%10 == 0 {
+					typ, amt = "grant", int64(r.IntN(200000)-100000)
+				}
+				if _, err := e.st.AppendLedger(bg, store.LedgerEntry{UserID: u, Period: p, Type: typ, AmountMT: amt, Reason: "v43"}, cur, e.clk.Now()); err != nil {
+					t.Fatal(err)
+				}
+				rows++
+			}
+		}
+	}
+	if bad := e.v43inv(false); len(bad) > 0 {
+		t.Fatalf("before corruption: %v", bad[:1])
+	}
+	// Corrupt every other cache: a junk entry in a period nobody reads, with
+	// that period passed as "current", sets the cache to the junk amount.
+	want := 0
+	var abs, net int64
+	for i, u := range ids {
+		if i%2 != 0 {
+			continue
+		}
+		sum, _ := e.st.SumLedger(bg, u, cur, "")
+		junk := int64(r.IntN(1_000_000) - 500_000)
+		if _, err := e.st.AppendLedger(bg, store.LedgerEntry{UserID: u, Period: "1999-01", Type: "grant", AmountMT: junk, Reason: "corrupt"}, "1999-01", e.clk.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if junk != sum {
+			want++
+			d := sum - junk
+			net += d
+			if d < 0 {
+				d = -d
+			}
+			abs += d
+		}
+	}
+	if bad := e.v43inv(false); len(bad) != want {
+		t.Fatalf("corruption: %d bad, want %d", len(bad), want)
+	}
+	svc := ledger.NewService(e.st, nil, e.clk, time.UTC)
+	t0 := time.Now()
+	rep, err := svc.RepairBalances(bg)
+	el := time.Since(t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("200 users, %d ledger rows: repair %v changed %d abs %d net %d (want %d, %d, %d)", rows, el, rep.Changed, rep.AbsDeltaMT, rep.NetDeltaMT, want, abs, net)
+	if rep.Changed != want || rep.AbsDeltaMT != abs || rep.NetDeltaMT != net {
+		t.Errorf("report wrong")
+	}
+	if bad := e.v43inv(false); len(bad) > 0 {
+		t.Errorf("after repair: %v", bad)
+	}
+	t0 = time.Now()
+	rep, err = svc.RepairBalances(bg)
+	t.Logf("second repair %v changed %d err %v", time.Since(t0), rep.Changed, err)
+	if rep.Changed != 0 {
+		t.Errorf("second repair changed %d", rep.Changed)
+	}
+}
+
+func TestV43_StartupRebuildEmptyDatabase(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "e.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	clk := newEnv(t, false).clk
+	rep, err := ledger.NewService(st, nil, clk, time.UTC).RepairBalances(bg)
+	if err != nil || rep != (store.BalanceRepair{}) {
+		t.Fatalf("empty db: %+v %v", rep, err)
+	}
+	// with only the local admin
+	if _, err := st.CreateLocalAdmin(bg, "admin", "x", false, clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	rep, err = ledger.NewService(st, nil, clk, time.UTC).RepairBalances(bg)
+	if err != nil || rep != (store.BalanceRepair{}) {
+		t.Fatalf("admin only: %+v %v", rep, err)
+	}
+}
+
+// A database written by 99408df (schema version 2, before migration 0003).
+func TestV43_StartupRebuildPre0003Database(t *testing.T) {
+	src := os.Getenv("V43_OLD_DB")
+	if src == "" {
+		t.Skip("V43_OLD_DB not set")
+	}
+	for _, c := range []struct {
+		name string
+		at   time.Time
+	}{{"same period", utc(2026, 10, 31, 23, 55)}, {"rollover pending", utc(2026, 11, 1, 3, 0)}, {"two boundaries pending", utc(2026, 12, 2, 3, 0)}} {
+		t.Run(c.name, func(t *testing.T) {
+			b, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dst := filepath.Join(t.TempDir(), "old.db")
+			if err := os.WriteFile(dst, b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			e := newEnv(t, false)
+			st, err := store.Open(dst) // migrates 2 -> 3
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer st.Close()
+			e.st = st
+			e.clk.Set(c.at)
+			e.led = &failingLedger{Service: ledger.NewService(st, e.rec, e.clk, time.UTC)}
+			e.c = e.newCollector()
+			before, _ := st.ListUsers(bg, "")
+			rep, err := e.led.RepairBalances(bg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%s: repair changed %d abs %d net %d", c.name, rep.Changed, rep.AbsDeltaMT, rep.NetDeltaMT)
+			if bad := e.v43inv(true); len(bad) > 0 {
+				t.Errorf("after start-up repair: %v", bad)
+			}
+			// expected closing outcome for each user after the first poll
+			oct := map[int64]int64{}
+			for _, u := range before {
+				s, _ := st.SumLedger(bg, u.ID, "2026-10", "")
+				oct[u.ID] = s
+			}
+			e.runOK()
+			if bad := e.v43inv(true); len(bad) > 0 {
+				t.Errorf("after first poll: %v", bad)
+			}
+			e.step(poll)
+			if bad := e.v43inv(true); len(bad) > 0 {
+				t.Errorf("after second poll: %v", bad)
+			}
+			after, _ := st.ListUsers(bg, "")
+			for _, u := range after {
+				roles, _ := st.GetUserRoles(bg, u.ID)
+				t.Logf("user %d %-6s roles %v oct %8d cache now %8d", u.ID, u.Username, roles, oct[u.ID], u.BalanceMT)
+			}
+			if c.name == "same period" && rep.Changed != 0 {
+				t.Errorf("same-period start changed %d caches", rep.Changed)
+			}
+		})
+	}
+}
+
+// 2b: rebuilds racing with grants, resets and debits; a consistent reader
+// (inside a write transaction) must never see cache != sum.
+func TestV43_RepairConcurrentWithWrites(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 10, 9, 0))
+	admin := e.adminID()
+	u, h := e.basic()
+	var us = []int64{u}
+	for i := 0; i < 9; i++ {
+		v := e.user(fmt.Sprintf("c%d", i))
+		us = append(us, v)
+	}
+	for _, x := range us {
+		e.allowance(x)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 100)
+	run := func(n int, f func(i int) error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < n; i++ {
+				if err := f(i); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+	for g := 0; g < 3; g++ {
+		run(100, func(int) error { _, err := e.led.RepairBalances(bg); return err })
+	}
+	run(150, func(i int) error { _, err := e.led.Grant(bg, admin, us[i%len(us)], int64(i*37-2000), "c"); return err })
+	run(100, func(i int) error { _, err := e.led.Reset(bg, admin, us[(i*3)%len(us)], "c"); return err })
+	run(150, func(i int) error {
+		return e.st.Tx(bg, func(tx *store.Tx) error { _, err := e.led.DebitTx(tx, u, h.ID, int64(i%9+1), e.clk.Now()); return err })
+	})
+	observed := 0
+	run(100, func(int) error {
+		return e.st.Tx(bg, func(tx *store.Tx) error {
+			for _, x := range us {
+				uu, err := tx.GetUser(bg, x)
+				if err != nil {
+					return err
+				}
+				s, err := tx.SumLedger(bg, x, "2026-11", "")
+				if err != nil {
+					return err
+				}
+				if s != uu.BalanceMT {
+					return fmt.Errorf("observed user %d cache %d sum %d", x, uu.BalanceMT, s)
+				}
+			}
+			observed++
+			return nil
+		})
+	})
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	if bad := e.v43inv(false); len(bad) > 0 {
+		t.Error(bad)
+	}
+	t.Logf("consistent snapshots checked: %d", observed)
+}
+
+// 2b: two goroutines in RolloverDue at once (the product serialises them with
+// Collector.runMu; this checks what happens without it).
+func TestV43_TwoGoroutinesRolloverDue(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 20, 9, 0))
+	admin := e.adminID()
+	pos := e.user("pos")
+	neg := e.user("neg")
+	e.allowance(pos)
+	e.allowance(neg)
+	e.grant(admin, neg, -350000) // closing -50,000
+	e.clk.Set(utc(2026, 12, 1, 0, 3))
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for g := 0; g < 2; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, err := e.led.Service.RolloverDue(bg); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	for _, x := range []int64{pos, neg} {
+		l, _ := e.st.ListLedger(bg, x, "2026-12")
+		var kinds []string
+		for _, y := range l {
+			kinds = append(kinds, fmt.Sprintf("%s:%d", y.Type, y.AmountMT))
+		}
+		s, _ := e.st.SumLedger(bg, x, "2026-12", "")
+		t.Logf("user %d december: %v sum %d", x, kinds, s)
+	}
+	if bad := e.v43inv(false); len(bad) > 0 {
+		t.Errorf("cache: %v", bad)
+	}
+	if s, _ := e.st.SumLedger(bg, neg, "2026-12", ""); s != 250000 {
+		t.Errorf("neg december sum %d, want 250000 (one carry-over)", s)
+	}
+	// and through the collector (serialised by runMu)
+	e2 := newEnv(t, false)
+	e2.clk.Set(utc(2026, 11, 20, 9, 0))
+	a2 := e2.adminID()
+	n2 := e2.user("neg")
+	e2.allowance(n2)
+	e2.grant(a2, n2, -350000)
+	e2.clk.Set(utc(2026, 12, 1, 0, 3))
+	var wg2 sync.WaitGroup
+	for g := 0; g < 2; g++ {
+		wg2.Add(1)
+		go func() { defer wg2.Done(); _ = e2.c.RunOnce(bg) }()
+	}
+	wg2.Wait()
+	if s, _ := e2.st.SumLedger(bg, n2, "2026-12", ""); s != 250000 {
+		t.Errorf("collector path: neg december sum %d, want 250000", s)
+	}
+}
+
+// Check 3 on a fixed scenario list: acquire allowed iff ledger sum > 0.
+func TestV43_GatingAfterOriginalScenarios(t *testing.T) {
+	e := newEnv(t, false)
+	e.setting(settings.KeyEnforcement, "true")
+	e.clk.Set(utc(2026, 9, 29, 12, 0))
+	admin := e.adminID()
+	a := e.user("a")
+	b := e.user("b")
+	e.allowance(a)
+	e.allowance(b)
+	e.grant(admin, b, -300000) // exactly zero
+	hs := holds.NewService(holds.Deps{Store: e.st, Clock: e.clk, Logger: nil})
+	gate := func(step string) {
+		for i, x := range []int64{a, b} {
+			sum, _ := e.st.SumLedger(bg, x, e.led.CurrentPeriod(), "")
+			sid := e.setup(fmt.Sprintf("g-%s-%d", step, i), true, nil)
+			h, err := hs.Acquire(bg, x, sid)
+			var he *holds.Error
+			if err != nil && !(errors.As(err, &he) && he.Code == holds.CodeInsufficientTokens) {
+				t.Fatalf("%s: %v", step, err)
+			}
+			if (err == nil) != (sum > 0) {
+				t.Errorf("%s: user %d sum %d acquire ok=%v", step, x, sum, err == nil)
+			}
+			if err == nil {
+				_ = e.st.ReleaseHold(bg, h.ID, &admin, "g", e.clk.Now())
+			}
+		}
+	}
+	gate("september")
+	e.clk.Set(utc(2026, 12, 1, 3, 0))
+	e.grant(admin, a, 5000)
+	e.runOK()
+	gate("after two-boundary rollover with december grant")
+	e.grant(admin, a, -305000)
+	gate("a exactly zero")
+	e.grant(admin, a, -1)
+	gate("a below zero")
+	_ = io.Discard
+}

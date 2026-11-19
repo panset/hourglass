@@ -1,0 +1,69 @@
+=== RUN   TestV43_StartupRebuild200Users
+    v43_startup_test.go:107: 200 users, 18600 ledger rows: repair 1.958708ms changed 100 abs 32936819 net 25690641 (want 100, 32936819, 25690641)
+    v43_startup_test.go:116: second repair 913.709µs changed 0 err <nil>
+--- PASS: TestV43_StartupRebuild200Users (1.91s)
+=== RUN   TestV43_StartupRebuildEmptyDatabase
+--- PASS: TestV43_StartupRebuildEmptyDatabase (0.01s)
+=== RUN   TestV43_StartupRebuildPre0003Database
+=== RUN   TestV43_StartupRebuildPre0003Database/same_period
+    v43_startup_test.go:177: same period: repair changed 0 abs 0 net 0
+    v43_startup_test.go:198: user 1 admin  roles [admin] oct        0 cache now        0
+    v43_startup_test.go:198: user 2        roles [developer] oct   296660 cache now   299833
+    v43_startup_test.go:198: user 3        roles [developer] oct    30000 cache now   300000
+    v43_startup_test.go:198: user 4        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 5        roles [developer] oct   -13340 cache now   286326
+    v43_startup_test.go:198: user 6        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 7        roles [developer] oct   -50000 cache now   250000
+    v43_startup_test.go:198: user 8        roles [developer] oct   296660 cache now   299833
+    v43_startup_test.go:198: user 9        roles [developer] oct   -90000 cache now   210000
+    v43_startup_test.go:198: user 10        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 11        roles [developer] oct  -133340 cache now   166326
+    v43_startup_test.go:198: user 12        roles [] oct   300000 cache now        0
+    v43_startup_test.go:198: user 13        roles [] oct        0 cache now        0
+=== RUN   TestV43_StartupRebuildPre0003Database/rollover_pending
+    v43_startup_test.go:177: rollover pending: repair changed 11 abs 2110000 net -1536640
+    v43_startup_test.go:198: user 1 admin  roles [admin] oct        0 cache now        0
+    v43_startup_test.go:198: user 2        roles [developer] oct   296660 cache now   299833
+    v43_startup_test.go:198: user 3        roles [developer] oct    30000 cache now   300000
+    v43_startup_test.go:198: user 4        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 5        roles [developer] oct   -13340 cache now   286493
+    v43_startup_test.go:198: user 6        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 7        roles [developer] oct   -50000 cache now   250000
+    v43_startup_test.go:198: user 8        roles [developer] oct   296660 cache now   299833
+    v43_startup_test.go:198: user 9        roles [developer] oct   -90000 cache now   210000
+    v43_startup_test.go:198: user 10        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 11        roles [developer] oct  -133340 cache now   166493
+    v43_startup_test.go:198: user 12        roles [] oct   300000 cache now        0
+    v43_startup_test.go:198: user 13        roles [] oct        0 cache now        0
+=== RUN   TestV43_StartupRebuildPre0003Database/two_boundaries_pending
+    v43_startup_test.go:177: two boundaries pending: repair changed 11 abs 2110000 net -1536640
+    v43_startup_test.go:198: user 1 admin  roles [admin] oct        0 cache now        0
+    v43_startup_test.go:198: user 2        roles [developer] oct   296660 cache now   299833
+    v43_startup_test.go:198: user 3        roles [developer] oct    30000 cache now   300000
+    v43_startup_test.go:198: user 4        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 5        roles [developer] oct   -13340 cache now   299833
+    v43_startup_test.go:198: user 6        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 7        roles [developer] oct   -50000 cache now   300000
+    v43_startup_test.go:198: user 8        roles [developer] oct   296660 cache now   299833
+    v43_startup_test.go:198: user 9        roles [developer] oct   -90000 cache now   300000
+    v43_startup_test.go:198: user 10        roles [developer] oct   300000 cache now   300000
+    v43_startup_test.go:198: user 11        roles [developer] oct  -133340 cache now   299833
+    v43_startup_test.go:198: user 12        roles [] oct   300000 cache now        0
+    v43_startup_test.go:198: user 13        roles [] oct        0 cache now        0
+--- PASS: TestV43_StartupRebuildPre0003Database (0.03s)
+    --- PASS: TestV43_StartupRebuildPre0003Database/same_period (0.01s)
+    --- PASS: TestV43_StartupRebuildPre0003Database/rollover_pending (0.01s)
+    --- PASS: TestV43_StartupRebuildPre0003Database/two_boundaries_pending (0.01s)
+=== RUN   TestV43_RepairConcurrentWithWrites
+    v43_startup_test.go:272: consistent snapshots checked: 100
+--- PASS: TestV43_RepairConcurrentWithWrites (0.20s)
+=== RUN   TestV43_TwoGoroutinesRolloverDue
+    v43_startup_test.go:308: user 2 december: [allowance:300000] sum 300000
+    v43_startup_test.go:308: user 3 december: [carryover:-50000 allowance:300000 carryover:-50000] sum 200000
+    v43_startup_test.go:314: neg december sum 200000, want 250000 (one carry-over)
+--- FAIL: TestV43_TwoGoroutinesRolloverDue (0.01s)
+=== RUN   TestV43_GatingAfterOriginalScenarios
+--- PASS: TestV43_GatingAfterOriginalScenarios (0.01s)
+FAIL
+FAIL	github.com/panset/hourglass/internal/collector	2.443s
+FAIL

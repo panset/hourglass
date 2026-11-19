@@ -1,0 +1,12 @@
+#!/bin/bash
+# usage: mutrun.sh <name>   (run inside mut after applying a mutation)
+name=$1; cd "$(dirname "$0")/mut"; out=../mut-$name.log
+mkdir -p ../mutaside; mv internal/collector/v43_*_test.go ../mutaside/
+echo "== repo tests ($name)" > $out
+go test -count=1 ./... 2>&1 | grep -E "^(--- FAIL|FAIL|ok )|^\s+--- FAIL" | grep -v "^ok " >> $out
+mv ../mutaside/v43_*_test.go internal/collector/
+echo "== v43 tests ($name)" >> $out
+V43_OLD_DB=$PWD/../data/old-v2.db go test -count=1 -v -run 'TestV43_(Randomised|Startup|Repair|Gating|TimezoneOrig)' ./internal/collector 2>&1 | grep -E "^(--- |ok|FAIL)|^\s+--- FAIL|seeds [0-9]+ failed" >> $out
+echo "== v43 tests, restart without start-up repair ($name)" >> $out
+V43_NOREPAIR=1 go test -count=1 -v -run 'TestV43_(Randomised|TimezoneOrig)' ./internal/collector 2>&1 | grep -E "^(--- |ok|FAIL)|^\s+--- FAIL|seeds [0-9]+ failed" >> $out
+cat $out

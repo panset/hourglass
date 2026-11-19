@@ -1,0 +1,84 @@
+=== RUN   TestV42_DebitsWithinMonth
+--- PASS: TestV42_DebitsWithinMonth (0.05s)
+=== RUN   TestV42_RolloverPositiveZeroNegative
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=3
+--- PASS: TestV42_RolloverPositiveZeroNegative (0.01s)
+=== RUN   TestV42_DownAcrossTwoBoundaries
+    v42_orig_test.go:163: SOFT after "restart, before first poll (pending rollover window)" at 2026-12-01T03:00:00Z: [user 2 (): cache 299833, ledger sum for 2026-12 0 (diff +299833) user 3 (): cache -40000, ledger sum for 2026-12 0 (diff -40000)]
+2026/11/19 13:56:32 INFO ledger period closed period=2026-09 next=2026-10 users=2
+2026/11/19 13:56:32 INFO ledger period closed period=2026-10 next=2026-11 users=2
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=2
+--- PASS: TestV42_DownAcrossTwoBoundaries (0.01s)
+=== RUN   TestV42_DownAcrossTwoBoundaries_GrantBeforeFirstPoll
+2026/11/19 13:56:32 INFO ledger period closed period=2026-09 next=2026-10 users=1
+2026/11/19 13:56:32 INFO ledger period closed period=2026-10 next=2026-11 users=1
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=1
+--- PASS: TestV42_DownAcrossTwoBoundaries_GrantBeforeFirstPoll (0.01s)
+=== RUN   TestV42_OneBoundary_GrantResetBeforeAndAfterRollover
+    v42_orig_test.go:204: SOFT after "boundary passed, rollover pending" at 2026-12-01T00:02:00Z: [user 2 (): cache 307000, ledger sum for 2026-12 0 (diff +307000) user 3 (): cache 300000, ledger sum for 2026-12 0 (diff +300000)]
+    v42_orig_test.go:206: SOFT after "grant in pending window" at 2026-12-01T00:02:00Z: [user 3 (): cache 300000, ledger sum for 2026-12 0 (diff +300000)]
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=2
+--- PASS: TestV42_OneBoundary_GrantResetBeforeAndAfterRollover (0.01s)
+=== RUN   TestV42_PollExactlyAtMidnight
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=1
+--- PASS: TestV42_PollExactlyAtMidnight (0.01s)
+=== RUN   TestV42_LatePastPeriodEntry
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=1
+2026/11/19 13:56:32 INFO ledger period closed period=2026-12 next=2027-01 users=1
+--- PASS: TestV42_LatePastPeriodEntry (0.01s)
+=== RUN   TestV42_FirstRoleMidMonthAndDuringPendingRollover
+    v42_orig_test.go:300: SOFT after "first role during pending rollover" at 2026-12-01T00:01:00Z: [user 1 (): cache 300000, ledger sum for 2026-12 0 (diff +300000) user 2 (): cache 300000, ledger sum for 2026-12 0 (diff +300000)]
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=3
+--- PASS: TestV42_FirstRoleMidMonthAndDuringPendingRollover (0.00s)
+=== RUN   TestV42_RolesRemovedAndRestored
+2026/11/19 13:56:32 INFO ledger rollover corrected balance caches period=2026-11 current=2026-12 changed=1 abs_delta_mt=200000 net_delta_mt=-200000
+2026/11/19 13:56:32 INFO ledger period closed period=2026-11 next=2026-12 users=1
+--- PASS: TestV42_RolesRemovedAndRestored (0.00s)
+=== RUN   TestV42_ConcurrentAppends
+=== RUN   TestV42_ConcurrentAppends/same=true
+=== RUN   TestV42_ConcurrentAppends/same=false
+--- PASS: TestV42_ConcurrentAppends (1.31s)
+    --- PASS: TestV42_ConcurrentAppends/same=true (0.74s)
+    --- PASS: TestV42_ConcurrentAppends/same=false (0.57s)
+=== RUN   TestV42_RollbackLeavesCache
+    v42_orig_test.go:424: after "rollbacks" at 2026-12-01T00:01:00Z: [user 1 (): cache 300000, ledger sum for 2026-12 0 (diff +300000)]
+--- FAIL: TestV42_RollbackLeavesCache (0.00s)
+=== RUN   TestV42_TimezoneChangeBetweenRestarts
+=== RUN   TestV42_TimezoneChangeBetweenRestarts/backwards
+2026/11/19 13:56:33 INFO ledger period closed period=2026-11 next=2026-12 users=1
+    v42_orig_test.go:456: before restart: period 2026-12, cache 300000
+    v42_orig_test.go:461: SOFT after "restart in new zone, before poll" at 2026-11-30T23:00:00Z: [user 2 (): cache 300000, ledger sum for 2026-11 0 (diff +300000)]
+    v42_orig_test.go:462: after restart: period 2026-11, cache 300000
+    v42_orig_test.go:466: poll 23:05 (2026-11): [user 2 (): cache 300000, ledger sum for 2026-11 0 (diff +300000)]
+    v42_orig_test.go:466: poll 23:10 (2026-11): [user 2 (): cache 299833, ledger sum for 2026-11 -167 (diff +300000)]
+    v42_orig_test.go:466: poll 23:15 (2026-11): [user 2 (): cache 299666, ledger sum for 2026-11 -334 (diff +300000)]
+    v42_orig_test.go:466: poll 23:20 (2026-11): [user 2 (): cache 299499, ledger sum for 2026-11 -501 (diff +300000)]
+    v42_orig_test.go:466: poll 23:25 (2026-11): [user 2 (): cache 299332, ledger sum for 2026-11 -668 (diff +300000)]
+    v42_orig_test.go:466: poll 23:30 (2026-11): [user 2 (): cache 299165, ledger sum for 2026-11 -835 (diff +300000)]
+    v42_orig_test.go:466: poll 23:35 (2026-11): [user 2 (): cache 298998, ledger sum for 2026-11 -1002 (diff +300000)]
+    v42_orig_test.go:466: poll 23:40 (2026-11): [user 2 (): cache 298831, ledger sum for 2026-11 -1169 (diff +300000)]
+    v42_orig_test.go:466: poll 23:45 (2026-11): [user 2 (): cache 298664, ledger sum for 2026-11 -1336 (diff +300000)]
+    v42_orig_test.go:466: poll 23:50 (2026-11): [user 2 (): cache 298497, ledger sum for 2026-11 -1503 (diff +300000)]
+    v42_orig_test.go:466: poll 23:55 (2026-11): [user 2 (): cache 298330, ledger sum for 2026-11 -1670 (diff +300000)]
+    v42_orig_test.go:466: poll 00:00 (2026-12): [user 2 (): cache 298163, ledger sum for 2026-12 299833 (diff -1670)]
+    v42_orig_test.go:466: poll 00:05 (2026-12): [user 2 (): cache 297996, ledger sum for 2026-12 299666 (diff -1670)]
+    v42_orig_test.go:466: poll 00:10 (2026-12): [user 2 (): cache 297829, ledger sum for 2026-12 299499 (diff -1670)]
+    v42_orig_test.go:466: poll 00:15 (2026-12): [user 2 (): cache 297662, ledger sum for 2026-12 299332 (diff -1670)]
+    v42_orig_test.go:471: end: period 2026-12, cache 298662, mismatches [user 2 (): cache 298662, ledger sum for 2026-12 300332 (diff -1670)]
+    v42_orig_test.go:482: ledger 2026-11: sum -1670, 11 debits, other [allowance:300000 grant:-100000 expiry:-199833]
+    v42_orig_test.go:482: ledger 2026-12: sum 300332, 4 debits, other [allowance:300000 grant:1000]
+    v42_orig_test.go:485: cache wrong after timezone change (backwards): [user 2 (): cache 298662, ledger sum for 2026-12 300332 (diff -1670)]
+=== RUN   TestV42_TimezoneChangeBetweenRestarts/forwards
+    v42_orig_test.go:456: before restart: period 2026-11, cache 199833
+    v42_orig_test.go:461: SOFT after "restart in new zone, before poll" at 2026-11-30T22:30:00Z: [user 2 (): cache 199833, ledger sum for 2026-12 0 (diff +199833)]
+    v42_orig_test.go:462: after restart: period 2026-12, cache 199833
+2026/11/19 13:56:33 INFO ledger period closed period=2026-11 next=2026-12 users=1
+    v42_orig_test.go:471: end: period 2026-12, cache 298662, mismatches []
+    v42_orig_test.go:482: ledger 2026-11: sum 0, 1 debits, other [allowance:300000 grant:-100000 expiry:-199833]
+    v42_orig_test.go:482: ledger 2026-12: sum 298662, 14 debits, other [allowance:300000 grant:1000]
+--- FAIL: TestV42_TimezoneChangeBetweenRestarts (0.02s)
+    --- FAIL: TestV42_TimezoneChangeBetweenRestarts/backwards (0.01s)
+    --- PASS: TestV42_TimezoneChangeBetweenRestarts/forwards (0.01s)
+FAIL
+FAIL	github.com/panset/hourglass/internal/collector	1.706s
+FAIL

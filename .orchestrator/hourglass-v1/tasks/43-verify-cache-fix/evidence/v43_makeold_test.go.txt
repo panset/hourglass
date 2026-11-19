@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: MIT
+
+package collector
+
+import (
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/store"
+)
+
+// Builds a database with 99408df (migrations 0001-0002) for task 43.
+func TestV43_MakeOldDB(t *testing.T) {
+	path := os.Getenv("V43_DB")
+	if path == "" {
+		t.Skip()
+	}
+	e := newEnv(t, false)
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	e.st = st
+	e.led = &failingLedger{Service: ledger.NewService(st, e.rec, e.clk, time.UTC)}
+	e.c = e.newCollector()
+	e.clk.Set(time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC))
+	admin, err := st.CreateLocalAdmin(bg, "admin", "x", false, e.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.rules("tier=gold", 2)
+	for i := 0; i < 10; i++ {
+		u := e.user(fmt.Sprintf("u%d", i))
+		e.allowance(u)
+		if i%3 == 0 {
+			e.hold(e.setup(fmt.Sprintf("lab-%d", i), true, map[string]string{"tier": "gold"}), u)
+		}
+		if i%2 == 1 {
+			if _, err := e.led.Grant(bg, admin.ID, u, -int64(250000+i*20000), "neg"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	gone := e.user("gone")
+	e.allowance(gone)
+	if err := st.SetUserRoles(bg, gone, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateOIDCUser(bg, "pend", "p@example.test", "pend", e.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	e.runOK()
+	for i := 0; i < 20; i++ {
+		e.step(poll)
+	}
+	e.clk.Set(time.Date(2026, 10, 31, 23, 50, 0, 0, time.UTC))
+	e.runOK()
+}

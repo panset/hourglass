@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: MIT
+
+package collector
+
+import (
+	"os"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/ledger"
+)
+
+func TestV43_TimezoneOrigWithStartupRepair(t *testing.T) {
+	east := time.FixedZone("UTC+2", 2*3600)
+	for _, c := range []struct {
+		name     string
+		from, to *time.Location
+		at       time.Time // the restart instant
+	}{
+		{"backwards", east, time.UTC, utc(2026, 11, 30, 23, 0)}, // Dec 1 01:00 east -> Nov 30 23:00 UTC
+		{"forwards", time.UTC, east, utc(2026, 11, 30, 22, 30)}, // Nov 30 22:30 UTC -> Dec 1 00:30 east
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnv(t, false)
+			e.led = &failingLedger{Service: ledger.NewService(e.st, e.rec, e.clk, c.from)}
+			e.c = e.newCollector()
+			admin := e.adminID()
+			e.clk.Set(c.at.Add(-3 * time.Hour))
+			u, _ := e.basic()
+			e.allowance(u)
+			e.grant(admin, u, -100000) // 200 tokens
+			e.runOK()
+			e.step(poll)
+			if c.name == "backwards" {
+				// make sure the December rollover in the east zone has run
+				e.clk.Set(c.at.Add(-50 * time.Minute)) // Dec 1 00:10 east
+				e.runOK()
+			}
+			e.check("before restart")
+			t.Logf("before restart: period %s, cache %d", e.led.CurrentPeriod(), e.cacheOf(u))
+			// restart with the other zone
+			e.led = &failingLedger{Service: ledger.NewService(e.st, e.rec, e.clk, c.to)}
+			e.c = e.newCollector()
+			e.clk.Set(c.at)
+			if os.Getenv("V43_NOREPAIR") == "" { if _, err := e.led.RepairBalances(bg); err != nil { t.Fatal(err) } } // what app.Run does at start-up
+			e.check("after startup repair")
+			e.soft("restart in new zone, before poll")
+			t.Logf("after restart: period %s, cache %d", e.led.CurrentPeriod(), e.cacheOf(u))
+			for i := 0; i < 15; i++ { // 75 minutes: crosses 00:00 UTC in the backwards case
+				e.step(poll)
+				if bad := e.inv(e.led.Service); len(bad) > 0 {
+					t.Errorf("poll %s (%s): %v", e.clk.Now().Format("15:04"), e.led.CurrentPeriod(), bad)
+				}
+			}
+			e.grant(admin, u, 1000)
+			bad := e.inv(e.led.Service)
+			t.Logf("end: period %s, cache %d, mismatches %v", e.led.CurrentPeriod(), e.cacheOf(u), bad)
+			for _, p := range []string{"2026-11", "2026-12"} {
+				s, _ := e.st.SumLedger(bg, u, p, "")
+				l, _ := e.st.ListLedger(bg, u, p)
+				var kinds []string
+				for _, x := range l {
+					if x.Type != "debit" {
+						kinds = append(kinds, fmt.Sprintf("%s:%d", x.Type, x.AmountMT))
+					}
+				}
+				nd, _ := e.st.CountLedger(bg, u, p, "debit")
+				t.Logf("ledger %s: sum %d, %d debits, other %v", p, s, nd, kinds)
+			}
+			if len(bad) > 0 {
+				t.Errorf("cache wrong after timezone change (%s): %v", c.name, bad)
+			}
+		})
+	}
+}
+

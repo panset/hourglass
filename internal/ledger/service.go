@@ -348,7 +348,9 @@ func (s *Service) RolloverDue(ctx context.Context) ([]string, error) {
 	// configured timezone moved it backwards and the clock has now come back to
 	// a period already opened): appends since then assumed the caches held this
 	// period, so rebuild them all from the ledger.
-	if cur, done := s.CurrentPeriod(), s.getCachePeriod(); done != "" && cur != done {
+	// A period not yet recorded in this process counts as moved, so the guard
+	// does not depend on the caller having rebuilt at start-up.
+	if cur, done := s.CurrentPeriod(), s.getCachePeriod(); cur != done {
 		rep, err := s.RepairBalances(ctx)
 		if err != nil {
 			return closed, err
