@@ -506,11 +506,16 @@ func TestHOLD2_ForceReleaseNeedsAdminAndReasonAndIsAudited(t *testing.T) {
 	if rows[0].Target != "hold:"+itoa(h.ID) {
 		t.Fatalf("target %q", rows[0].Target)
 	}
-	// already released: not_found
+	// already released: conflict (api/openapi.yaml), for the owner and for an
+	// admin; a user who may not release the hold is told forbidden, not that
+	// the hold exists and is released.
 	_, err = e.svc.Release(bg, admin, h.ID, ReleaseOpts{Force: true, Reason: "again"})
-	wantCode(t, err, CodeNotFound)
+	wantCode(t, err, CodeConflict)
 	_, err = e.svc.Release(bg, dev, h.ID, ReleaseOpts{})
-	wantCode(t, err, CodeNotFound)
+	wantCode(t, err, CodeConflict)
+	stranger := e.user("stranger", 11, store.RoleDeveloper)
+	_, err = e.svc.Release(bg, stranger, h.ID, ReleaseOpts{})
+	wantCode(t, err, CodeForbidden)
 	_, err = e.svc.Release(bg, dev, 4242, ReleaseOpts{})
 	wantCode(t, err, CodeNotFound)
 }

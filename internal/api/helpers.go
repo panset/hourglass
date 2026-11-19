@@ -130,13 +130,6 @@ func milliFromTokens(t float64) (int64, error) {
 	return int64(math.Round(t * MilliPerToken)), nil
 }
 
-// notImplemented answers 501 for an operation whose handler is not written
-// yet. api/openapi.yaml has no such error code, so the contract test will
-// flag every stub until it is replaced.
-func notImplemented(w http.ResponseWriter) {
-	apierr.Write(w, http.StatusNotImplemented, "not_implemented", "this operation is not implemented yet")
-}
-
 // writeError maps a service error to the API's error shape and status per
 // the OpenAPI error table; anything unrecognised is logged and answered as
 // 500 internal with a fixed message.
@@ -183,3 +176,33 @@ func classify(err error) (code, msg, field string) {
 		return apierr.Internal, "", ""
 	}
 }
+
+// nullIfEmpty is a pointer to s, or nil (JSON null) when s is empty.
+func nullIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// labelsNonNil makes a nil label map an empty one (JSON {} not null).
+func labelsNonNil(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
+}
+
+// userDisplayName is the name shown for a user: name, else username, else email.
+func userDisplayName(u store.User) string {
+	switch {
+	case u.Name != "":
+		return u.Name
+	case u.Username != "":
+		return u.Username
+	default:
+		return u.Email
+	}
+}
+
+func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }

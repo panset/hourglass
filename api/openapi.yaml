@@ -1397,7 +1397,8 @@ components:
             free: {type: integer}
         metering_description:
           type: string
-          description: Text from the metering policy for the acquire dialog, e.g. `deployed or 2 h after acquire`.
+          nullable: true
+          description: Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`.
     SetupInput:
       type: object
       required: [name, labels, details, enabled, resource_name_override]
@@ -1598,7 +1599,7 @@ components:
           required: [name, description]
           properties:
             name: {type: string, example: default}
-            description: {type: string, example: deployed or 2 h after acquire}
+            description: {type: string, nullable: true, description: Always null; the extension interfaces have no describe method.}
         hooks:
           type: array
           items: {type: string}

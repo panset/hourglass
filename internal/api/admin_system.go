@@ -109,12 +109,12 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 	out.RecentRuns = make([]collectorRunOut, len(runs))
 	for i, x := range runs {
 		out.RecentRuns[i] = collectorRunOut{ID: x.ID, StartedAt: ts(x.StartedAt), FinishedAt: tsPtr(x.FinishedAt),
-			OK: x.OK != nil && *x.OK, Error: strPtr(x.Error)}
+			OK: x.OK != nil && *x.OK, Error: nullIfEmpty(x.Error)}
 	}
 
 	switch run, err := st.LastSuccessfulRun(ctx); {
 	case err == nil:
-		out.LastSuccessfulPollAt = strPtr(ts(run.StartedAt))
+		out.LastSuccessfulPollAt = nullIfEmpty(ts(run.StartedAt))
 	case !isNotFound(err):
 		return out, err
 	}
@@ -173,10 +173,7 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 	for i, o := range orphans {
 		labels := map[string]string{}
 		_ = json.Unmarshal([]byte(o.LabelsJSON), &labels) // provider-specific; non-string labels are dropped
-		if labels == nil {
-			labels = map[string]string{}
-		}
-		x := collectorOrphanOut{ResourceName: o.ResourceName, FirstSeenAt: ts(o.FirstSeenAt), LastSeenAt: ts(o.LastSeenAt), Labels: labels}
+		x := collectorOrphanOut{ResourceName: o.ResourceName, FirstSeenAt: ts(o.FirstSeenAt), LastSeenAt: ts(o.LastSeenAt), Labels: labelsNonNil(labels)}
 		if s, ok := byResource[o.ResourceName]; ok {
 			x.Setup = &collectorOrphanSetup{ID: s.ID, Name: s.Name}
 		}

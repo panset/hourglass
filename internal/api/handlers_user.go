@@ -578,7 +578,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 			v.State = "held"
 			hu := d.users[h.UserID]
 			at := utcTime(h.AcquiredAt)
-			m := meteringOf(h, d)
+			m := meteringOf(h, l.view)
 			v.HeldSince, v.Metering = &at, &m
 			v.Holder = &holderJSON{UserID: h.UserID, HoldID: h.ID, Name: userDisplayName(hu), Balance: tokens(hu.BalanceMT),
 				Over: hu.BalanceMT <= 0, IsYou: h.UserID == u.ID}
@@ -600,14 +600,11 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 		}
 		list = append(list, v)
 	}
-	desc := "Charging follows the configured metering policy."
-	if n := a.d.Runtime.MeteringPolicy; n != "" {
-		desc = "Charging follows the \"" + n + "\" metering policy."
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"setups": list, "display_label_keys": keys,
-		"summary":              map[string]int{"enabled": summary.Enabled, "deployed": summary.Deployed, "free": summary.Free},
-		"metering_description": desc,
+		"summary": map[string]int{"enabled": summary.Enabled, "deployed": summary.Deployed, "free": summary.Free},
+		// The policy interface has no describe method, so there is no text to show.
+		"metering_description": nil,
 	})
 }
 

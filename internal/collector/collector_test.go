@@ -1031,3 +1031,45 @@ func TestLED3_PollAtMidnightOpensPeriodFirst(t *testing.T) {
 		t.Fatalf("acquire refused after the midnight poll: %v", err)
 	}
 }
+
+// The poll view keeps the policy's decision per active hold from the latest
+// successful poll (the API shows its reason); a hold the poll has not seen
+// has none, and a failed poll leaves the view alone.
+func TestMET1_PollViewKeepsDecisionPerActiveHold(t *testing.T) {
+	e := newEnv(t, false)
+	_, h := e.basic()
+	if _, ok := e.c.LastPoll().Decisions[h.ID]; ok {
+		t.Fatal("decision before any poll")
+	}
+	e.policy.SetDefault(hourglass.Decision{Meter: false, Reason: "waiting for something"})
+	e.runOK()
+	d, ok := e.c.LastPoll().Decisions[h.ID]
+	if !ok || d.Meter || d.Reason != "waiting for something" {
+		t.Fatalf("decision %+v %v", d, ok)
+	}
+	// A copy: changing it does not change the collector's view.
+	v := e.c.LastPoll()
+	v.Decisions[h.ID] = hourglass.Decision{Reason: "tampered"}
+	if got := e.c.LastPoll().Decisions[h.ID].Reason; got != "waiting for something" {
+		t.Fatalf("view was mutated: %q", got)
+	}
+	// A hold created after the poll is unseen until the next poll.
+	u2 := e.user("other")
+	h2 := e.hold(e.setup("lab-02", true, nil), u2)
+	if _, ok := e.c.LastPoll().Decisions[h2.ID]; ok {
+		t.Fatal("decision for a hold no poll has seen")
+	}
+	e.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "charging"})
+	e.step(poll)
+	if v := e.c.LastPoll(); v.Decisions[h.ID].Reason != "charging" || !v.Decisions[h2.ID].Meter {
+		t.Fatalf("after next poll %+v", v.Decisions)
+	}
+	// A released hold is gone from the next poll's view.
+	if err := e.st.ReleaseHold(bg, h.ID, nil, "", e.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	e.step(poll)
+	if _, ok := e.c.LastPoll().Decisions[h.ID]; ok {
+		t.Fatal("released hold still has a decision")
+	}
+}

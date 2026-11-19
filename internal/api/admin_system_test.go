@@ -21,16 +21,16 @@ func TestRULE3_GetRulesCountsAndFallThrough(t *testing.T) {
 	e.setup("b1", true, map[string]string{"tier": "b"})
 	e.setup("c1", true, map[string]string{"tier": "c"})
 	e.setup("off", false, map[string]string{"tier": "a"}) // disabled setups are not counted
-	if err := e.st.ReplaceRules(adBg, "rate", []store.Rule{
+	if err := e.st.ReplaceRules(uBg, "rate", []store.Rule{
 		{Selector: "site=x", Value: 4}, {Selector: "tier=a", Value: 2}, {Selector: "tier=zzz", Value: 9}}, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.st.PutSetting(adBg, "default_weight", "1.5", nil, e.clk.Now()); err != nil {
+	if err := e.st.PutSetting(uBg, "default_weight", "1.5", nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
-	b := adOK(t, e.get(rulesPath), 200)
-	adKeys(t, "response", b, "rules", "default_weight", "unmatched_setups")
-	if adNum(t, b, "default_weight") != 1.5 {
+	b := uWantOK(t, e.get(rulesPath), 200)
+	uWantKeys(t, "response", b, "rules", "default_weight", "unmatched_setups")
+	if uNum(t, b, "default_weight") != 1.5 {
 		t.Errorf("default_weight = %v", b["default_weight"])
 	}
 	rs := adArr(t, b, "rules")
@@ -40,8 +40,8 @@ func TestRULE3_GetRulesCountsAndFallThrough(t *testing.T) {
 	wantSel, wantCount, wantW := []string{"site=x", "tier=a", "tier=zzz"}, []float64{1, 1, 0}, []float64{4, 2, 9}
 	for i, x := range rs {
 		r := adObjOf(t, x)
-		adKeys(t, "rule", r, "id", "position", "selector", "weight", "match_count")
-		if r["selector"] != wantSel[i] || adNum(t, r, "match_count") != wantCount[i] || adNum(t, r, "position") != float64(i+1) || adNum(t, r, "weight") != wantW[i] {
+		uWantKeys(t, "rule", r, "id", "position", "selector", "weight", "match_count")
+		if r["selector"] != wantSel[i] || uNum(t, r, "match_count") != wantCount[i] || uNum(t, r, "position") != float64(i+1) || uNum(t, r, "weight") != wantW[i] {
 			t.Errorf("rule %d = %v", i, r)
 		}
 	}
@@ -50,7 +50,7 @@ func TestRULE3_GetRulesCountsAndFallThrough(t *testing.T) {
 		t.Fatalf("unmatched = %v", un)
 	}
 	first := adObjOf(t, un[0])
-	adKeys(t, "setup ref", first, "id", "name", "labels")
+	uWantKeys(t, "setup ref", first, "id", "name", "labels")
 	if first["name"] != "b1" || adObjOf(t, un[1])["name"] != "c1" {
 		t.Errorf("unmatched = %v", un)
 	}
@@ -60,20 +60,20 @@ func TestRULE3_PutRulesReplacesAndAudits(t *testing.T) {
 	e := newAdEnv(t)
 	e.setup("a1", true, map[string]string{"tier": "a"})
 	e.setup("b1", true, map[string]string{"tier": "b"})
-	if err := e.st.ReplaceRules(adBg, "rate", []store.Rule{{Selector: "tier=old", Value: 7}}, nil, e.clk.Now()); err != nil {
+	if err := e.st.ReplaceRules(uBg, "rate", []store.Rule{{Selector: "tier=old", Value: 7}}, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
-	b := adOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"tier=b","weight":3},{"selector":"tier in (a,b)","weight":0.5},{"selector":"","weight":1}]}`), 200)
+	b := uWantOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"tier=b","weight":3},{"selector":"tier in (a,b)","weight":0.5},{"selector":"","weight":1}]}`), 200)
 	rs := adArr(t, b, "rules")
-	if len(rs) != 3 || adObjOf(t, rs[0])["selector"] != "tier=b" || adNum(t, adObjOf(t, rs[0]), "match_count") != 1 || adNum(t, adObjOf(t, rs[1]), "match_count") != 1 ||
-		adNum(t, adObjOf(t, rs[1]), "weight") != 0.5 || adNum(t, adObjOf(t, rs[2]), "match_count") != 0 {
+	if len(rs) != 3 || adObjOf(t, rs[0])["selector"] != "tier=b" || uNum(t, adObjOf(t, rs[0]), "match_count") != 1 || uNum(t, adObjOf(t, rs[1]), "match_count") != 1 ||
+		uNum(t, adObjOf(t, rs[1]), "weight") != 0.5 || uNum(t, adObjOf(t, rs[2]), "match_count") != 0 {
 		t.Errorf("rules = %v", rs)
 	}
 	if len(adArr(t, b, "unmatched_setups")) != 0 {
 		t.Errorf("unmatched = %v", b["unmatched_setups"])
 	}
 	// The stored list is exactly the new one, in order, attributed to the admin (RULE-4).
-	rows, _ := e.st.ListRules(adBg, "rate")
+	rows, _ := e.st.ListRules(uBg, "rate")
 	if len(rows) != 3 || rows[0].Selector != "tier=b" || rows[2].Position != 2 || rows[0].UpdatedBy == nil || *rows[0].UpdatedBy != e.admin.ID {
 		t.Errorf("stored rules = %+v", rows)
 	}
@@ -82,7 +82,7 @@ func TestRULE3_PutRulesReplacesAndAudits(t *testing.T) {
 		t.Errorf("audit = %+v", a)
 	}
 	// An empty list clears the rules; everything falls through.
-	b = adOK(t, e.send("PUT", rulesPath, `{"rules":[]}`), 200)
+	b = uWantOK(t, e.send("PUT", rulesPath, `{"rules":[]}`), 200)
 	if len(adArr(t, b, "rules")) != 0 || len(adArr(t, b, "unmatched_setups")) != 2 {
 		t.Errorf("after clearing: %v", b)
 	}
@@ -90,14 +90,14 @@ func TestRULE3_PutRulesReplacesAndAudits(t *testing.T) {
 
 func TestRULE3_InvalidSelectorRejectsWholeRequest(t *testing.T) {
 	e := newAdEnv(t)
-	if err := e.st.ReplaceRules(adBg, "rate", []store.Rule{{Selector: "tier=keep", Value: 1}}, nil, e.clk.Now()); err != nil {
+	if err := e.st.ReplaceRules(uBg, "rate", []store.Rule{{Selector: "tier=keep", Value: 1}}, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
 	f, msg := adErr(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"tier=a","weight":1},{"selector":"tier in (a","weight":2}]}`), 400, "invalid_selector")
 	if f != "rules[1].selector" || !strings.Contains(msg, "position") {
 		t.Errorf("field %q message %q", f, msg)
 	}
-	rows, _ := e.st.ListRules(adBg, "rate")
+	rows, _ := e.st.ListRules(uBg, "rate")
 	if len(rows) != 1 || rows[0].Selector != "tier=keep" {
 		t.Errorf("rules changed by a rejected request: %+v", rows)
 	}
@@ -154,20 +154,20 @@ func fullSettings(mod string) string {
 
 func TestADM2_GetSettingsShapeAndRuntime(t *testing.T) {
 	e := newAdEnv(t)
-	b := adOK(t, e.get(settingsPath), 200)
-	adKeys(t, "response", b, "settings", "runtime")
-	adKeys(t, "settings", adObjOf(t, b["settings"]), "resource_name_template", "default_weight", "display_label_keys", "bands", "default_allowance",
+	b := uWantOK(t, e.get(settingsPath), 200)
+	uWantKeys(t, "response", b, "settings", "runtime")
+	uWantKeys(t, "settings", adObjOf(t, b["settings"]), "resource_name_template", "default_weight", "display_label_keys", "bands", "default_allowance",
 		"max_holds_per_user", "release_requires_teardown", "poll_interval", "enforcement")
 	st := adObjOf(t, b["settings"])
-	if st["resource_name_template"] != "{{.SetupName}}" || adNum(t, st, "default_allowance") != 300 || st["poll_interval"] != "5m" || st["enforcement"] != false {
+	if st["resource_name_template"] != "{{.SetupName}}" || uNum(t, st, "default_allowance") != 300 || st["poll_interval"] != "5m" || st["enforcement"] != false {
 		t.Errorf("settings = %v", st)
 	}
 	rt := adObjOf(t, b["runtime"])
-	adKeys(t, "runtime", rt, "provider", "pressure_source", "metering_policy", "hooks", "oidc_issuer", "timezone")
+	uWantKeys(t, "runtime", rt, "provider", "pressure_source", "metering_policy", "hooks", "oidc_issuer", "timezone")
 	if rt["provider"] != "fake-provider" || rt["pressure_source"] != "fake-pressure" || rt["timezone"] != "UTC" || rt["oidc_issuer"] != nil {
 		t.Errorf("runtime = %v", rt)
 	}
-	if mp := adObjOf(t, rt["metering_policy"]); mp["name"] != "fake-policy" {
+	if mp := adObjOf(t, rt["metering_policy"]); mp["name"] != "fake-policy" || mp["description"] != nil {
 		t.Errorf("metering_policy = %v", mp)
 	}
 	if h := adArr(t, rt, "hooks"); len(h) != 1 || h[0] != "fake-hook" {
@@ -175,11 +175,24 @@ func TestADM2_GetSettingsShapeAndRuntime(t *testing.T) {
 	}
 }
 
+func TestADM2_RuntimeShowsOIDCIssuerAndTimezone(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Skip("no tzdata")
+	}
+	b := newBackend(t, backendOpts{loc: loc, runtime: Runtime{OIDCIssuer: "https://issuer.example"}})
+	adm := b.session(b.admin)
+	rt := adObjOf(t, uWantOK(t, b.serve("GET", "/api/v1/admin/settings", &adm, false, ""), 200)["runtime"])
+	if rt["oidc_issuer"] != "https://issuer.example" || rt["timezone"] != "Europe/Berlin" || rt["provider"] != nil {
+		t.Errorf("runtime = %v", rt)
+	}
+}
+
 func TestADM2_PutSettingsSavesAndAuditsChangedKeys(t *testing.T) {
 	e := newAdEnv(t)
-	b := adOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
+	b := uWantOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
 	st := adObjOf(t, b["settings"])
-	if st["resource_name_template"] != "{{.SetupName}}_RP" || adNum(t, st, "default_allowance") != 250.5 || adNum(t, st, "max_holds_per_user") != 3 || st["poll_interval"] != "10m" || st["enforcement"] != true {
+	if st["resource_name_template"] != "{{.SetupName}}_RP" || uNum(t, st, "default_allowance") != 250.5 || uNum(t, st, "max_holds_per_user") != 3 || st["poll_interval"] != "10m" || st["enforcement"] != true {
 		t.Errorf("returned settings = %v", st)
 	}
 	if adObjOf(t, b["runtime"])["provider"] != "fake-provider" {
@@ -204,13 +217,13 @@ func TestADM2_PutSettingsSavesAndAuditsChangedKeys(t *testing.T) {
 		}
 	}
 	// Saving the same values again changes nothing and writes no audit row.
-	adOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
+	uWantOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
 	if n := len(e.audits("settings.update")); n != 1 {
 		t.Errorf("no-op save wrote an audit row: %d", n)
 	}
 	// Changes are not retroactive: the allowance setting does not touch ledgers.
 	d := e.dev("dev2")
-	if n, _ := e.st.SumLedger(adBg, d.user.ID, "2026-11", ""); n != 250_500 {
+	if n, _ := e.st.SumLedger(uBg, d.user.ID, "2026-11", ""); n != 250_500 {
 		t.Errorf("new user's allowance = %d mt", n)
 	}
 }
@@ -241,7 +254,7 @@ func TestADM2_PutSettingsValidation(t *testing.T) {
 	if n := len(e.audits("settings.update")); n != 0 {
 		t.Errorf("rejected requests wrote %d audit rows", n)
 	}
-	if b := adObjOf(t, adDecode(t, e.get(settingsPath))["settings"]); adNum(t, b, "max_holds_per_user") != 2 {
+	if b := adObjOf(t, uObj(t, e.get(settingsPath))["settings"]); uNum(t, b, "max_holds_per_user") != 2 {
 		t.Errorf("a rejected PUT changed the settings: %v", b)
 	}
 }
@@ -254,35 +267,35 @@ func TestADM4_CollectorHealth(t *testing.T) {
 	e.hold(held, d.user.ID)
 	// The provider reports the held setup, the free setup (an orphan, HOLD-4) and an unknown resource.
 	e.prov.SetAllocations(hourglassAlloc("lab-held"), hourglassAlloc("lab-free", "site", "x"), hourglassAlloc("unrelated"))
-	if err := e.col.RunOnce(adBg); err != nil {
+	if err := e.col.RunOnce(uBg); err != nil {
 		t.Fatal(err)
 	}
 	// A failed run, an outage this month and a failed delivery.
 	e.clk.Advance(5 * time.Minute)
 	e.pressure.SetError(errors.New("pressure down"))
-	if err := e.col.RunOnce(adBg); err == nil {
+	if err := e.col.RunOnce(uBg); err == nil {
 		t.Fatal("poll should have failed")
 	}
 	e.pressure.SetError(nil)
-	if _, err := e.st.InsertOutage(adBg, store.Outage{StartedAt: e.clk.Now().Add(-3 * time.Hour), EndedAt: e.clk.Now().Add(-2 * time.Hour), Reason: "gap"}); err != nil {
+	if _, err := e.st.InsertOutage(uBg, store.Outage{StartedAt: e.clk.Now().Add(-3 * time.Hour), EndedAt: e.clk.Now().Add(-2 * time.Hour), Reason: "gap"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.st.InsertOutage(adBg, store.Outage{StartedAt: e.clk.Now().AddDate(0, -1, 0), EndedAt: e.clk.Now().AddDate(0, -1, 0).Add(time.Hour), Reason: "old"}); err != nil {
+	if _, err := e.st.InsertOutage(uBg, store.Outage{StartedAt: e.clk.Now().AddDate(0, -1, 0), EndedAt: e.clk.Now().AddDate(0, -1, 0).Add(time.Hour), Reason: "old"}); err != nil {
 		t.Fatal(err)
 	}
-	id, err := e.st.InsertEventDelivery(adBg, "hold.acquired", "fake-hook", `{"secret":"payload"}`, e.clk.Now())
+	id, err := e.st.InsertEventDelivery(uBg, "hold.acquired", "fake-hook", `{"secret":"payload"}`, e.clk.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.st.FinishEventDelivery(adBg, id, e.clk.Now(), false, "hook exploded"); err != nil {
+	if err := e.st.FinishEventDelivery(uBg, id, e.clk.Now(), false, "hook exploded"); err != nil {
 		t.Fatal(err)
 	}
 
-	b := adOK(t, e.get("/api/v1/admin/collector"), 200)
-	adKeys(t, "collector", b, "extensions", "last_successful_poll_at", "last_error", "matched_setups", "orphan_count", "outages_this_month",
+	b := uWantOK(t, e.get("/api/v1/admin/collector"), 200)
+	uWantKeys(t, "collector", b, "extensions", "last_successful_poll_at", "last_error", "matched_setups", "orphan_count", "outages_this_month",
 		"recent_runs", "outages", "orphans", "failed_deliveries", "queue_length")
 	ext := adObjOf(t, b["extensions"])
-	adKeys(t, "extensions", ext, "provider", "pressure_source", "metering_policy", "hooks")
+	uWantKeys(t, "extensions", ext, "provider", "pressure_source", "metering_policy", "hooks")
 	if ext["provider"] != "fake-provider" || ext["metering_policy"] != "fake-policy" {
 		t.Errorf("extensions = %v", ext)
 	}
@@ -290,25 +303,25 @@ func TestADM4_CollectorHealth(t *testing.T) {
 		t.Errorf("last_successful_poll_at = %v", b["last_successful_poll_at"])
 	}
 	le := adObjOf(t, b["last_error"])
-	adKeys(t, "last_error", le, "message", "at")
+	uWantKeys(t, "last_error", le, "message", "at")
 	if !strings.Contains(le["message"].(string), "pressure down") {
 		t.Errorf("last_error = %v", le)
 	}
-	if adNum(t, b, "matched_setups") != 2 || adNum(t, b, "orphan_count") != 1 {
+	if uNum(t, b, "matched_setups") != 2 || uNum(t, b, "orphan_count") != 1 {
 		t.Errorf("matched %v orphans %v", b["matched_setups"], b["orphan_count"])
 	}
 	om := adObjOf(t, b["outages_this_month"])
-	if adNum(t, om, "count") != 1 || adNum(t, om, "minutes_not_charged") != 60 {
+	if uNum(t, om, "count") != 1 || uNum(t, om, "minutes_not_charged") != 60 {
 		t.Errorf("outages_this_month = %v", om)
 	}
 	outs := adArr(t, b, "outages")
-	if len(outs) != 2 || adNum(t, adObjOf(t, outs[0]), "duration_minutes") != 60 {
+	if len(outs) != 2 || uNum(t, adObjOf(t, outs[0]), "duration_minutes") != 60 {
 		t.Errorf("outages = %v", outs)
 	}
-	adKeys(t, "outage", adObjOf(t, outs[0]), "started_at", "ended_at", "duration_minutes")
+	uWantKeys(t, "outage", adObjOf(t, outs[0]), "started_at", "ended_at", "duration_minutes")
 	orphans := adArr(t, b, "orphans")
 	o := adObjOf(t, orphans[0])
-	adKeys(t, "orphan", o, "resource_name", "first_seen_at", "last_seen_at", "setup", "labels")
+	uWantKeys(t, "orphan", o, "resource_name", "first_seen_at", "last_seen_at", "setup", "labels")
 	if o["resource_name"] != "lab-free" || adObjOf(t, o["setup"])["name"] != "lab-free" || adObjOf(t, o["labels"])["site"] != "x" {
 		t.Errorf("orphan = %v", o)
 	}
@@ -316,7 +329,7 @@ func TestADM4_CollectorHealth(t *testing.T) {
 	if len(runs) != 2 {
 		t.Fatalf("runs = %v", runs)
 	}
-	adKeys(t, "run", adObjOf(t, runs[0]), "id", "started_at", "finished_at", "ok", "error")
+	uWantKeys(t, "run", adObjOf(t, runs[0]), "id", "started_at", "finished_at", "ok", "error")
 	if adObjOf(t, runs[0])["ok"] != false || adObjOf(t, runs[1])["ok"] != true || adObjOf(t, runs[1])["error"] != nil {
 		t.Errorf("runs = %v", runs)
 	}
@@ -324,19 +337,19 @@ func TestADM4_CollectorHealth(t *testing.T) {
 	if len(fd) != 1 {
 		t.Fatalf("failed deliveries = %v", fd)
 	}
-	adKeys(t, "delivery", adObjOf(t, fd[0]), "id", "event_type", "hook", "error", "started_at", "finished_at")
+	uWantKeys(t, "delivery", adObjOf(t, fd[0]), "id", "event_type", "hook", "error", "started_at", "finished_at")
 	if adObjOf(t, fd[0])["error"] != "hook exploded" || strings.Contains(string(adBytes(b)), "payload") {
 		t.Errorf("failed delivery = %v", fd[0])
 	}
-	if adNum(t, b, "queue_length") < 0 {
+	if uNum(t, b, "queue_length") < 0 {
 		t.Errorf("queue_length = %v", b["queue_length"])
 	}
 }
 
 func TestADM4_CollectorBeforeFirstPoll(t *testing.T) {
 	e := newAdEnv(t)
-	b := adOK(t, e.get("/api/v1/admin/collector"), 200)
-	if b["last_successful_poll_at"] != nil || b["last_error"] != nil || adNum(t, b, "matched_setups") != 0 ||
+	b := uWantOK(t, e.get("/api/v1/admin/collector"), 200)
+	if b["last_successful_poll_at"] != nil || b["last_error"] != nil || uNum(t, b, "matched_setups") != 0 ||
 		len(adArr(t, b, "recent_runs")) != 0 || len(adArr(t, b, "orphans")) != 0 || len(adArr(t, b, "outages")) != 0 || len(adArr(t, b, "failed_deliveries")) != 0 {
 		t.Errorf("collector = %v", b)
 	}
@@ -346,22 +359,22 @@ func TestADM3_AuditListFiltersAndPaging(t *testing.T) {
 	e := newAdEnv(t)
 	other := e.user("boss2", store.StatusActive, store.RoleAdmin)
 	d := e.dev("dev")
-	grant := "/api/v1/admin/users/" + adItoa(d.user.ID) + "/grants"
-	adOK(t, e.send("POST", grant, `{"amount_tokens":1,"reason":"one"}`), 201)
-	adOK(t, e.send("POST", grant, `{"amount_tokens":2,"reason":"two"}`), 201)
-	adOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"a=b","weight":1}]}`), 200)
-	adOK(t, e.do("PUT", rulesPath, &other, true, `{"rules":[]}`), 200)
+	grant := "/api/v1/admin/users/" + uItoa(d.user.ID) + "/grants"
+	uWantOK(t, e.send("POST", grant, `{"amount_tokens":1,"reason":"one"}`), 201)
+	uWantOK(t, e.send("POST", grant, `{"amount_tokens":2,"reason":"two"}`), 201)
+	uWantOK(t, e.send("PUT", rulesPath, `{"rules":[{"selector":"a=b","weight":1}]}`), 200)
+	uWantOK(t, e.do("PUT", rulesPath, &other, true, `{"rules":[]}`), 200)
 
-	b := adOK(t, e.get("/api/v1/admin/audit"), 200)
-	adKeys(t, "response", b, "entries", "total", "limit", "offset")
-	if adNum(t, b, "total") != 4 || adNum(t, b, "limit") != 50 || adNum(t, b, "offset") != 0 {
+	b := uWantOK(t, e.get("/api/v1/admin/audit"), 200)
+	uWantKeys(t, "response", b, "entries", "total", "limit", "offset")
+	if uNum(t, b, "total") != 4 || uNum(t, b, "limit") != 50 || uNum(t, b, "offset") != 0 {
 		t.Errorf("response = %v", b)
 	}
 	es := adArr(t, b, "entries")
 	first := adObjOf(t, es[0])
-	adKeys(t, "entry", first, "id", "actor", "action", "target", "before", "after", "created_at")
-	adKeys(t, "actor", adObjOf(t, first["actor"]), "id", "name")
-	if first["action"] != "rules.replace" || adObjOf(t, first["actor"])["name"] != "User boss2" || adNum(t, adObjOf(t, first["actor"]), "id") != float64(other.user.ID) || first["target"] != "rules:rate" {
+	uWantKeys(t, "entry", first, "id", "actor", "action", "target", "before", "after", "created_at")
+	uWantKeys(t, "actor", adObjOf(t, first["actor"]), "id", "name")
+	if first["action"] != "rules.replace" || adObjOf(t, first["actor"])["name"] != "User boss2" || uNum(t, adObjOf(t, first["actor"]), "id") != float64(other.user.ID) || first["target"] != "rules:rate" {
 		t.Errorf("newest entry = %v", first)
 	}
 	if adObjOf(t, adObjOf(t, es[2])["after"]) == nil || adObjOf(t, es[3])["action"] != "ledger.grant" {
@@ -370,27 +383,27 @@ func TestADM3_AuditListFiltersAndPaging(t *testing.T) {
 	// Newest first by id.
 	prev := 1e18
 	for _, x := range es {
-		id := adNum(t, adObjOf(t, x), "id")
+		id := uNum(t, adObjOf(t, x), "id")
 		if id >= prev {
 			t.Errorf("not newest first: %v", es)
 		}
 		prev = id
 	}
-	g := adOK(t, e.get("/api/v1/admin/audit?action=ledger.grant"), 200)
-	if adNum(t, g, "total") != 2 || len(adArr(t, g, "entries")) != 2 {
+	g := uWantOK(t, e.get("/api/v1/admin/audit?action=ledger.grant"), 200)
+	if uNum(t, g, "total") != 2 || len(adArr(t, g, "entries")) != 2 {
 		t.Errorf("action filter: %v", g)
 	}
-	a := adOK(t, e.get("/api/v1/admin/audit?actor="+adItoa(other.user.ID)), 200)
-	if adNum(t, a, "total") != 1 {
+	a := uWantOK(t, e.get("/api/v1/admin/audit?actor="+uItoa(other.user.ID)), 200)
+	if uNum(t, a, "total") != 1 {
 		t.Errorf("actor filter: %v", a)
 	}
-	p := adOK(t, e.get("/api/v1/admin/audit?limit=1&offset=1"), 200)
+	p := uWantOK(t, e.get("/api/v1/admin/audit?limit=1&offset=1"), 200)
 	pe := adArr(t, p, "entries")
-	if adNum(t, p, "total") != 4 || len(pe) != 1 || adObjOf(t, pe[0])["action"] != "rules.replace" || adNum(t, p, "limit") != 1 || adNum(t, p, "offset") != 1 {
+	if uNum(t, p, "total") != 4 || len(pe) != 1 || adObjOf(t, pe[0])["action"] != "rules.replace" || uNum(t, p, "limit") != 1 || uNum(t, p, "offset") != 1 {
 		t.Errorf("paging: %v", p)
 	}
-	empty := adOK(t, e.get("/api/v1/admin/audit?actor=99999"), 200)
-	if adNum(t, empty, "total") != 0 || len(adArr(t, empty, "entries")) != 0 {
+	empty := uWantOK(t, e.get("/api/v1/admin/audit?actor=99999"), 200)
+	if uNum(t, empty, "total") != 0 || len(adArr(t, empty, "entries")) != 0 {
 		t.Errorf("empty: %v", empty)
 	}
 	for _, q := range []string{"limit=0", "limit=201", "limit=x", "offset=-1", "actor=abc"} {
@@ -400,9 +413,9 @@ func TestADM3_AuditListFiltersAndPaging(t *testing.T) {
 
 func TestADM3_SecretsNeverEnterAuditRows(t *testing.T) {
 	e := newAdEnv(t)
-	adOK(t, e.send("POST", setupPath, setupBody("lab-01", `{"password":"hunter2-secret","token":"abc123"}`, true)), 201)
-	adOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
-	rows, err := e.st.ListAudit(adBg, store.AuditFilter{Limit: 100})
+	uWantOK(t, e.send("POST", setupPath, setupBody("lab-01", `{"password":"hunter2-secret","token":"abc123"}`, true)), 201)
+	uWantOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
+	rows, err := e.st.ListAudit(uBg, store.AuditFilter{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +429,7 @@ func TestADM3_SecretsNeverEnterAuditRows(t *testing.T) {
 func TestEXT7_UserApprovedHookReceivesUser(t *testing.T) {
 	e := newAdEnv(t)
 	p := e.user("p", store.StatusPending)
-	adOK(t, e.send("PUT", "/api/v1/admin/users/"+adItoa(p.user.ID)+"/roles", `{"roles":["admin"]}`), 200)
+	uWantOK(t, e.send("PUT", "/api/v1/admin/users/"+uItoa(p.user.ID)+"/roles", `{"roles":["admin"]}`), 200)
 	e.flushEvents()
 	evs := e.hook.EventsOfType(hourglass.EventUserApproved)
 	if len(evs) != 1 || evs[0].User == nil || len(evs[0].User.Roles) != 1 || evs[0].User.Roles[0] != "admin" {

@@ -41,6 +41,7 @@ type Runtime struct {
 	PressureSource string
 	MeteringPolicy string
 	Hooks          []string
+	OIDCIssuer     string // the issuer URL (not a secret); empty when OIDC is not configured
 }
 
 // Deps is everything a handler may use. Handlers read it through the *API

@@ -954,8 +954,8 @@ export interface components {
                 deployed: number;
                 free: number;
             };
-            /** @description Text from the metering policy for the acquire dialog, e.g. `deployed or 2 h after acquire`. */
-            metering_description: string;
+            /** @description Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`. */
+            metering_description: string | null;
         };
         SetupInput: {
             /** @example lab-01 */
@@ -1125,8 +1125,8 @@ export interface components {
             metering_policy: {
                 /** @example default */
                 name: string;
-                /** @example deployed or 2 h after acquire */
-                description: string;
+                /** @description Always null; the extension interfaces have no describe method. */
+                description: string | null;
             };
             hooks: string[];
             oidc_issuer: string | null;

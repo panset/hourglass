@@ -75,6 +75,10 @@ type PollView struct {
 	RawPressure      float64
 	SmoothedPressure float64
 	Multiplier       float64
+	// Decisions is, per hold id, what the metering policy decided for each
+	// hold that was active at the latest successful poll (meter flag and the
+	// policy's own reason). A hold the poll has not seen has no entry.
+	Decisions map[int64]hourglass.Decision
 }
 
 // HoldsView adapts a PollView to holds.PollView, whose OK is a method (a
@@ -100,6 +104,10 @@ func (v PollView) clone() PollView {
 	out.LastSeen = make(map[string]time.Time, len(v.LastSeen))
 	for k, t := range v.LastSeen {
 		out.LastSeen[k] = t
+	}
+	out.Decisions = make(map[int64]hourglass.Decision, len(v.Decisions))
+	for k, d := range v.Decisions {
+		out.Decisions[k] = d
 	}
 	return out
 }
@@ -444,12 +452,15 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 	// 8. One transaction for everything this poll writes.
 	res := &result{
 		view: PollView{OK: true, Time: t, ProviderConfigured: c.d.Provider != nil, Resources: map[string]bool{},
-			RawPressure: raw, SmoothedPressure: smoothed, Multiplier: mult},
+			RawPressure: raw, SmoothedPressure: smoothed, Multiplier: mult, Decisions: map[int64]hourglass.Decision{}},
 		seen:  map[string]time.Time{},
 		holds: len(holds), interval: cfg.PollInterval,
 	}
 	for name := range reported {
 		res.view.Resources[name] = true
+	}
+	for _, h := range holds {
+		res.view.Decisions[h.row.ID] = h.decision
 	}
 	for _, si := range setups {
 		if allocationFor(si) != nil {

@@ -72,26 +72,26 @@ func TestADM1_ListUsersShapeOrderAndSummary(t *testing.T) {
 	bob := e.dev("bob") // will be overdrawn
 	e.user("boss", store.StatusActive, store.RoleAdmin)
 	// bob: -400 => balance -100 (300 allowance).
-	if _, err := e.led.Grant(adBg, e.admin.ID, bob.user.ID, -400_000, "correction"); err != nil {
+	if _, err := e.led.Grant(uBg, e.admin.ID, bob.user.ID, -400_000, "correction"); err != nil {
 		t.Fatal(err)
 	}
 	// amy burns: one debit entry.
-	if _, err := e.st.AppendLedger(adBg, store.LedgerEntry{UserID: amy.user.ID, Period: "2026-11", Type: "debit", AmountMT: -12_500}, "2026-11", e.clk.Now()); err != nil {
+	if _, err := e.st.AppendLedger(uBg, store.LedgerEntry{UserID: amy.user.ID, Period: "2026-11", Type: "debit", AmountMT: -12_500}, "2026-11", e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
 	// zed holds a metering setup of weight 2 at 2x => 4 tokens/hour.
 	sid := e.setup("lab-01", true, map[string]string{"tier": "big"})
-	if err := e.st.ReplaceRules(adBg, "rate", []store.Rule{{Selector: "tier=big", Value: 2}}, nil, e.clk.Now()); err != nil {
+	if err := e.st.ReplaceRules(uBg, "rate", []store.Rule{{Selector: "tier=big", Value: 2}}, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.st.PutSetting(adBg, "default_weight", "1", nil, e.clk.Now()); err != nil {
+	if err := e.st.PutSetting(uBg, "default_weight", "1", nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
 	h := e.hold(sid, zed.user.ID)
-	if _, err := e.st.SetMeteringStarted(adBg, h.ID, e.clk.Now()); err != nil {
+	if _, err := e.st.SetMeteringStarted(uBg, h.ID, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.st.InsertPressureSample(adBg, store.PressureSample{PolledAt: e.clk.Now(), Source: "x", Raw: 0.8, Smoothed: 0.8, Multiplier: 2}); err != nil {
+	if err := e.st.InsertPressureSample(uBg, store.PressureSample{PolledAt: e.clk.Now(), Source: "x", Raw: 0.8, Smoothed: 0.8, Multiplier: 2}); err != nil {
 		t.Fatal(err)
 	}
 	pend1 := e.user("p1", store.StatusPending)
@@ -99,16 +99,16 @@ func TestADM1_ListUsersShapeOrderAndSummary(t *testing.T) {
 	pend2 := e.user("p2", store.StatusPending)
 	_ = e.user("rej", store.StatusRejected)
 
-	body := adOK(t, e.get("/api/v1/admin/users"), 200)
-	adKeys(t, "response", body, "users", "pending_count", "summary", "period", "period_ends_at", "default_allowance_tokens")
-	if body["period"] != "2026-11" || body["period_ends_at"] != "2026-12-01T00:00:00.000Z" || adNum(t, body, "default_allowance_tokens") != 300 || adNum(t, body, "pending_count") != 2 {
+	body := uWantOK(t, e.get("/api/v1/admin/users"), 200)
+	uWantKeys(t, "response", body, "users", "pending_count", "summary", "period", "period_ends_at", "default_allowance_tokens")
+	if body["period"] != "2026-11" || body["period_ends_at"] != "2026-12-01T00:00:00.000Z" || uNum(t, body, "default_allowance_tokens") != 300 || uNum(t, body, "pending_count") != 2 {
 		t.Errorf("top-level fields: %v", body)
 	}
 	sum := adObjOf(t, body["summary"])
-	adKeys(t, "summary", sum, "user_count", "admin_count", "overdrawn_count", "debited_this_month_tokens", "granted_this_month_tokens", "grant_count_this_month")
+	uWantKeys(t, "summary", sum, "user_count", "admin_count", "overdrawn_count", "debited_this_month_tokens", "granted_this_month_tokens", "grant_count_this_month")
 	// active users: local admin, zed, amy, bob, boss, rej is rejected, 2 pending => 5 active.
-	if adNum(t, sum, "user_count") != 5 || adNum(t, sum, "admin_count") != 2 || adNum(t, sum, "overdrawn_count") != 1 ||
-		adNum(t, sum, "debited_this_month_tokens") != 12.5 || adNum(t, sum, "granted_this_month_tokens") != -400 || adNum(t, sum, "grant_count_this_month") != 1 {
+	if uNum(t, sum, "user_count") != 5 || uNum(t, sum, "admin_count") != 2 || uNum(t, sum, "overdrawn_count") != 1 ||
+		uNum(t, sum, "debited_this_month_tokens") != 12.5 || uNum(t, sum, "granted_this_month_tokens") != -400 || uNum(t, sum, "grant_count_this_month") != 1 {
 		t.Errorf("summary = %v", sum)
 	}
 	users := adArr(t, body, "users")
@@ -121,25 +121,25 @@ func TestADM1_ListUsersShapeOrderAndSummary(t *testing.T) {
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("order = %v, want %v", names, want)
 	}
-	byName := map[string]adObj{}
+	byName := map[string]ujobj{}
 	for _, u := range users {
 		m := adObjOf(t, u)
-		adKeys(t, "user", m, "id", "username", "email", "name", "auth_source", "status", "roles", "is_local_admin", "balance_tokens",
+		uWantKeys(t, "user", m, "id", "username", "email", "name", "auth_source", "status", "roles", "is_local_admin", "balance_tokens",
 			"overdrawn", "month_to_date_burn_tokens", "burn_per_hour_tokens", "active_holds", "first_sign_in_at", "last_login_at")
 		byName[m["name"].(string)] = m
 	}
-	if b := byName["User bob"]; b["overdrawn"] != true || adNum(t, b, "balance_tokens") != -100 {
+	if b := byName["User bob"]; b["overdrawn"] != true || uNum(t, b, "balance_tokens") != -100 {
 		t.Errorf("bob = %v", b)
 	}
-	if a := byName["User amy"]; adNum(t, a, "balance_tokens") != 287.5 || adNum(t, a, "month_to_date_burn_tokens") != 12.5 || a["overdrawn"] != false {
+	if a := byName["User amy"]; uNum(t, a, "balance_tokens") != 287.5 || uNum(t, a, "month_to_date_burn_tokens") != 12.5 || a["overdrawn"] != false {
 		t.Errorf("amy = %v", a)
 	}
 	z := byName["User zed"]
-	if adNum(t, z, "burn_per_hour_tokens") != 4 {
+	if uNum(t, z, "burn_per_hour_tokens") != 4 {
 		t.Errorf("zed burn = %v", z["burn_per_hour_tokens"])
 	}
 	ah := adArr(t, z, "active_holds")
-	if len(ah) != 1 || adObjOf(t, ah[0])["setup_name"] != "lab-01" || adNum(t, adObjOf(t, ah[0]), "hold_id") != float64(h.ID) {
+	if len(ah) != 1 || adObjOf(t, ah[0])["setup_name"] != "lab-01" || uNum(t, adObjOf(t, ah[0]), "hold_id") != float64(h.ID) {
 		t.Errorf("zed holds = %v", ah)
 	}
 	loc := byName["admin"]
@@ -151,15 +151,15 @@ func TestADM1_ListUsersShapeOrderAndSummary(t *testing.T) {
 	}
 
 	// status=pending: only pending users, oldest first; the totals ignore the filter.
-	pb := adOK(t, e.get("/api/v1/admin/users?status=pending"), 200)
+	pb := uWantOK(t, e.get("/api/v1/admin/users?status=pending"), 200)
 	pu := adArr(t, pb, "users")
-	if len(pu) != 2 || adNum(t, adObjOf(t, pu[0]), "id") != float64(pend1.user.ID) || adNum(t, adObjOf(t, pu[1]), "id") != float64(pend2.user.ID) {
+	if len(pu) != 2 || uNum(t, adObjOf(t, pu[0]), "id") != float64(pend1.user.ID) || uNum(t, adObjOf(t, pu[1]), "id") != float64(pend2.user.ID) {
 		t.Errorf("pending list = %v", pu)
 	}
-	if adNum(t, adObjOf(t, pb["summary"]), "user_count") != 5 || adNum(t, pb, "pending_count") != 2 {
+	if uNum(t, adObjOf(t, pb["summary"]), "user_count") != 5 || uNum(t, pb, "pending_count") != 2 {
 		t.Errorf("filtered response changed the totals: %v", pb)
 	}
-	rb := adOK(t, e.get("/api/v1/admin/users?status=rejected"), 200)
+	rb := uWantOK(t, e.get("/api/v1/admin/users?status=rejected"), 200)
 	if len(adArr(t, rb, "users")) != 1 {
 		t.Errorf("rejected list = %v", rb["users"])
 	}
@@ -171,11 +171,11 @@ func TestADM1_ListUsersShapeOrderAndSummary(t *testing.T) {
 func TestADM5_ListUsersPendingCountDrops(t *testing.T) {
 	e := newAdEnv(t)
 	p := e.user("p", store.StatusPending)
-	if n := adNum(t, adOK(t, e.get("/api/v1/admin/users"), 200), "pending_count"); n != 1 {
+	if n := uNum(t, uWantOK(t, e.get("/api/v1/admin/users"), 200), "pending_count"); n != 1 {
 		t.Fatalf("pending_count = %v", n)
 	}
-	adOK(t, e.send("POST", "/api/v1/admin/users/"+adItoa(p.user.ID)+"/reject", ""), 200)
-	if n := adNum(t, adOK(t, e.get("/api/v1/admin/users"), 200), "pending_count"); n != 0 {
+	uWantOK(t, e.send("POST", "/api/v1/admin/users/"+uItoa(p.user.ID)+"/reject", ""), 200)
+	if n := uNum(t, uWantOK(t, e.get("/api/v1/admin/users"), 200), "pending_count"); n != 0 {
 		t.Fatalf("pending_count after reject = %v", n)
 	}
 }
@@ -183,9 +183,9 @@ func TestADM5_ListUsersPendingCountDrops(t *testing.T) {
 func TestADM5_SetRolesApprovesCreditsOnceAndEmitsOnce(t *testing.T) {
 	e := newAdEnv(t)
 	p := e.user("p", store.StatusPending)
-	path := "/api/v1/admin/users/" + adItoa(p.user.ID) + "/roles"
-	u := adOK(t, e.send("PUT", path, `{"roles":["developer"]}`), 200)
-	if u["status"] != "active" || len(adArr(t, u, "roles")) != 1 || adNum(t, u, "balance_tokens") != 300 {
+	path := "/api/v1/admin/users/" + uItoa(p.user.ID) + "/roles"
+	u := uWantOK(t, e.send("PUT", path, `{"roles":["developer"]}`), 200)
+	if u["status"] != "active" || len(adArr(t, u, "roles")) != 1 || uNum(t, u, "balance_tokens") != 300 {
 		t.Fatalf("approved user = %v", u)
 	}
 	e.flushEvents()
@@ -197,28 +197,28 @@ func TestADM5_SetRolesApprovesCreditsOnceAndEmitsOnce(t *testing.T) {
 		t.Errorf("event user = %+v", ev.User)
 	}
 	// A second role does not credit again or re-emit.
-	u = adOK(t, e.send("PUT", path, `{"roles":["developer","admin"]}`), 200)
-	if adNum(t, u, "balance_tokens") != 300 {
+	u = uWantOK(t, e.send("PUT", path, `{"roles":["developer","admin"]}`), 200)
+	if uNum(t, u, "balance_tokens") != 300 {
 		t.Errorf("balance after second role = %v", u["balance_tokens"])
 	}
 	// Emptying the set returns the user to unassigned: still active, not pending.
-	u = adOK(t, e.send("PUT", path, `{"roles":[]}`), 200)
+	u = uWantOK(t, e.send("PUT", path, `{"roles":[]}`), 200)
 	if u["status"] != "active" || len(adArr(t, u, "roles")) != 0 {
 		t.Errorf("unassigned user = %v", u)
 	}
-	if n := adNum(t, adOK(t, e.get("/api/v1/admin/users?status=pending"), 200), "pending_count"); n != 0 {
+	if n := uNum(t, uWantOK(t, e.get("/api/v1/admin/users?status=pending"), 200), "pending_count"); n != 0 {
 		t.Errorf("unassigned user is pending again")
 	}
 	// Re-assigning in the same period neither credits again nor emits again.
-	u = adOK(t, e.send("PUT", path, `{"roles":["developer"]}`), 200)
-	if adNum(t, u, "balance_tokens") != 300 {
+	u = uWantOK(t, e.send("PUT", path, `{"roles":["developer"]}`), 200)
+	if uNum(t, u, "balance_tokens") != 300 {
 		t.Errorf("balance after re-assign = %v", u["balance_tokens"])
 	}
 	e.flushEvents()
 	if n := len(e.hook.EventsOfType(hourglass.EventUserApproved)); n != 1 {
 		t.Errorf("user.approved emitted %d times in total", n)
 	}
-	n, err := e.st.CountLedger(adBg, p.user.ID, "2026-11", "allowance")
+	n, err := e.st.CountLedger(uBg, p.user.ID, "2026-11", "allowance")
 	if err != nil || n != 1 {
 		t.Errorf("allowance entries = %d (%v)", n, err)
 	}
@@ -229,7 +229,7 @@ func TestADM5_SetRolesApprovesCreditsOnceAndEmitsOnce(t *testing.T) {
 	}
 	last := rows[3] // oldest = the approval
 	if !strings.Contains(last.BeforeJSON, `"status":"pending"`) || !strings.Contains(last.AfterJSON, `"status":"active"`) ||
-		!strings.Contains(last.AfterJSON, `"developer"`) || last.Target != "user:"+adItoa(p.user.ID) || *last.ActorID != e.admin.ID {
+		!strings.Contains(last.AfterJSON, `"developer"`) || last.Target != "user:"+uItoa(p.user.ID) || *last.ActorID != e.admin.ID {
 		t.Errorf("approval audit = %+v", last)
 	}
 }
@@ -237,18 +237,18 @@ func TestADM5_SetRolesApprovesCreditsOnceAndEmitsOnce(t *testing.T) {
 func TestADM5_RejectedUserCanBeApprovedLater(t *testing.T) {
 	e := newAdEnv(t)
 	p := e.user("p", store.StatusPending)
-	id := adItoa(p.user.ID)
-	r := adOK(t, e.send("POST", "/api/v1/admin/users/"+id+"/reject", ""), 200)
+	id := uItoa(p.user.ID)
+	r := uWantOK(t, e.send("POST", "/api/v1/admin/users/"+id+"/reject", ""), 200)
 	if r["status"] != "rejected" {
 		t.Fatalf("rejected user = %v", r)
 	}
 	// Rejecting again, or rejecting an active user, is a conflict.
 	adErr(t, e.send("POST", "/api/v1/admin/users/"+id+"/reject", ""), 409, "conflict")
-	if n := len(adArr(t, adOK(t, e.get("/api/v1/admin/users?status=pending"), 200), "users")); n != 0 {
+	if n := len(adArr(t, uWantOK(t, e.get("/api/v1/admin/users?status=pending"), 200), "users")); n != 0 {
 		t.Errorf("rejected user still pending")
 	}
-	u := adOK(t, e.send("PUT", "/api/v1/admin/users/"+id+"/roles", `{"roles":["developer"]}`), 200)
-	if u["status"] != "active" || adNum(t, u, "balance_tokens") != 300 {
+	u := uWantOK(t, e.send("PUT", "/api/v1/admin/users/"+id+"/roles", `{"roles":["developer"]}`), 200)
+	if u["status"] != "active" || uNum(t, u, "balance_tokens") != 300 {
 		t.Errorf("approved-after-reject = %v", u)
 	}
 	e.flushEvents()
@@ -267,7 +267,7 @@ func TestADM1_SetRolesRefusals(t *testing.T) {
 	other := e.user("boss2", store.StatusActive, store.RoleAdmin)
 	sid := e.setup("lab-01", true, nil)
 	e.hold(sid, holder.user.ID)
-	roles := func(id int64) string { return "/api/v1/admin/users/" + adItoa(id) + "/roles" }
+	roles := func(id int64) string { return "/api/v1/admin/users/" + uItoa(id) + "/roles" }
 
 	adErr(t, e.send("PUT", roles(holder.user.ID), `{"roles":[]}`), 409, "has_active_hold")
 	adErr(t, e.send("PUT", roles(e.admin.ID), `{"roles":["developer"]}`), 409, "local_admin_protected")
@@ -285,7 +285,7 @@ func TestADM1_SetRolesRefusals(t *testing.T) {
 	// Self-demotion: a second admin cannot drop their own admin role.
 	adErr(t, e.do("PUT", roles(other.user.ID), &other, true, `{"roles":["developer"]}`), 409, "self_demote")
 	// The local admin, though, may demote another admin.
-	u := adOK(t, e.send("PUT", roles(other.user.ID), `{"roles":["developer"]}`), 200)
+	u := uWantOK(t, e.send("PUT", roles(other.user.ID), `{"roles":["developer"]}`), 200)
 	if len(adArr(t, u, "roles")) != 1 {
 		t.Errorf("demoted = %v", u)
 	}
@@ -293,14 +293,14 @@ func TestADM1_SetRolesRefusals(t *testing.T) {
 	if rows := e.audits("user.roles"); len(rows) != 1 {
 		t.Errorf("audit rows after refusals = %d, want 1", len(rows))
 	}
-	if ids, _ := e.st.GetUserRoles(adBg, holder.user.ID); len(ids) != 1 {
+	if ids, _ := e.st.GetUserRoles(uBg, holder.user.ID); len(ids) != 1 {
 		t.Errorf("holder roles changed: %v", ids)
 	}
 }
 
 func TestADM1_RejectLocalAdminAndUnknown(t *testing.T) {
 	e := newAdEnv(t)
-	adErr(t, e.send("POST", "/api/v1/admin/users/"+adItoa(e.admin.ID)+"/reject", ""), 409, "local_admin_protected")
+	adErr(t, e.send("POST", "/api/v1/admin/users/"+uItoa(e.admin.ID)+"/reject", ""), 409, "local_admin_protected")
 	adErr(t, e.send("POST", "/api/v1/admin/users/9999/reject", ""), 404, "not_found")
 }
 
@@ -308,27 +308,27 @@ func TestLED4_GrantShapeAndRefusals(t *testing.T) {
 	e := newAdEnv(t)
 	d := e.dev("dev")
 	nobody := e.user("nobody", store.StatusActive)
-	path := func(id int64) string { return "/api/v1/admin/users/" + adItoa(id) + "/grants" }
+	path := func(id int64) string { return "/api/v1/admin/users/" + uItoa(id) + "/grants" }
 
 	rec := e.send("POST", path(d.user.ID), `{"amount_tokens":100.5,"reason":"soak test week"}`)
-	b := adOK(t, rec, 201)
-	adKeys(t, "response", b, "entry", "user")
+	b := uWantOK(t, rec, 201)
+	uWantKeys(t, "response", b, "entry", "user")
 	entry := adObjOf(t, b["entry"])
-	adKeys(t, "entry", entry, "id", "created_at", "period", "type", "amount_tokens", "balance_after_tokens", "multiplier", "setup_name", "hold_id", "actor_name", "reason")
-	if entry["type"] != "grant" || adNum(t, entry, "amount_tokens") != 100.5 || adNum(t, entry, "balance_after_tokens") != 400.5 ||
+	uWantKeys(t, "entry", entry, "id", "created_at", "period", "type", "amount_tokens", "balance_after_tokens", "multiplier", "setup_name", "hold_id", "actor_name", "reason")
+	if entry["type"] != "grant" || uNum(t, entry, "amount_tokens") != 100.5 || uNum(t, entry, "balance_after_tokens") != 400.5 ||
 		entry["period"] != "2026-11" || entry["reason"] != "soak test week" || entry["actor_name"] != "admin" || entry["multiplier"] != nil || entry["hold_id"] != nil {
 		t.Errorf("entry = %v", entry)
 	}
-	if u := adObjOf(t, b["user"]); adNum(t, u, "balance_tokens") != 400.5 {
+	if u := adObjOf(t, b["user"]); uNum(t, u, "balance_tokens") != 400.5 {
 		t.Errorf("user = %v", u)
 	}
 	// Negative grants correct mistakes.
-	b = adOK(t, e.send("POST", path(d.user.ID), `{"amount_tokens":-500,"reason":"fix"}`), 201)
-	if u := adObjOf(t, b["user"]); adNum(t, u, "balance_tokens") != -99.5 || u["overdrawn"] != true {
+	b = uWantOK(t, e.send("POST", path(d.user.ID), `{"amount_tokens":-500,"reason":"fix"}`), 201)
+	if u := adObjOf(t, b["user"]); uNum(t, u, "balance_tokens") != -99.5 || u["overdrawn"] != true {
 		t.Errorf("user after negative grant = %v", u)
 	}
 	rows := e.audits("ledger.grant")
-	if len(rows) != 2 || rows[0].Target != "user:"+adItoa(d.user.ID) || rows[0].BeforeJSON == "" || rows[0].AfterJSON == "" {
+	if len(rows) != 2 || rows[0].Target != "user:"+uItoa(d.user.ID) || rows[0].BeforeJSON == "" || rows[0].AfterJSON == "" {
 		t.Errorf("grant audit = %+v", rows)
 	}
 
@@ -356,16 +356,16 @@ func TestLED4_GrantShapeAndRefusals(t *testing.T) {
 func TestLED5_ResetShapeAndRefusals(t *testing.T) {
 	e := newAdEnv(t)
 	d := e.dev("dev")
-	if _, err := e.led.Grant(adBg, e.admin.ID, d.user.ID, -450_000, "debt"); err != nil {
+	if _, err := e.led.Grant(uBg, e.admin.ID, d.user.ID, -450_000, "debt"); err != nil {
 		t.Fatal(err)
 	}
-	path := func(id int64) string { return "/api/v1/admin/users/" + adItoa(id) + "/reset" }
-	b := adOK(t, e.send("POST", path(d.user.ID), `{"reason":"fresh start"}`), 201)
+	path := func(id int64) string { return "/api/v1/admin/users/" + uItoa(id) + "/reset" }
+	b := uWantOK(t, e.send("POST", path(d.user.ID), `{"reason":"fresh start"}`), 201)
 	entry := adObjOf(t, b["entry"])
-	if entry["type"] != "reset" || adNum(t, entry, "amount_tokens") != 450 || adNum(t, entry, "balance_after_tokens") != 300 || entry["reason"] != "fresh start" {
+	if entry["type"] != "reset" || uNum(t, entry, "amount_tokens") != 450 || uNum(t, entry, "balance_after_tokens") != 300 || entry["reason"] != "fresh start" {
 		t.Errorf("entry = %v", entry)
 	}
-	if u := adObjOf(t, b["user"]); adNum(t, u, "balance_tokens") != 300 || u["overdrawn"] != false {
+	if u := adObjOf(t, b["user"]); uNum(t, u, "balance_tokens") != 300 || u["overdrawn"] != false {
 		t.Errorf("user = %v", u)
 	}
 	if rows := e.audits("ledger.reset"); len(rows) != 1 {

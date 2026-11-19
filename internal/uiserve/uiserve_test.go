@@ -67,7 +67,8 @@ func TestUI3_AssetImmutableAndTypes(t *testing.T) {
 
 func TestUI3_ClientRouteFallsBackToIndex(t *testing.T) {
 	h := Handler(testFS())
-	for _, target := range []string{"/setups/123", "/admin/users", "/login"} {
+	// Paths whose last segment contains a dot are client routes too.
+	for _, target := range []string{"/setups/123", "/admin/users", "/login", "/users/jo.smith", "/setups/lab-01.example.org", "/missing.png", "/v1.2/notes.txt", "/index.htm"} {
 		rec := get(h, "GET", target)
 		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<!doctype html>") {
 			t.Errorf("%s: %d %q", target, rec.Code, rec.Body.String())
@@ -90,7 +91,7 @@ func TestUI3_ReservedPathsStayNotFound(t *testing.T) {
 
 func TestUI3_MissingAssetIsNotHTML(t *testing.T) {
 	h := Handler(testFS())
-	for _, target := range []string{"/assets/gone.js", "/missing.png"} {
+	for _, target := range []string{"/assets/gone.js", "/assets/sub/gone.png", "/assets/noextension", "/assets"} {
 		if rec := get(h, "GET", target); rec.Code != 404 {
 			t.Errorf("%s: %d", target, rec.Code)
 		}
@@ -137,7 +138,7 @@ func unescape(s string) string {
 
 func TestUI3_HeadersAndMethods(t *testing.T) {
 	h := Handler(testFS())
-	for _, target := range []string{"/", "/assets/app-abc.js", "/setups/1", "/nope.png"} {
+	for _, target := range []string{"/", "/assets/app-abc.js", "/setups/1", "/nope.png", "/assets/gone.js"} {
 		if got := get(h, "GET", target).Header().Get("X-Content-Type-Options"); got != "nosniff" {
 			t.Errorf("%s nosniff %q", target, got)
 		}

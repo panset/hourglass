@@ -191,7 +191,8 @@ export default function Page() {
         <Collector />
         <p className={shared.note}>
           Provider: {runtime.provider ?? "none"} · Pressure source: {runtime.pressure_source} · Metering policy:{" "}
-          {runtime.metering_policy.name} ({runtime.metering_policy.description}) · Hooks:{" "}
+          {runtime.metering_policy.name}
+          {runtime.metering_policy.description ? ` (${runtime.metering_policy.description})` : ""} · Hooks:{" "}
           {runtime.hooks.length > 0 ? runtime.hooks.join(", ") : "none"} · OIDC issuer: {runtime.oidc_issuer ?? "none"}.
           Extensions, connection settings and secrets come from the config file and are read-only here.
         </p>

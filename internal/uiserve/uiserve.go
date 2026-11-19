@@ -86,9 +86,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		// A missing file under assets/ or with an extension is a missing
-		// asset, not a client route: do not answer HTML for it.
-		if strings.HasPrefix(name, assetsPrefix) || path.Ext(name) != "" {
+		// A missing file under assets/ is a missing build asset: 404. Any
+		// other path is a client route, even when its last segment has a
+		// dot (a user name, a version, a host name).
+		if name == strings.TrimSuffix(assetsPrefix, "/") || strings.HasPrefix(name, assetsPrefix) {
 			http.NotFound(w, r)
 			return
 		}

@@ -84,8 +84,8 @@ func buildExtensions(cfg config.Config, defPressure, defPolicy string) (extensio
 	return x, nil
 }
 
-func (x extensions) runtime() api.Runtime {
-	rt := api.Runtime{PressureSource: x.pressure.Name(), MeteringPolicy: x.policy.Name(), Hooks: []string{}}
+func (x extensions) runtime(oidcIssuer string) api.Runtime {
+	rt := api.Runtime{OIDCIssuer: oidcIssuer, PressureSource: x.pressure.Name(), MeteringPolicy: x.policy.Name(), Hooks: []string{}}
 	if x.provider != nil {
 		rt.Provider = x.provider.Name()
 	}
@@ -205,7 +205,7 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	}
 	handler := api.New(api.Deps{
 		Store: st, Auth: authSvc, Holds: holdsSvc, Ledger: led, Events: disp, Collector: coll,
-		Clock: clock, Location: loc, Logger: log, Runtime: ext.runtime(),
+		Clock: clock, Location: loc, Logger: log, Runtime: ext.runtime(cfg.OIDC.Issuer),
 		Fallback: uiFallback(opts.UI, cfg.UI.Serve, log),
 	})
 

@@ -381,7 +381,7 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 	if s := l["summary"].(ujobj); s["enabled"].(float64) != 2 || s["deployed"].(float64) != 1 || s["free"].(float64) != 1 {
 		t.Errorf("summary %v", s)
 	}
-	if !strings.Contains(l["metering_description"].(string), "fake-policy") {
+	if l["metering_description"] != nil { // the policy interface has no describe method
 		t.Errorf("metering_description %v", l["metering_description"])
 	}
 	ss := l["setups"].([]any)
@@ -589,7 +589,7 @@ func TestHOLD2_ReleaseRules(t *testing.T) {
 		t.Errorf("forced release %v", h)
 	}
 	// Releasing again: it is gone.
-	uWantErr(t, e.post(path, &dev, ""), 404, "not_found")
+	uWantErr(t, e.post(path, &dev, ""), 409, "conflict") // HOLD-2: already released
 	// And the audit trail has it (ADM-3).
 	if as, err := e.st.ListAudit(uBg, store.AuditFilter{Action: "hold.force_release"}); err != nil || len(as) != 1 {
 		t.Errorf("audit %v %v", as, err)
@@ -608,5 +608,52 @@ func TestHOLD2_OwnerReleaseWithoutProviderOrBody(t *testing.T) {
 	h := uWantOK(t, e.post("/api/v1/holds/"+uItoa(hid)+"/release", &dev, ""), 200)
 	if h["active"] != false || h["forced"] != false || h["release_reason"] != nil {
 		t.Errorf("release %v", h)
+	}
+}
+
+// The metering reason is the policy's decision at the latest poll that saw
+// the hold; null before such a poll, and for a released hold.
+func TestMET_ReasonComesFromTheLastPollDecision(t *testing.T) {
+	e := defaultEnv(t)
+	e.policy.SetDefault(hourglass.Decision{Meter: false, Reason: "waiting for its own condition"})
+	sid := e.setup("lab-01", true, nil)
+	dev := e.dev("dev", store.RoleDeveloper)
+	hid := e.acquire(&dev, sid)
+	reasonOf := func() any {
+		t.Helper()
+		hs := uWantOK(t, e.get("/api/v1/me/holds", &dev), 200)["holds"].([]any)
+		return hs[0].(ujobj)["metering"].(ujobj)["reason"]
+	}
+	listReason := func() any {
+		t.Helper()
+		for _, s := range uWantOK(t, e.get("/api/v1/setups", &dev), 200)["setups"].([]any) {
+			if m, ok := s.(ujobj)["metering"].(ujobj); ok {
+				return m["reason"]
+			}
+		}
+		t.Fatal("no held setup in the list")
+		return nil
+	}
+	if r := reasonOf(); r != nil {
+		t.Errorf("before a poll: holds reason %v", r)
+	}
+	if r := listReason(); r != nil {
+		t.Errorf("before a poll: setups reason %v", r)
+	}
+	e.poll()
+	if r := reasonOf(); r != "waiting for its own condition" {
+		t.Errorf("after a poll: holds reason %v", r)
+	}
+	if r := listReason(); r != "waiting for its own condition" {
+		t.Errorf("after a poll: setups reason %v", r)
+	}
+	e.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "now charging"})
+	e.step(time.Minute)
+	if r := reasonOf(); r != "now charging" {
+		t.Errorf("next poll: holds reason %v", r)
+	}
+	h := uWantOK(t, e.post("/api/v1/holds/"+uItoa(hid)+"/release", &dev, ""), 200)
+	if m := h["metering"].(ujobj); m["reason"] != nil {
+		t.Errorf("released hold metering %v", m)
 	}
 }

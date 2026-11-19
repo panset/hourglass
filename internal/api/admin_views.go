@@ -291,21 +291,18 @@ func (a *API) setupView(ctx context.Context, s *adminState, x store.Setup, calle
 	if err != nil {
 		resName = ""
 	}
-	labels := x.Labels
-	if labels == nil {
-		labels = map[string]string{}
-	}
+	labels := labelsNonNil(x.Labels)
 	v := adminSetupView{
 		ID: x.ID, Name: x.Name, Labels: labels, Weight: w, State: "free",
 		Cost:    costView{Now: tokens(metering.HourlyCostMT(w, s.multiplier)), AtPeak: tokens(metering.HourlyCostMT(w, s.cfg.Bands.Max()))},
 		Details: json.RawMessage(x.DetailsJSON),
-		Admin:   &setupAdminView{Enabled: x.Enabled, ResourceName: resName, ResourceNameOverride: strPtr(x.ResourceNameOverride), MatchedRuleSelector: strPtr(sel)},
+		Admin:   &setupAdminView{Enabled: x.Enabled, ResourceName: resName, ResourceNameOverride: nullIfEmpty(x.ResourceNameOverride), MatchedRuleSelector: nullIfEmpty(sel)},
 	}
 	if resName != "" && s.poll.OK {
 		v.Deployed = s.poll.Reported(resName)
 	}
 	if t, ok := s.poll.LastSeen[x.Name]; ok {
-		v.Admin.LastSeenAt = strPtr(ts(t))
+		v.Admin.LastSeenAt = nullIfEmpty(ts(t))
 	}
 	if !x.Enabled {
 		v.State = "disabled"
@@ -324,12 +321,12 @@ func (a *API) setupView(ctx context.Context, s *adminState, x store.Setup, calle
 	bal, _ := s.balance(h.UserID)
 	v.Holder = &holderView{UserID: h.UserID, HoldID: h.ID, Name: hu.Name, BalanceTokens: tokens(bal),
 		Overdrawn: bal <= 0, IsYou: h.UserID == callerID}
-	v.HeldSince = strPtr(ts(h.AcquiredAt))
-	reason, err := a.d.Store.LatestUsageReason(ctx, h.ID)
-	if err != nil {
-		return v, err
+	v.HeldSince = nullIfEmpty(ts(h.AcquiredAt))
+	var reason string
+	if dec, ok := s.poll.Decisions[h.ID]; ok {
+		reason = dec.Reason // the policy's own words from the latest poll that saw the hold
 	}
-	v.Metering = &meteringView{Active: h.MeteringStartedAt != nil, StartedAt: tsPtr(h.MeteringStartedAt), Reason: strPtr(reason)}
+	v.Metering = &meteringView{Active: h.MeteringStartedAt != nil, StartedAt: tsPtr(h.MeteringStartedAt), Reason: nullIfEmpty(reason)}
 	return v, nil
 }
 
@@ -369,8 +366,6 @@ func writeSetupJSON(w http.ResponseWriter, status int, v adminSetupView) error {
 	_, _ = w.Write(append(b, '\n'))
 	return nil
 }
-
-func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }
 
 // pollView is the collector's last successful poll; the zero value (OK
 // false) when no collector is wired.

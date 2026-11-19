@@ -32,6 +32,7 @@ const (
 	CodeHoldLimit          = "hold_limit"
 	CodeHookVeto           = "hook_veto"
 	CodeStillDeployed      = "still_deployed"
+	CodeConflict           = "conflict" // releasing a hold that is already released
 )
 
 // MessageStillDeployed is the refusal shown when a release needs teardown first.
@@ -271,7 +272,7 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 	}
 
 	h, err := st.GetHold(ctx, holdID)
-	if errors.Is(err, store.ErrNotFound) || (err == nil && h.ReleasedAt != nil) {
+	if errors.Is(err, store.ErrNotFound) {
 		return Hold{}, refuse(CodeNotFound, "Hold not found.")
 	}
 	if err != nil {
@@ -280,6 +281,9 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 	owner := h.UserID == actorID
 	if (!owner && !(isAdmin && opts.Force)) || (opts.Force && !isAdmin) {
 		return Hold{}, refuse(CodeForbidden, "You are not allowed to release this hold.")
+	}
+	if h.ReleasedAt != nil { // after the permission check, so a stranger learns nothing about the hold
+		return Hold{}, refuse(CodeConflict, "This hold is already released.")
 	}
 	reason := strings.TrimSpace(opts.Reason)
 	if opts.Force && reason == "" {
@@ -328,7 +332,7 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 		return err
 	})
 	if errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) {
-		return Hold{}, refuse(CodeNotFound, "Hold not found.") // released concurrently
+		return Hold{}, refuse(CodeConflict, "This hold is already released.") // released concurrently
 	}
 	if err != nil {
 		return Hold{}, err

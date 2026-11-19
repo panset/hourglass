@@ -68,32 +68,6 @@ func utcTimePtr(t *time.Time) *time.Time {
 	return &u
 }
 
-// userDisplayName is the name shown for a user: name, else username, else email.
-func userDisplayName(u store.User) string {
-	switch {
-	case u.Name != "":
-		return u.Name
-	case u.Username != "":
-		return u.Username
-	default:
-		return u.Email
-	}
-}
-
-func nullIfEmpty(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-func labelsNonNil(m map[string]string) map[string]string {
-	if m == nil {
-		return map[string]string{}
-	}
-	return m
-}
-
 // lab is the per-request view of the lab every user route needs: settings,
 // rate rules, the latest pressure sample and the collector's poll view.
 type lab struct {
@@ -216,10 +190,13 @@ func (l *lab) holdWeight(h store.Hold, s store.Setup, d *holdData) (float64, err
 	return w, err
 }
 
-func meteringOf(h store.Hold, d *holdData) meteringJSON {
+// meteringOf is a hold's metering state. The reason is the metering policy's
+// own words from the latest successful poll that saw the hold; null before
+// such a poll (and for a released hold).
+func meteringOf(h store.Hold, view collector.PollView) meteringJSON {
 	m := meteringJSON{Active: h.MeteringStartedAt != nil, StartedAt: utcTimePtr(h.MeteringStartedAt)}
-	if ls, ok := d.samples[h.ID]; ok {
-		m.Reason = nullIfEmpty(ls.Reason)
+	if dec, ok := view.Decisions[h.ID]; ok && h.ReleasedAt == nil {
+		m.Reason = nullIfEmpty(dec.Reason)
 	}
 	return m
 }
@@ -242,7 +219,7 @@ func (a *API) holdViews(ctx context.Context, l *lab, holds []store.Hold) ([]hold
 			ID: h.ID, SetupID: h.SetupID, SetupName: s.Name, SetupLabels: labelsNonNil(s.Labels), UserID: h.UserID,
 			Active: h.ReleasedAt == nil, Weight: w, AcquiredAt: utcTime(h.AcquiredAt),
 			MeteringStartedAt: utcTimePtr(h.MeteringStartedAt), DeployedAt: utcTimePtr(h.DeployedAt), ReleasedAt: utcTimePtr(h.ReleasedAt),
-			Metering:      meteringOf(h, d),
+			Metering:      meteringOf(h, l.view),
 			ChargedTokens: tokens(d.charges[h.ID]),
 			ReleaseReason: nullIfEmpty(h.ReleaseReason),
 		}

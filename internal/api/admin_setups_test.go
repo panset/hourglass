@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
 )
 
 const setupPath = "/api/v1/admin/setups"
@@ -19,13 +20,13 @@ func setupBody(name, details string, enabled bool) string {
 
 func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
 	e := newAdEnv(t)
-	if err := e.st.ReplaceRules(adBg, "rate", []store.Rule{{Selector: "tier=a", Value: 2}}, nil, e.clk.Now()); err != nil {
+	if err := e.st.ReplaceRules(uBg, "rate", []store.Rule{{Selector: "tier=a", Value: 2}}, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
 	rec := e.send("POST", setupPath, setupBody("lab-01", `{"note":"opaque"}`, true))
-	s := adOK(t, rec, 201)
-	adKeys(t, "setup", s, "id", "name", "labels", "weight", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
-	if s["name"] != "lab-01" || adNum(t, s, "weight") != 2 || s["state"] != "free" || s["holder"] != nil || s["held_since"] != nil ||
+	s := uWantOK(t, rec, 201)
+	uWantKeys(t, "setup", s, "id", "name", "labels", "weight", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
+	if s["name"] != "lab-01" || uNum(t, s, "weight") != 2 || s["state"] != "free" || s["holder"] != nil || s["held_since"] != nil ||
 		s["deployed"] != false || s["metering"] != nil {
 		t.Errorf("setup = %v", s)
 	}
@@ -33,12 +34,12 @@ func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
 		t.Errorf("labels = %v", l)
 	}
 	cost := adObjOf(t, s["cost_per_hour_tokens"])
-	adKeys(t, "cost", cost, "now", "at_peak")
-	if adNum(t, cost, "now") != 0 || adNum(t, cost, "at_peak") != 6 { // no pressure sample yet: base band 0x; peak 3x of weight 2
+	uWantKeys(t, "cost", cost, "now", "at_peak")
+	if uNum(t, cost, "now") != 0 || uNum(t, cost, "at_peak") != 6 { // no pressure sample yet: base band 0x; peak 3x of weight 2
 		t.Errorf("cost = %v", cost)
 	}
 	ad := adObjOf(t, s["admin"])
-	adKeys(t, "admin", ad, "enabled", "resource_name", "resource_name_override", "last_seen_at", "matched_rule_selector")
+	uWantKeys(t, "admin", ad, "enabled", "resource_name", "resource_name_override", "last_seen_at", "matched_rule_selector")
 	if ad["enabled"] != true || ad["resource_name"] != "lab-01" || ad["resource_name_override"] != nil || ad["last_seen_at"] != nil || ad["matched_rule_selector"] != "tier=a" {
 		t.Errorf("admin = %v", ad)
 	}
@@ -46,7 +47,7 @@ func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
 		t.Errorf("details = %v", d)
 	}
 	rows := e.audits("setup.create")
-	if len(rows) != 1 || rows[0].BeforeJSON != "" || !strings.Contains(rows[0].AfterJSON, `"name":"lab-01"`) || rows[0].Target != "setup:"+adItoa(int64(s["id"].(float64))) {
+	if len(rows) != 1 || rows[0].BeforeJSON != "" || !strings.Contains(rows[0].AfterJSON, `"name":"lab-01"`) || rows[0].Target != "setup:"+uItoa(int64(s["id"].(float64))) {
 		t.Errorf("audit = %+v", rows)
 	}
 }
@@ -63,14 +64,14 @@ func TestSET2_DetailsStoredAndReturnedByteForByte(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"details":`+details) {
 		t.Errorf("create response does not carry details verbatim: %s", rec.Body)
 	}
-	id := int64(adDecode(t, rec)["id"].(float64))
-	x, err := e.st.GetSetup(adBg, id)
+	id := int64(uObj(t, rec)["id"].(float64))
+	x, err := e.st.GetSetup(uBg, id)
 	if err != nil || x.DetailsJSON != details {
 		t.Fatalf("stored details = %q (%v)", x.DetailsJSON, err)
 	}
 	// The same on update, and the audit row records only a size and a hash.
 	details2 := "[\n  \"<>\",   null ]"
-	rec = e.send("PUT", setupPath+"/"+adItoa(id), setupBody("lab-01", details2, true))
+	rec = e.send("PUT", setupPath+"/"+uItoa(id), setupBody("lab-01", details2, true))
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"details":`+details2) {
 		t.Errorf("update response: %d %s", rec.Code, rec.Body)
 	}
@@ -81,7 +82,7 @@ func TestSET2_DetailsStoredAndReturnedByteForByte(t *testing.T) {
 	}
 	// A scalar and null are well-formed JSON too.
 	for _, d := range []string{`"text"`, `42`, `null`, `true`} {
-		rec = e.send("PUT", setupPath+"/"+adItoa(id), setupBody("lab-01", d, true))
+		rec = e.send("PUT", setupPath+"/"+uItoa(id), setupBody("lab-01", d, true))
 		if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"details":`+d+`,`) && !strings.Contains(rec.Body.String(), `"details":`+d+`}`) {
 			t.Errorf("details %s: %d %s", d, rec.Code, rec.Body)
 		}
@@ -95,7 +96,7 @@ func TestSET2_DetailsValidation(t *testing.T) {
 		t.Errorf("oversized field = %q", f)
 	}
 	exact := `"` + strings.Repeat("x", maxDetailsBytes-2) + `"`
-	adOK(t, e.send("POST", setupPath, setupBody("b", exact, true)), 201)
+	uWantOK(t, e.send("POST", setupPath, setupBody("b", exact, true)), 201)
 	if f, _ := adErr(t, e.send("POST", setupPath, `{"name":"c","labels":{},"enabled":true}`), 400, "validation"); f != "details" {
 		t.Errorf("missing details field = %q", f)
 	}
@@ -132,26 +133,26 @@ func TestSET3_LabelAndFieldValidation(t *testing.T) {
 
 func TestSET4_ResourceNameFromTemplateAndOverride(t *testing.T) {
 	e := newAdEnv(t)
-	if err := e.st.PutSetting(adBg, "resource_name_template", `"{{.SetupName}}_RP"`, nil, e.clk.Now()); err != nil {
+	if err := e.st.PutSetting(uBg, "resource_name_template", `"{{.SetupName}}_RP"`, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
-	s := adOK(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 201)
+	s := uWantOK(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 201)
 	if adObjOf(t, s["admin"])["resource_name"] != "lab-01_RP" {
 		t.Errorf("admin = %v", s["admin"])
 	}
 	body := `{"name":"lab-02","labels":{},"details":{},"enabled":true,"resource_name_override":"  pool-7 "}`
-	s = adOK(t, e.send("POST", setupPath, body), 201)
+	s = uWantOK(t, e.send("POST", setupPath, body), 201)
 	ad := adObjOf(t, s["admin"])
 	if ad["resource_name"] != "pool-7" || ad["resource_name_override"] != "pool-7" {
 		t.Errorf("admin = %v", ad)
 	}
 	// A blank override falls back to the template.
-	s = adOK(t, e.send("POST", setupPath, `{"name":"lab-03","labels":{},"details":{},"enabled":true,"resource_name_override":""}`), 201)
+	s = uWantOK(t, e.send("POST", setupPath, `{"name":"lab-03","labels":{},"details":{},"enabled":true,"resource_name_override":""}`), 201)
 	if ad := adObjOf(t, s["admin"]); ad["resource_name"] != "lab-03_RP" || ad["resource_name_override"] != nil {
 		t.Errorf("admin = %v", ad)
 	}
 	// A template that renders empty for this setup is refused.
-	if err := e.st.PutSetting(adBg, "resource_name_template", `"{{index .Labels \"missing\"}}"`, nil, e.clk.Now()); err != nil {
+	if err := e.st.PutSetting(uBg, "resource_name_template", `"{{index .Labels \"missing\"}}"`, nil, e.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
 	adErr(t, e.send("POST", setupPath, setupBody("lab-04", `{}`, true)), 400, "validation")
@@ -159,13 +160,13 @@ func TestSET4_ResourceNameFromTemplateAndOverride(t *testing.T) {
 
 func TestSET1_DuplicateNameIsConflict(t *testing.T) {
 	e := newAdEnv(t)
-	adOK(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 201)
+	uWantOK(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 201)
 	_, msg := adErr(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 409, "conflict")
 	if !strings.Contains(msg, "name") {
 		t.Errorf("message = %q", msg)
 	}
-	other := adOK(t, e.send("POST", setupPath, setupBody("lab-02", `{}`, true)), 201)
-	adErr(t, e.send("PUT", setupPath+"/"+adItoa(int64(other["id"].(float64))), setupBody("lab-01", `{}`, true)), 409, "conflict")
+	other := uWantOK(t, e.send("POST", setupPath, setupBody("lab-02", `{}`, true)), 201)
+	adErr(t, e.send("PUT", setupPath+"/"+uItoa(int64(other["id"].(float64))), setupBody("lab-01", `{}`, true)), 409, "conflict")
 	if n := len(e.audits("setup.create")); n != 2 {
 		t.Errorf("audit rows = %d", n)
 	}
@@ -177,9 +178,9 @@ func TestSET1_DuplicateNameIsConflict(t *testing.T) {
 func TestSET1_UpdateSetup(t *testing.T) {
 	e := newAdEnv(t)
 	id := e.setup("lab-01", true, map[string]string{"old": "1"})
-	path := setupPath + "/" + adItoa(id)
+	path := setupPath + "/" + uItoa(id)
 	body := `{"name":"renamed","labels":{"new":"2"},"details":{"x":[1]},"enabled":false,"resource_name_override":"pool"}`
-	s := adOK(t, e.send("PUT", path, body), 200)
+	s := uWantOK(t, e.send("PUT", path, body), 200)
 	if s["name"] != "renamed" || s["state"] != "disabled" || adObjOf(t, s["labels"])["new"] != "2" || len(adObjOf(t, s["labels"])) != 1 {
 		t.Errorf("setup = %v", s)
 	}
@@ -199,33 +200,42 @@ func TestSET5_HeldSetupCannotBeDisabledOrDeleted(t *testing.T) {
 	d := e.dev("dev")
 	id := e.setup("lab-01", true, nil)
 	h := e.hold(id, d.user.ID)
-	path := setupPath + "/" + adItoa(id)
+	path := setupPath + "/" + uItoa(id)
 
 	adErr(t, e.send("PUT", path, setupBody("lab-01", `{}`, false)), 409, "has_active_hold")
 	adErr(t, e.send("DELETE", path, ""), 409, "has_active_hold")
 	// Editing a held setup without disabling it is allowed, and the response shows the hold.
-	s := adOK(t, e.send("PUT", path, setupBody("lab-01", `{"edited":true}`, true)), 200)
+	s := uWantOK(t, e.send("PUT", path, setupBody("lab-01", `{"edited":true}`, true)), 200)
 	if s["state"] != "held" {
 		t.Errorf("state = %v", s["state"])
 	}
 	holder := adObjOf(t, s["holder"])
-	adKeys(t, "holder", holder, "user_id", "hold_id", "name", "balance_tokens", "overdrawn", "is_you")
-	if adNum(t, holder, "hold_id") != float64(h.ID) || holder["name"] != "User dev" || adNum(t, holder, "balance_tokens") != 300 || holder["is_you"] != false || s["held_since"] == nil {
+	uWantKeys(t, "holder", holder, "user_id", "hold_id", "name", "balance_tokens", "overdrawn", "is_you")
+	if uNum(t, holder, "hold_id") != float64(h.ID) || holder["name"] != "User dev" || uNum(t, holder, "balance_tokens") != 300 || holder["is_you"] != false || s["held_since"] == nil {
 		t.Errorf("holder = %v", holder)
 	}
-	if m := adObjOf(t, s["metering"]); m["active"] != false || m["expected_start_at"] != nil {
-		t.Errorf("metering = %v", m)
+	if m := adObjOf(t, s["metering"]); m["active"] != false || m["expected_start_at"] != nil || m["reason"] != nil {
+		t.Errorf("metering = %v", m) // no poll has seen the hold: no reason
 	}
-	// After the hold ends the setup may be disabled, but not deleted: it has history.
-	if err := e.st.ReleaseHold(adBg, h.ID, &d.user.ID, "", e.clk.Now()); err != nil {
+	// Once a poll has seen it, the reason is the policy's own words.
+	e.policy.SetDefault(hourglass.Decision{Meter: false, Reason: "waiting for the policy's own condition"})
+	if err := e.col.RunOnce(uBg); err != nil {
 		t.Fatal(err)
 	}
-	adOK(t, e.send("PUT", path, setupBody("lab-01", `{}`, false)), 200)
+	s = uWantOK(t, e.send("PUT", path, setupBody("lab-01", `{"edited":true}`, true)), 200)
+	if m := adObjOf(t, s["metering"]); m["active"] != false || m["reason"] != "waiting for the policy's own condition" {
+		t.Errorf("metering after a poll = %v", m)
+	}
+	// After the hold ends the setup may be disabled, but not deleted: it has history.
+	if err := e.st.ReleaseHold(uBg, h.ID, &d.user.ID, "", e.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	uWantOK(t, e.send("PUT", path, setupBody("lab-01", `{}`, false)), 200)
 	_, msg := adErr(t, e.send("DELETE", path, ""), 409, "conflict")
 	if !strings.Contains(msg, "disable") {
 		t.Errorf("message does not point to disabling: %q", msg)
 	}
-	if _, err := e.st.GetSetup(adBg, id); err != nil {
+	if _, err := e.st.GetSetup(uBg, id); err != nil {
 		t.Errorf("setup vanished: %v", err)
 	}
 	if n := len(e.audits("setup.delete")); n != 0 {
@@ -236,18 +246,18 @@ func TestSET5_HeldSetupCannotBeDisabledOrDeleted(t *testing.T) {
 func TestSET1_DeleteSetup(t *testing.T) {
 	e := newAdEnv(t)
 	id := e.setup("lab-01", true, map[string]string{"k": "v"})
-	rec := e.send("DELETE", setupPath+"/"+adItoa(id), "")
+	rec := e.send("DELETE", setupPath+"/"+uItoa(id), "")
 	if rec.Code != 204 || rec.Body.Len() != 0 {
 		t.Fatalf("delete: %d %q", rec.Code, rec.Body)
 	}
-	if _, err := e.st.GetSetup(adBg, id); err == nil {
+	if _, err := e.st.GetSetup(uBg, id); err == nil {
 		t.Error("setup still exists")
 	}
 	rows := e.audits("setup.delete")
 	if len(rows) != 1 || rows[0].AfterJSON != "" || !strings.Contains(rows[0].BeforeJSON, "lab-01") {
 		t.Errorf("audit = %+v", rows)
 	}
-	adErr(t, e.send("DELETE", setupPath+"/"+adItoa(id), ""), 404, "not_found")
+	adErr(t, e.send("DELETE", setupPath+"/"+uItoa(id), ""), 404, "not_found")
 }
 
 func TestSET1_AdminViewShowsDeployedAndLastSeen(t *testing.T) {
@@ -255,14 +265,14 @@ func TestSET1_AdminViewShowsDeployedAndLastSeen(t *testing.T) {
 	id := e.setup("lab-01", true, nil)
 	_ = id
 	e.prov.SetAllocations(hourglassAlloc("lab-01"))
-	if err := e.col.RunOnce(adBg); err != nil {
+	if err := e.col.RunOnce(uBg); err != nil {
 		t.Fatal(err)
 	}
-	s := adOK(t, e.send("PUT", setupPath+"/"+adItoa(id), setupBody("lab-01", `{}`, true)), 200)
+	s := uWantOK(t, e.send("PUT", setupPath+"/"+uItoa(id), setupBody("lab-01", `{}`, true)), 200)
 	if s["deployed"] != true || adObjOf(t, s["admin"])["last_seen_at"] == nil {
 		t.Errorf("setup = %v", s)
 	}
-	if adNum(t, adObjOf(t, s["cost_per_hour_tokens"]), "now") != 2 { // 0.8 pressure = 2x, weight 1
+	if uNum(t, adObjOf(t, s["cost_per_hour_tokens"]), "now") != 2 { // 0.8 pressure = 2x, weight 1
 		t.Errorf("cost = %v", s["cost_per_hour_tokens"])
 	}
 }

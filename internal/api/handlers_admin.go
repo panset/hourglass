@@ -364,7 +364,7 @@ func (a *API) writeBalanceChange(w http.ResponseWriter, r *http.Request, caller 
 		Entry entry         `json:"entry"`
 		User  adminUserView `json:"user"`
 	}{entry{ID: e.ID, CreatedAt: ts(e.CreatedAt), Period: e.Period, Type: e.Type, Amount: tokens(e.AmountMT),
-		BalanceAfter: tokens(after), HoldID: e.HoldID, ActorName: strPtr(caller.Name), Reason: strPtr(e.Reason)}, uv})
+		BalanceAfter: tokens(after), HoldID: e.HoldID, ActorName: nullIfEmpty(caller.Name), Reason: nullIfEmpty(e.Reason)}, uv})
 }
 
 func (a *API) writeUser(w http.ResponseWriter, r *http.Request, status int, id int64) {
@@ -493,7 +493,7 @@ func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInpu
 func setupAudit(s store.Setup) map[string]any {
 	sum := sha256.Sum256([]byte(s.DetailsJSON))
 	return map[string]any{"name": s.Name, "labels": s.Labels, "enabled": s.Enabled,
-		"resource_name_override": strPtr(s.ResourceNameOverride),
+		"resource_name_override": nullIfEmpty(s.ResourceNameOverride),
 		"details_bytes":          len(s.DetailsJSON), "details_sha256": hex.EncodeToString(sum[:])}
 }
 
@@ -797,9 +797,11 @@ type runtimeView struct {
 	Timezone       string     `json:"timezone"`
 }
 
+// policyView names the metering policy. The extension interfaces have no
+// describe method, so description is always null.
 type policyView struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
 }
 
 func (a *API) runtimeView() runtimeView {
@@ -808,8 +810,8 @@ func (a *API) runtimeView() runtimeView {
 	if hooks == nil {
 		hooks = []string{}
 	}
-	return runtimeView{Provider: strPtr(rt.Provider), PressureSource: rt.PressureSource,
-		MeteringPolicy: policyView{Name: rt.MeteringPolicy}, Hooks: hooks, Timezone: a.d.Location.String()}
+	return runtimeView{Provider: nullIfEmpty(rt.Provider), PressureSource: rt.PressureSource,
+		MeteringPolicy: policyView{Name: rt.MeteringPolicy}, Hooks: hooks, OIDCIssuer: nullIfEmpty(rt.OIDCIssuer), Timezone: a.d.Location.String()}
 }
 
 func (a *API) writeSettings(w http.ResponseWriter, r *http.Request) {

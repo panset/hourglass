@@ -435,3 +435,18 @@ func TestUI3_UIFallbackModes(t *testing.T) {
 		t.Errorf("want one log line per no-UI case, got %d: %s", n, buf.String())
 	}
 }
+
+// The settings page's runtime block gets the OIDC issuer (not a secret) from
+// the config; empty means OIDC is not configured.
+func TestADM2_RuntimeCarriesOIDCIssuerAndNames(t *testing.T) {
+	x := extensions{pressure: hourglasstest.NewFakePressureSource(), policy: hourglasstest.NewFakePolicy(),
+		hooks: []hourglass.Hook{hourglasstest.NewFakeHook()}}
+	rt := x.runtime("https://issuer.example")
+	if rt.OIDCIssuer != "https://issuer.example" || rt.PressureSource != x.pressure.Name() || rt.MeteringPolicy != x.policy.Name() ||
+		len(rt.Hooks) != 1 || rt.Provider != "" {
+		t.Errorf("runtime %+v", rt)
+	}
+	if rt := x.runtime(""); rt.OIDCIssuer != "" {
+		t.Errorf("no OIDC: issuer %q", rt.OIDCIssuer)
+	}
+}

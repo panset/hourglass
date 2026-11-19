@@ -73,13 +73,6 @@ func tsPtr(t *time.Time) *string {
 	return &s
 }
 
-func strPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
 // putAudit appends one audit row inside the caller's transaction. before and
 // after are marshalled as JSON; nil means null. Callers pass only values that
 // are safe to store (never secrets, never setup details).

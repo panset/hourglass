@@ -4,91 +4,29 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
-	"io"
-	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/panset/hourglass/internal/auth"
-	"github.com/panset/hourglass/internal/collector"
-	"github.com/panset/hourglass/internal/events"
-	"github.com/panset/hourglass/internal/holds"
-	"github.com/panset/hourglass/internal/ledger"
 	"github.com/panset/hourglass/internal/store"
 	"github.com/panset/hourglass/pkg/hourglass"
-	"github.com/panset/hourglass/pkg/hourglasstest"
 )
 
 var uBg = context.Background()
 
-// uenv is a full backend (real store, ledger, holds, collector and router)
-// with fakes only for the extensions and the clock.
-type uenv struct {
-	t        *testing.T
-	st       *store.Store
-	clk      *hourglasstest.FakeClock
-	auth     *auth.Service
-	led      *ledger.Service
-	col      *collector.Collector
-	prov     *hourglasstest.FakeProvider
-	pressure *hourglasstest.FakePressureSource
-	policy   *hourglasstest.FakePolicy
-	hook     *hourglasstest.FakeHook
-	h        http.Handler
-	admin    store.User
-}
+// uenv is the environment of the user-route tests: the backend with a clock,
+// a metering policy that always meters, and the pressure and policy names set.
+type uenv struct{ *backend }
 
 func newUserEnv(t *testing.T, start time.Time, loc *time.Location) *uenv {
 	t.Helper()
-	if loc == nil {
-		loc = time.UTC
-	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "user.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	svc, err := auth.New(auth.Config{SessionKey: strings.Repeat("k", 40)}, st, nil, log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	admin, err := auth.EnsureLocalAdmin(uBg, st, "correct horse battery staple", log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.SetPassword(uBg, admin.ID, admin.PasswordHash, false); err != nil {
-		t.Fatal(err)
-	}
-	e := &uenv{t: t, st: st, clk: hourglasstest.NewFakeClock(start), auth: svc, admin: admin,
-		prov: hourglasstest.NewFakeProvider(), pressure: hourglasstest.NewFakePressureSource(),
-		policy: hourglasstest.NewFakePolicy(), hook: hourglasstest.NewFakeHook()}
-	e.pressure.SetValue(0.8) // 2x with the default bands
-	e.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "test reason"})
-	ev := events.New([]hourglass.Hook{e.hook}, st, events.WithTimeout(time.Second))
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(uBg, 5*time.Second)
-		defer cancel()
-		_ = ev.Close(ctx)
-	})
-	e.led = ledger.NewService(st, ev, e.clk, loc)
-	e.col = collector.New(collector.Deps{Store: st, Provider: e.prov, Pressure: e.pressure, Policy: e.policy,
-		Events: ev, Ledger: e.led, Clock: e.clk, Logger: log})
-	hs := holds.NewService(holds.Deps{Store: st, Events: ev, ProviderConfigured: true, Clock: e.clk, Logger: log,
-		Poll: func() holds.PollView { return e.col.LastPoll().ForHolds() }})
-	e.h = New(Deps{Store: st, Auth: svc, Holds: hs, Ledger: e.led, Events: ev, Collector: e.col, Clock: e.clk,
-		Location: loc, Logger: log, Runtime: Runtime{PressureSource: "fake-pressure", MeteringPolicy: "fake-policy"}})
-	return e
+	b := newBackend(t, backendOpts{start: start, loc: loc,
+		runtime: Runtime{PressureSource: "fake-pressure", MeteringPolicy: "fake-policy"}})
+	b.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "test reason"})
+	return &uenv{b}
 }
 
 func defaultEnv(t *testing.T) *uenv {
@@ -110,50 +48,13 @@ func (e *uenv) step(d time.Duration) {
 	e.poll()
 }
 
-type usess struct {
-	user         store.User
-	cookie, csrf string
-}
-
 // dev creates an active user with the roles, their first allowance and a session.
 func (e *uenv) dev(name string, roles ...string) usess {
-	e.t.Helper()
-	u, err := e.st.CreateOIDCUser(uBg, name, name+"@example.test", "User "+name, e.clk.Now())
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	if err := e.st.SetUserStatus(uBg, u.ID, store.StatusActive); err != nil {
-		e.t.Fatal(err)
-	}
-	if len(roles) > 0 {
-		if err := e.st.SetUserRoles(uBg, u.ID, roles); err != nil {
-			e.t.Fatal(err)
-		}
-		err = e.st.Tx(uBg, func(tx *store.Tx) error { return e.led.EnsureFirstAllowanceTx(tx, u.ID, e.clk.Now()) })
-		if err != nil {
-			e.t.Fatal(err)
-		}
-	}
-	return e.session(u)
+	return e.newUser(name, store.StatusActive, roles...)
 }
 
 // pending is an active user with no role (AUTH-4).
 func (e *uenv) pending(name string) usess { return e.dev(name) }
-
-func (e *uenv) session(u store.User) usess {
-	e.t.Helper()
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		e.t.Fatal(err)
-	}
-	sum := sha256.Sum256(raw)
-	id := hex.EncodeToString(sum[:])
-	now := time.Now()
-	if err := e.st.CreateSession(uBg, id, u.ID, now, now.Add(time.Hour)); err != nil {
-		e.t.Fatal(err)
-	}
-	return usess{user: u, cookie: base64.RawURLEncoding.EncodeToString(raw), csrf: e.auth.CSRFToken(id)}
-}
 
 func (e *uenv) adminSess() usess { return e.session(e.admin) }
 
@@ -182,23 +83,7 @@ func (e *uenv) rateRule(selector string, weight float64) {
 
 func (e *uenv) do(method, path string, s *usess, csrf bool, body string) *httptest.ResponseRecorder {
 	e.t.Helper()
-	var rd io.Reader
-	if body != "" {
-		rd = strings.NewReader(body)
-	}
-	req := httptest.NewRequest(method, path, rd)
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if s != nil {
-		req.Header.Set("Cookie", auth.SessionCookie+"="+s.cookie)
-		if csrf {
-			req.Header.Set(auth.CSRFHeader, s.csrf)
-		}
-	}
-	rec := httptest.NewRecorder()
-	e.h.ServeHTTP(rec, req)
-	return rec
+	return e.serve(method, path, s, csrf, body)
 }
 
 func (e *uenv) get(path string, s *usess) *httptest.ResponseRecorder {

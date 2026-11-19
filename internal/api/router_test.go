@@ -18,6 +18,20 @@ import (
 
 func concretePath(p string) string { return strings.ReplaceAll(p, "{id}", "1") }
 
+// seed creates setup 1 and hold 1 (held by a developer), so that every
+// {id} of concretePath names something that exists.
+func (e *env) seed() {
+	e.t.Helper()
+	ctx := context.Background()
+	if id, err := e.st.CreateSetup(ctx, store.Setup{Name: "lab-01", Enabled: true, Labels: map[string]string{}, DetailsJSON: `{}`}); err != nil || id != 1 {
+		e.t.Fatalf("seed setup: %d %v", id, err)
+	}
+	holder := e.user("holder", store.StatusActive, store.RoleDeveloper)
+	if h, err := e.st.CreateHold(ctx, 1, holder.user.ID, e.clk.Now()); err != nil || h.ID != 1 {
+		e.t.Fatalf("seed hold: %d %v", h.ID, err)
+	}
+}
+
 func TestAPI_RouteTableIsConsistent(t *testing.T) {
 	seen := map[string]bool{}
 	ops := map[string]bool{}
@@ -56,6 +70,7 @@ func TestAPI_EveryRouteAnswersSomethingOtherThan404(t *testing.T) {
 	dead := httptest.NewServer(http.NotFoundHandler())
 	dead.Close()
 	e := newEnv(t, envOpts{oidcIssuer: dead.URL})
+	e.seed()
 	admin := e.adminSession(true)
 	for _, r := range Routes() {
 		path := concretePath(r.Pattern)
@@ -68,16 +83,28 @@ func TestAPI_EveryRouteAnswersSomethingOtherThan404(t *testing.T) {
 	}
 }
 
-func TestAUTH4_AdminSessionReachesEveryStub(t *testing.T) {
-	e := newEnv(t, envOpts{})
-	admin := e.adminSession(true)
+func TestAUTH4_AdminSessionReachesEveryRealHandler(t *testing.T) {
+	// An issuer that is not there, so the OIDC routes exist.
+	dead := httptest.NewServer(http.NotFoundHandler())
+	dead.Close()
+	e := newEnv(t, envOpts{oidcIssuer: dead.URL})
+	e.seed()
+	e.adminSession(true) // clears the forced password change
 	for _, r := range Routes() {
-		if authServed[r.OperationID] || r.OperationID == "getHealth" {
-			continue
-		}
+		admin := e.session(e.admin) // a fresh session each time: POST /auth/logout ends one
 		rec := e.do(r.Method, concretePath(r.Pattern), &admin, true, "")
-		if rec.Code != http.StatusNotImplemented || rec.errCode() != "not_implemented" {
-			t.Errorf("%s %s = %d %s, want 501 not_implemented", r.Method, r.Pattern, rec.Code, rec.Body)
+		switch {
+		case rec.Code == http.StatusNotImplemented, rec.Code == http.StatusNotFound:
+			t.Errorf("%s %s = %d %s, want a real handler's answer", r.Method, r.Pattern, rec.Code, rec.Body)
+		case r.Access == AccessRole || r.Access == AccessAdmin:
+			// The admin passes the middleware: never 401/403 for a role or
+			// admin route, and no server error from an empty request.
+			if rec.Code == http.StatusUnauthorized || rec.Code >= 500 {
+				t.Errorf("%s %s = %d %s", r.Method, r.Pattern, rec.Code, rec.Body)
+			}
+			if rec.Code == http.StatusForbidden && rec.errCode() != apierr.Forbidden {
+				t.Errorf("%s %s = 403 %s: the admin was stopped by the middleware", r.Method, r.Pattern, rec.Body)
+			}
 		}
 	}
 }
@@ -141,6 +168,7 @@ func TestUI3_OtherPathsGoToFallbackOrPlain404(t *testing.T) {
 
 func TestAUTH4_MiddlewareOrder401Then403ThenPasswordThenCSRF(t *testing.T) {
 	e := newEnv(t, envOpts{})
+	e.seed()
 	dev := e.user("dev", store.StatusActive, store.RoleDeveloper)
 	none := e.user("none", store.StatusActive)
 	pending := e.user("pend", store.StatusPending)
@@ -171,14 +199,15 @@ func TestAUTH4_MiddlewareOrder401Then403ThenPasswordThenCSRF(t *testing.T) {
 	wrong := dev
 	wrong.csrf = strings.Repeat("0", 64)
 	check("developer POST, wrong csrf", e.do("POST", rolePost, &wrong, true, ""), 403, apierr.CSRF)
-	check("developer POST, csrf", e.do("POST", rolePost, &dev, true, ""), 501, "not_implemented")
-	check("developer GET, no csrf needed", e.do("GET", "/api/v1/me", &dev, false, ""), 501, "not_implemented")
+	// With CSRF the request reaches the real handler: setup 1 is held by someone else.
+	check("developer POST, csrf", e.do("POST", rolePost, &dev, true, ""), 409, apierr.SetupHeld)
+	check("developer GET, no csrf needed", e.do("GET", "/api/v1/me", &dev, false, ""), 200, "")
 	admin := e.adminSession(true)
 	check("admin POST no csrf", e.do("POST", adminPost, &admin, false, ""), 403, apierr.CSRF)
 	for _, m := range []string{"PUT", "DELETE"} {
 		check("admin "+m+" no csrf", e.do(m, "/api/v1/admin/setups/1", &admin, false, ""), 403, apierr.CSRF)
 	}
-	check("admin PUT csrf", e.do("PUT", "/api/v1/admin/setups/1", &admin, true, ""), 501, "")
+	check("admin PUT csrf", e.do("PUT", "/api/v1/admin/setups/1", &admin, true, ""), 400, apierr.Validation)
 }
 
 func TestAUTH5_UnassignedUserSessionHasEmptyRoleList(t *testing.T) {
@@ -331,10 +360,14 @@ func TestNFR_RecovererReturnsStandardInternalError(t *testing.T) {
 
 func TestNFR_RequestLogHasNoBodyCookieTokenOrQuery(t *testing.T) {
 	e := newEnv(t, envOpts{})
+	e.seed()
 	dev := e.user("dev", store.StatusActive, store.RoleDeveloper)
-	e.do("POST", "/api/v1/setups/1/acquire?code=QUERYSECRET", &dev, true, `{"password":"BODYSECRET"}`)
+	rec := e.do("POST", "/api/v1/setups/1/acquire?code=QUERYSECRET", &dev, true, `{"password":"BODYSECRET"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("acquire of a held setup = %d %s", rec.Code, rec.Body)
+	}
 	out := e.logs.String()
-	if !strings.Contains(out, `"path":"/api/v1/setups/1/acquire"`) || !strings.Contains(out, `"status":501`) || !strings.Contains(out, `"method":"POST"`) {
+	if !strings.Contains(out, `"path":"/api/v1/setups/1/acquire"`) || !strings.Contains(out, `"status":409`) || !strings.Contains(out, `"method":"POST"`) {
 		t.Fatalf("request not logged: %s", out)
 	}
 	for _, s := range []string{"QUERYSECRET", "BODYSECRET", dev.cookie, dev.csrf, "hourglass_session"} {
@@ -354,7 +387,7 @@ func TestAUTH6_LocalSignInRecordsLastLogin(t *testing.T) {
 	if u, _ := e.st.GetUser(ctx, e.admin.ID); u.LastLoginAt != nil {
 		t.Fatalf("failed sign-in set last_login_at: %v", u.LastLoginAt)
 	}
-	before := time.Now().Add(-time.Second)
+	before := e.clk.Now().Add(-time.Second) // the router stamps with its (fake) clock
 	rec := e.do("POST", "/auth/local", nil, false, body(testAdminPassword))
 	if rec.Code != 200 {
 		t.Fatalf("sign-in: %d %s", rec.Code, rec.Body)
