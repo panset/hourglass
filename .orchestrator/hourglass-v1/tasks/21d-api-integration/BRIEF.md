@@ -1,0 +1,15 @@
+# 21d API integration fixes
+Job intent: .orchestrator/hourglass-v1/INTENT.md. Rules: .orchestrator/hourglass-v1/CONTRACT.md.
+## Context
+The router skeleton (21a), user handlers (21b), admin handlers (21c) and UI serving (28) were built by separate agents. Read the "open questions" and "gaps" sections of tasks/21a-app-wiring, 21b-api-user, 21c-api-admin and 28-uiserve RESULT.md.
+## Changes
+1. `internal/api/router_test.go` still has tests written for 501 stubs (`TestAUTH4_AdminSessionReachesEveryStub`, `TestAUTH4_MiddlewareOrder401Then403ThenPasswordThenCSRF`, `TestNFR_RequestLogHasNoBodyCookieTokenOrQuery`). Rewrite them to assert the same properties against the real handlers (every route in `Routes()` is reachable by an admin session and none returns 501 or 404; middleware order; request log contents). Remove the `not_implemented` literal and any leftover stub code.
+2. Metering reason before the first usage sample: the collector keeps, in its in-memory poll view, the last policy `Decision` (meter flag and reason) per active hold from the latest successful poll (additive change to `internal/collector`), and the setups / holds responses use it for the metering reason, so a user sees the policy's own words (e.g. what it is waiting for). Until a poll has seen the hold the reason is null. Remove the generic placeholder sentence; no policy-specific text may be written in core code.
+3. Duplicate helpers: the two handler files each grew their own small helpers (pointer helpers, test environment helpers). Merge true duplicates into `helpers.go` / one test-env file; keep behaviour identical.
+4. `internal/uiserve`: any GET for a path that is not an existing file and not under `/api/`, `/auth/`, `/healthz` or the build's assets directory falls back to `index.html`, including paths whose last segment contains a dot; a missing file under the assets directory is a 404. Update its tests.
+5. Releasing an already released hold returns what `api/openapi.yaml` says if that is `409 conflict`; make `internal/holds` and the handler agree with the YAML (additive error code if needed) and test it.
+6. Regenerate BUILD files for `internal/api`, `internal/store`, `internal/collector`, `internal/uiserve`, `cmd/hourglassd`, `internal/app` with gazelle (keeping `# keep` lines and SPDX first lines), then run `./ci.sh` until it exits 0 (allow 25 minutes; it now builds the UI and both binaries). Fix whatever integration breakage it shows in Go code or BUILD files; if a failure is inside `ui/src`, fix it only if it is a type error or broken import, and say what you changed.
+## Scope
+May write: `internal/api/`, `internal/collector/` (additive), `internal/holds/` (additive), `internal/uiserve/`, BUILD files of the packages listed, `ui/src` (only for item 6 breakage), this task folder. No new dependencies.
+## Done when
+`./ci.sh` exits 0 on the whole tree and `go test -race -count=1 ./...` passes. RESULT.md lists what each item changed and the final Bazel test count.
