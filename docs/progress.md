@@ -13,9 +13,9 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 | 0 | Repository: license, README stub, .gitignore, spec copy | done, pushed |
 | - | Spike: govmomi simulator resource pools and cluster figures | done; see decisions D5-D9 |
 | 1 | Build skeleton (Go module, Bazel bzlmod, rules_go, Gazelle, CI script) | verified from a fresh clone, pushed |
-| 2 | Pure core logic: selectors and rate rules, bands and smoothing, debits, ledger and rollover | in progress |
-| 3 | SQLite store and migrations | not started |
-| 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | not started |
+| 2 | Pure core logic: selectors and rate rules, bands and smoothing, debits, ledger and rollover | verified, pushed |
+| 3 | SQLite store and migrations | in progress |
+| 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | in progress: `pkg/hourglass` and the core-genericity check built |
 | 5 | Collector and event queue | not started |
 | 6 | Auth and JSON API, `api/openapi.yaml`, contract test | not started |
 | 7 | React + TypeScript UI | not started |
@@ -28,11 +28,12 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 - Step 0: repository pushed to `github.com/panset/hourglass` (public).
 - Spike: the govmomi simulator supports resource pools; its allocation figures are static (decisions D5-D8).
 - Milestone 1: `bazel build //...`, `bazel test //...`, `go build ./...` and `./ci.sh` pass from a fresh clone; a deliberately broken test and a file without an SPDX header were both caught.
+- Milestone 2: `internal/rules`, `internal/metering`, `internal/ledger`. An independent check found no bugs against the spec and caught 29 of 33 seeded mutations (2 were equivalent); its findings are fixed. Decisions D11-D17.
 - Wireframe notes for the UI work: `docs/ui-notes.md`.
 
 ## Not finished
 
-Milestones 2 to 10.
+Milestones 3 to 10.
 
 ## Waiting on the owner
 
@@ -40,4 +41,4 @@ Nothing.
 
 ## Decisions to review
 
-See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8.
+See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13.

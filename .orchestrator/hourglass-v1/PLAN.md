@@ -13,17 +13,17 @@ detail when the one before it is verified.
 | 01 | - | Spike: govmomi simulator creates resource pools; which cluster CPU/memory/storage figures it reports | research | sonnet | 00 | task folder, scratch module outside the repo | verified |
 | 02 | 1 | Build skeleton: go.mod, MODULE.bazel (bzlmod, rules_go, Gazelle), .bazelversion, `ci.sh`, SPDX header check, stub `cmd/hourglassd` | build | sonnet | 00 | repo root, `cmd/`, `tools/` | verified |
 | 03 | 1 | Verify 02 from a fresh clone: `bazel build //...`, `bazel test //...`, `go build ./...` | verify | haiku | 02 | (read-only) | done |
-| 04 | 2 | `internal/rules`: selector parser, `Match`, ordered rule evaluation by kind (RULE-1,2,5) | build | sonnet | 03 | `internal/rules/` | running |
-| 05 | 2 | `internal/metering`: bands, 15-minute smoothing, debit in milli-tokens with gap cap (MET-3,4) | build | sonnet | 03 | `internal/metering/` | done |
-| 06 | 2 | `internal/ledger` pure logic: entry types, balance, rollover with expiry and carry-over, reset, grant (LED-1..6) | build | sonnet | 03 | `internal/ledger/` | done |
-| 07 | 2 | Verify 04-06: run tests, count them, mutation spot-checks, spec worked examples | verify | sonnet | 04,05,06 | (read-only) | pending |
-| 08 | 3 | `internal/store`: SQLite (modernc), WAL, embedded numbered migrations for all 15 tables, repositories | build | sonnet | 07 | `internal/store/` | pending |
+| 04 | 2 | `internal/rules`: selector parser, `Match`, ordered rule evaluation by kind (RULE-1,2,5) | build | sonnet | 03 | `internal/rules/` | verified |
+| 05 | 2 | `internal/metering`: bands, 15-minute smoothing, debit in milli-tokens with gap cap (MET-3,4) | build | sonnet | 03 | `internal/metering/` | verified |
+| 06 | 2 | `internal/ledger` pure logic: entry types, balance, rollover with expiry and carry-over, reset, grant (LED-1..6) | build | sonnet | 03 | `internal/ledger/` | verified |
+| 07 | 2 | Verify 04-06: run tests, count them, mutation spot-checks, spec worked examples | verify | sonnet | 04,05,06 | (read-only) | done |
+| 08 | 3 | `internal/store`: SQLite (modernc), WAL, embedded numbered migrations for all 15 tables, repositories | build | sonnet | 07 | `internal/store/` | running |
 | 09 | 3 | Verify 08 against the data-model table, column by column | verify | sonnet | 08 | (read-only) | pending |
-| 10 | 4 | `pkg/hourglass`: four interfaces, Setup/Allocation/Decision/Event, Snapshot/HoldState, registry with unknown-name error (EXT-1,2) | build | opus | 07 | `pkg/hourglass/` | pending |
-| 11 | 4 | `pkg/hourglasstest`: fake provider, pressure source, policy, hook, clock; conformance suite per interface (EXT-5) | build | sonnet | 10 | `pkg/hourglasstest/` | pending |
+| 10 | 4 | `pkg/hourglass`: four interfaces, Setup/Allocation/Decision/Event, Snapshot/HoldState, registry with unknown-name error (EXT-1,2) | build | opus | 07 | `pkg/hourglass/` | done |
+| 11 | 4 | `pkg/hourglasstest`: fake provider, pressure source, policy, hook, clock; conformance suite per interface (EXT-5) | build | sonnet | 10 | `pkg/hourglasstest/` | running |
 | 12 | 4 | `pressure/inventory` and `policies/default` (MET-7) | build | sonnet | 11 | `pressure/`, `policies/` | pending |
 | 13 | 4 | `providers/static` and `hooks/webhook` | build | sonnet | 11 | `providers/static/`, `hooks/` | pending |
-| 14 | 4 | Core-genericity check: script failing CI if a core package imports or mentions vCenter, sizes or a concrete extension | build | haiku | 10 | `tools/` | pending |
+| 14 | 4 | Core-genericity check: script failing CI if a core package imports or mentions vCenter, sizes or a concrete extension | build | haiku | 10 | `tools/` | done |
 | 15 | 4 | Verify 10-14 | verify | sonnet | 12,13,14 | (read-only) | pending |
 | 16 | 5 | `internal/events`: in-order queue, veto path, 30 s timeout, delivery records (EXT-6,7) | build | sonnet | 09,15 | `internal/events/` | pending |
 | 17 | 5 | `internal/collector`: snapshot, matching, orphans, outages, idempotent debits in one transaction, hold lifecycle events (MET-1..6, HOLD-3,4) | build | opus | 16 | `internal/collector/` | pending |
