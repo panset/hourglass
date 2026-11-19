@@ -69,6 +69,15 @@ detail when the one before it is verified.
 | 32b | 8 | Fix findings of 32 | sonnet | done |
 | 33b | 9 | Test-only simulator with control endpoint | sonnet | done |
 
+## Paused 2026-11-19 at the owner's request
+
+Stopped mid-task, with partial uncommitted edits in the working tree:
+
+- 23b (fix security and docs findings): brief in `tasks/23b-fix-auth-api/`. Partial edits in Go packages and tools. On resume: start a fresh agent on the same brief, telling it to inspect `git status` / `git diff` and continue from what is there.
+- 29b (fix UI findings): brief in `tasks/29b-fix-ui/`. Partial edits under `ui/src`. Same resume approach.
+
+Then: run `./ci.sh`; commit; re-run `e2e/run.sh bundled` and `split`; a visual pass of the running stack in Chrome (owner offered the Chrome plugin); task 40 (final verification from a clean clone, brief in `tasks/40-final-verify/`); fix what it finds; final `docs/progress.md`; push.
+
 ## Notes
 
 - Parallel groups: 04/05/06; 12/13/14; 19/20; 24 alongside anything; 26/27/28;

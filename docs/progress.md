@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-19
+Last updated: 2026-11-19 (work paused at the owner's request)
 
 Status of Hourglass v1 against the spec in [SPEC.md](SPEC.md). The detailed
 task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
@@ -17,11 +17,11 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 | 3 | SQLite store and migrations | verified, pushed |
 | 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | verified, pushed |
 | 5 | Collector and event queue | verified, pushed |
-| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | built and pushed; permissions-table and contract tests pass; security verification running |
-| 7 | React + TypeScript UI | built and pushed (all eight pages, embedded serving); verification against the wireframes running |
+| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | built, pushed, verified with findings; fixes for the five medium findings in progress (paused) |
+| 7 | React + TypeScript UI | built, pushed, verified with findings; fixes for two medium findings in progress (paused) |
 | 8 | vSphere provider and pressure source | verified, pushed |
-| 9 | Images, compose stacks, end-to-end acceptance path (bundled and split) | images and both stacks built and smoke-tested; browser acceptance test running |
-| 10 | Docs and `examples/custom` | `examples/custom` and the license check built; documents being written; final verification pending |
+| 9 | Images, compose stacks, end-to-end acceptance path (bundled and split) | built and pushed; the acceptance path passes in both modes; to be re-run after the fixes |
+| 10 | Docs and `examples/custom` | documents, `examples/custom` and the license check built and pushed; final verification from a clean clone not started |
 
 ## Finished and verified
 
@@ -37,14 +37,17 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 
 ## Not finished
 
-- Milestone 6 and 7: independent verification (running).
-- Milestone 9: the end-to-end acceptance run in both modes (running).
-- Milestone 10: documents, final verification from a clean clone.
+- Fixes for the security verification findings (template that can hang the collector, permissions-test coverage of routes registered outside the route table, empty before/after in rule-change audit rows, seed re-applied after all setups are deleted, config validated only after the database is created) and for the UI findings (blank page when a page chunk fails to load, side panels not taking keyboard focus). Both were stopped part-way; the partial edits are uncommitted in the local working tree.
+- `./ci.sh` from a fresh clone needs `ui/node_modules` for the license check; part of the same fix round.
+- Re-run of the end-to-end acceptance test after those fixes.
+- Final verification against "Done means" from a clean clone of the pushed repository.
+- A compiled 32 MB `simulator` binary was committed by mistake in `b349a63` and removed in `74c76ba`; it remains in the pushed history. Removing it needs a history rewrite, which only the owner can authorise.
 
 ## Waiting on the owner
 
-Nothing.
+- Word to resume.
+- Whether to rewrite history to drop the 32 MB binary.
 
 ## Decisions to review
 
-See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19, D22, D23, D27, D28, D29, D30.
+See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19, D22, D23, D27, D28, D29, D30, D31.
