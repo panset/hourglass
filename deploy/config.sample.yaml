@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: MIT
+# Sample Hourglass config: the v1 reference scenario (docs/SPEC.md,
+# "v1 reference scenario"): setups are resource pools on one shared vCenter.
+#
+# This file holds no secrets. The compose files supply them as environment
+# variables (HOURGLASS_ADMIN_PASSWORD, HOURGLASS_SESSION_KEY,
+# HOURGLASS_OIDC_CLIENT_SECRET, HOURGLASS_VSPHERE_PASSWORD, ...). The values
+# in the compose files are obviously fake development values
+# ("dev-only-not-a-secret"); never reuse them anywhere real.
+listen: ":8080"
+database: /data/hourglass.db
+timezone: UTC
+seed: /etc/hourglass/seed.yaml    # imported once, on the first start with no setups (SET-7)
+
+# OIDC comes from the environment: HOURGLASS_OIDC_ISSUER, _CLIENT_ID,
+# _CLIENT_SECRET and _REDIRECT_URL.
+
+provider:
+  type: vsphere
+  config:
+    # In the local stack this is the simulator container, not a real vCenter.
+    url: https://vcsim:8989/sdk
+    username: user
+    # password: from HOURGLASS_VSPHERE_PASSWORD
+    # The simulator's certificate is self-signed. Real deployments set this
+    # to false (the default) so the vCenter certificate is verified.
+    insecure_skip_verify: true
+
+pressure:
+  type: vsphere
+  config:
+    url: https://vcsim:8989/sdk
+    username: user
+    insecure_skip_verify: true   # false against a real vCenter
+
+metering:
+  type: default
+  config:
+    start_on_allocation: true
+    start_after: 2h
+
+hooks: []

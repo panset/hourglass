@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MIT
+# Sample seed file (SET-7): the reference scenario's setups and rate rules.
+# Imported once, when the database has no setups; never applied again.
+#
+# Two settings the scenario needs are not seedable and are set by an admin
+# on first run (Admin > Settings), or through PUT /api/v1/admin/settings:
+#   - resource name template: {{.SetupName}}_RP
+#   - display label keys:     size
+setups:
+  - name: lab-01
+    labels: {size: medium}
+    details: {note: "sample setup", notes: "no real data"}
+  - name: lab-02
+    labels: {size: medium}
+    details: {note: "sample setup"}
+  - name: lab-03
+    labels: {size: large}
+    details: {note: "sample setup"}
+  - name: lab-04
+    labels: {size: large}
+    details: {note: "sample setup"}
+  - name: lab-05
+    labels: {size: extralarge}
+    details: {note: "sample setup"}
+  - name: lab-06
+    labels: {size: extralarge}
+    details: {note: "sample setup"}
+
+rate_rules:
+  - {selector: "size=extralarge", weight: 4}
+  - {selector: "size=large", weight: 2}
+
+default_weight: 1

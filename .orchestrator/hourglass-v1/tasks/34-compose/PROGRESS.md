@@ -1,0 +1,5 @@
+- 2026-11-19 Read brief, contract, results of 21a/30/20/33/33b.
+- 2026-11-19 Wrote deploy/{config.sample.yaml,seed.sample.yaml,keycloak/realm-hourglass.json,compose.bundled.yaml,compose.split.yaml,smoke.sh,README.md}.
+- 2026-11-19 Decision: curl treats *.localhost as loopback, so readiness probes use http://keycloak:8081; Go's resolver in Hourglass resolves the alias fine.
+- 2026-11-19 Decision: product images are distroless, so compose healthchecks for hourglass/vcsim/ui are done by curl sidecars (deps-ready, stack-ready).
+- 2026-11-19 smoke.sh bundled and split exit 0; check_spdx passes; Keycloak login page answers 200 for Hourglass's authorization URL.

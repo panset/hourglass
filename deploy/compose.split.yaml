@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: MIT
+# Split mode (UI-3, UI-4): hourglass-api serves only the API; hourglass-ui
+# serves the static UI and proxies /api, /auth and /healthz to it. The
+# browser talks only to hourglass-ui on http://localhost:8080.
+# Local development and end-to-end only; every secret below is a fake
+# development value ("dev-only-not-a-secret"). Never reuse any of them.
+#
+#   deploy/load-images.sh
+#   docker compose -f deploy/compose.split.yaml up -d --wait
+#   open http://localhost:8080
+#
+# Same host ports as compose.bundled.yaml: run one stack at a time.
+name: hourglass-split
+
+services:
+  hourglass-api:
+    # hourglass-api-e2e adds the clock control endpoint on :8091; set
+    # HOURGLASS_API_IMAGE=hourglass-api:dev for the plain product image.
+    image: ${HOURGLASS_API_IMAGE:-hourglass-api-e2e:dev}
+    environment:
+      HOURGLASS_CONFIG: /etc/hourglass/config.yaml
+      HOURGLASS_UI_SERVE: "false"
+      HOURGLASS_ADMIN_PASSWORD: dev-only-not-a-secret
+      HOURGLASS_SESSION_KEY: dev-only-not-a-secret-dev-only-not-a-secret
+      HOURGLASS_VSPHERE_PASSWORD: pass
+      HOURGLASS_OIDC_ISSUER: http://keycloak.localhost:8081/realms/hourglass
+      HOURGLASS_OIDC_CLIENT_ID: hourglass
+      HOURGLASS_OIDC_CLIENT_SECRET: dev-only-not-a-secret
+      HOURGLASS_OIDC_REDIRECT_URL: http://localhost:8080/auth/callback
+      HOURGLASS_E2E_CONTROL: ":8091"   # ignored by the plain image
+    volumes:
+      - data:/data
+      - ./config.sample.yaml:/etc/hourglass/config.yaml:ro
+      - ./seed.sample.yaml:/etc/hourglass/seed.yaml:ro
+    ports:
+      - "8091:8091"
+    depends_on:
+      deps-ready:
+        condition: service_healthy
+
+  hourglass-ui:
+    image: ${HOURGLASS_UI_IMAGE:-hourglass-ui:dev}
+    environment:
+      HOURGLASS_UI_API: http://hourglass-api:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      hourglass-api: {condition: service_started}
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: dev-only-not-a-secret
+      KC_HTTP_PORT: "8081"
+      KC_HOSTNAME: http://keycloak.localhost:8081
+    volumes:
+      - ./keycloak/realm-hourglass.json:/opt/keycloak/data/import/realm-hourglass.json:ro
+    ports:
+      - "8081:8081"
+    networks:
+      default:
+        aliases: [keycloak.localhost]
+    healthcheck:
+      # The image has no curl: a bash TCP probe of the realm's discovery document.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8081 &&
+          printf 'GET /realms/hourglass/.well-known/openid-configuration HTTP/1.0\r\nHost: keycloak.localhost\r\n\r\n' >&3 &&
+          read -r line <&3 && case "$$line" in *" 200 "*) exit 0;; esac; exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  vcsim:
+    image: hourglass-vcsim:dev
+    environment:
+      VCSIM_USERNAME: user
+      VCSIM_PASSWORD: pass
+    ports:
+      - "8990:8990"   # control API; the SOAP port (8989) stays inside the network
+
+  # The product images are distroless (no shell, no curl), so readiness is
+  # probed from small curl containers. Not part of the product.
+  deps-ready:
+    image: curlimages/curl:8.11.1
+    entrypoint: ["sleep", "infinity"]
+    depends_on:
+      keycloak: {condition: service_healthy}
+      vcsim: {condition: service_started}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://vcsim:8990/healthz && curl -fsS -o /dev/null http://keycloak:8081/realms/hourglass/.well-known/openid-configuration"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  stack-ready:
+    image: curlimages/curl:8.11.1
+    entrypoint: ["sleep", "infinity"]
+    depends_on:
+      hourglass-api: {condition: service_started}
+      hourglass-ui: {condition: service_started}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://hourglass-api:8080/healthz && curl -fsS -o /dev/null http://hourglass-ui:8080/ui-healthz"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  data:
