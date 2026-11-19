@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: MIT
+package spike
+
+import (
+	"context"
+	"fmt"
+	"testing"
+
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/simulator"
+	"github.com/vmware/govmomi/view"
+	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/vmware/govmomi/vim25/types"
+)
+
+func i64(v int64) *int64 { return &v }
+func bl(v bool) *bool    { return &v }
+
+func spec(res int64) types.ResourceConfigSpec {
+	a := types.ResourceAllocationInfo{Reservation: i64(res), ExpandableReservation: bl(false), Limit: i64(-1),
+		Shares: &types.SharesInfo{Level: types.SharesLevelNormal}}
+	return types.ResourceConfigSpec{CpuAllocation: a, MemoryAllocation: a}
+}
+
+func dump(t *testing.T, ctx context.Context, c *govmomi.Client, label string) {
+	var ccrs []mo.ClusterComputeResource
+	m := view.NewManager(c.Client)
+	v, _ := m.CreateContainerView(ctx, c.ServiceContent.RootFolder, []string{"ClusterComputeResource"}, true)
+	_ = v.Retrieve(ctx, []string{"ClusterComputeResource"}, nil, &ccrs)
+	for _, cc := range ccrs {
+		s := cc.Summary.GetComputeResourceSummary()
+		t.Logf("[%s] cluster %s total cpu=%d mem=%d eff cpu=%d eff mem=%d hosts=%d", label, cc.Name, s.TotalCpu, s.TotalMemory, s.EffectiveCpu, s.EffectiveMemory, s.NumHosts)
+		if cs, ok := cc.Summary.(*types.ClusterComputeResourceSummary); ok {
+			t.Logf("[%s]   usageSummary=%+v", label, cs.UsageSummary)
+		}
+		var rp mo.ResourcePool
+		_ = object.NewResourcePool(c.Client, *cc.ResourcePool).Properties(ctx, *cc.ResourcePool, nil, &rp)
+		r := rp.Runtime
+		t.Logf("[%s]   root RP cpu=%+v", label, r.Cpu)
+		t.Logf("[%s]   root RP mem=%+v", label, r.Memory)
+		t.Logf("[%s]   root RP cfg cpu res=%v mem res=%v", label, *rp.Config.CpuAllocation.Reservation, *rp.Config.MemoryAllocation.Reservation)
+		var dss []mo.Datastore
+		_ = c.Retrieve(ctx, cc.Datastore, []string{"name", "summary"}, &dss)
+		for _, d := range dss {
+			t.Logf("[%s]   ds %s cap=%d free=%d", label, d.Name, d.Summary.Capacity, d.Summary.FreeSpace)
+		}
+	}
+}
+
+func TestSpike(t *testing.T) {
+	model := simulator.VPX()
+	model.Cluster = 1
+	defer model.Remove()
+	if err := model.Create(); err != nil {
+		t.Fatal(err)
+	}
+	s := model.Service.NewServer()
+	defer s.Close()
+	ctx := context.Background()
+	c, err := govmomi.NewClient(ctx, s.URL, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := find.NewFinder(c.Client, true)
+	dc, _ := f.DefaultDatacenter(ctx)
+	f.SetDatacenter(dc)
+	cl, err := f.ClusterComputeResource(ctx, "*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ccr mo.ClusterComputeResource
+	_ = cl.Properties(ctx, cl.Reference(), []string{"resourcePool", "name"}, &ccr)
+	root := object.NewResourcePool(c.Client, *ccr.ResourcePool)
+	t.Logf("cluster=%s root=%s", cl.Name(), root.Reference())
+
+	dump(t, ctx, c, "baseline")
+	dump(t, ctx, c, "baseline-again")
+
+	// Q1: create nested + named pools
+	lab, err := root.Create(ctx, "lab-01_RP", spec(1000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nested, err := lab.Create(ctx, "child_RP", spec(500))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listPools := func(label string) {
+		var rps []mo.ResourcePool
+		m := view.NewManager(c.Client)
+		v, _ := m.CreateContainerView(ctx, c.ServiceContent.RootFolder, []string{"ResourcePool"}, true)
+		_ = v.Retrieve(ctx, []string{"ResourcePool"}, []string{"name", "parent", "config.cpuAllocation", "config.memoryAllocation"}, &rps)
+		for _, p := range rps {
+			t.Logf("[%s] pool %s parent=%s cpuRes=%v", label, p.Name, p.Parent, *p.Config.CpuAllocation.Reservation)
+		}
+		fp, err := f.ResourcePoolList(ctx, "*/Resources/*")
+		t.Logf("[%s] finder */Resources/* -> %d err=%v", label, len(fp), err)
+		fp, err = f.ResourcePoolList(ctx, "*/Resources/lab-01_RP/*")
+		t.Logf("[%s] finder nested -> %d err=%v", label, len(fp), err)
+	}
+	listPools("created")
+	dump(t, ctx, c, "after-pool-reservations")
+
+	// Q3: VM added / powered on
+	vms, _ := f.VirtualMachineList(ctx, "*")
+	t.Logf("VMs: %d", len(vms))
+	for _, vm := range vms {
+		task, err := vm.PowerOn(ctx)
+		if err == nil {
+			_ = task.Wait(ctx)
+		}
+	}
+	dump(t, ctx, c, "after-poweron-all")
+
+	// VM with reservation placed in the new pool
+	if len(vms) > 0 {
+		var vmo mo.VirtualMachine
+		_ = vms[0].Properties(ctx, vms[0].Reference(), []string{"summary.config", "runtime"}, &vmo)
+		t.Logf("vm0 cpuRes=%d memRes=%d state=%s", vmo.Summary.Config.CpuReservation, vmo.Summary.Config.MemoryReservation, vmo.Runtime.PowerState)
+		folders, _ := dc.Folders(ctx)
+		hs, _ := f.HostSystemList(ctx, "*/*")
+		_ = hs
+		cs := types.VirtualMachineConfigSpec{Name: "spike-vm", GuestId: "otherGuest", Files: &types.VirtualMachineFileInfo{VmPathName: "[LocalDS_0]"},
+			NumCPUs: 4, MemoryMB: 8192,
+			CpuAllocation:    &types.ResourceAllocationInfo{Reservation: i64(4000)},
+			MemoryAllocation: &types.ResourceAllocationInfo{Reservation: i64(4096)}}
+		task, err := folders.VmFolder.CreateVM(ctx, cs, lab, nil)
+		if err != nil {
+			t.Logf("CreateVM err %v", err)
+		} else if info, err := task.WaitForResult(ctx); err != nil {
+			t.Logf("CreateVM wait err %v", err)
+		} else {
+			vm := object.NewVirtualMachine(c.Client, info.Result.(types.ManagedObjectReference))
+			dump(t, ctx, c, "vm-created-in-pool-off")
+			tk, _ := vm.PowerOn(ctx)
+			t.Logf("poweron err=%v", tk.Wait(ctx))
+			dump(t, ctx, c, "vm-in-pool-on")
+		}
+	}
+
+	// Q1 destroy
+	for _, p := range []*object.ResourcePool{nested, lab} {
+		task, err := p.Destroy(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := task.Wait(ctx); err != nil {
+			t.Logf("destroy %s err: %v", p.Reference(), err)
+		}
+	}
+	listPools("after-destroy")
+	fmt.Println("done")
+}
