@@ -1,0 +1,24 @@
+=== RUN   TestZZPerf500ms
+    zz_perf_verify_test.go:104: seeded 200 users, 100 setups, 100 holds, 5184 polls (518400 usage samples) in 33s
+    zz_perf_verify_test.go:143: dev   /api/v1/session                          200      276 B  best    0.0 ms  median    0.0 ms  worst    0.4 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/me                               200      603 B  best   91.8 ms  median   97.2 ms  worst  112.6 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/me/holds                         200     1026 B  best   53.8 ms  median   65.2 ms  worst   74.5 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/me/ledger?period=2026-11         200  2334619 B  best   70.6 ms  median   79.2 ms  worst  113.2 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/me/usage?period=2026-11          200      985 B  best   17.5 ms  median   18.4 ms  worst   20.4 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/pressure                         200   149528 B  best    2.6 ms  median    2.7 ms  worst    2.9 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/setups                           200    45678 B  best  304.6 ms  median  310.3 ms  worst  385.1 ms
+    zz_perf_verify_test.go:143: dev   /api/v1/setups?selector=size%3Dlarge     200    15084 B  best  304.5 ms  median  311.0 ms  worst  370.9 ms
+    zz_perf_verify_test.go:143: admin /api/v1/setups                           200    57378 B  best  305.2 ms  median  322.4 ms  worst  416.4 ms
+    zz_perf_verify_test.go:143: admin /api/v1/admin/users                      200    78841 B  best  613.8 ms  median  629.3 ms  worst  672.6 ms  OVER 500ms
+    zz_perf_verify_test.go:143: admin /api/v1/admin/users?status=pending       200      285 B  best  611.9 ms  median  649.9 ms  worst  738.8 ms  OVER 500ms
+    zz_perf_verify_test.go:143: admin /api/v1/admin/rules                      200     6744 B  best    0.3 ms  median    0.3 ms  worst    0.6 ms
+    zz_perf_verify_test.go:143: admin /api/v1/admin/settings                   200      480 B  best    0.0 ms  median    0.0 ms  worst    0.1 ms
+    zz_perf_verify_test.go:143: admin /api/v1/admin/collector                  200     2652 B  best    0.5 ms  median    0.5 ms  worst    0.8 ms
+    zz_perf_verify_test.go:143: admin /api/v1/admin/audit                      200       47 B  best    0.1 ms  median    0.1 ms  worst    0.1 ms
+    zz_perf_verify_test.go:151: dev   POST acquire 201 in 45.9 ms
+    zz_perf_verify_test.go:156: collector poll over 100 holds: err=<nil> in 2815.2 ms
+2026/11/19 11:32:05 WARN events: pending events dropped at shutdown dropped=2
+--- PASS: TestZZPerf500ms (49.27s)
+PASS
+ok  	github.com/panset/hourglass/internal/api	49.577s
+exit 0

@@ -1,0 +1,76 @@
+{
+  "focusedInGrant": true,
+  "focusedInEdit": "Edit setup",
+  "probes": {
+    "admin / 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /setups 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/users 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/setups 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/settings 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/audit 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "carol / 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "carol /setups 1280": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin / 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /setups 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/users 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/setups 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/settings 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "admin /admin/audit 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "carol / 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    },
+    "carol /setups 1440": {
+      "overflowX": 0,
+      "wrappedHeaders": []
+    }
+  },
+  "errors": [
+    "anon console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "admin console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "bob console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "carol console: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+}

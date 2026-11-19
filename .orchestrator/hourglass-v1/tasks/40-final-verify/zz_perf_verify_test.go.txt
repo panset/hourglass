@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: MIT
+
+package api
+
+// Throwaway verification harness (task 40), not part of the product: seeds
+// 200 users, 100 setups, 100 active holds and 18 days of 5-minute polls, then
+// times every GET route through the real router.
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"sort"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/store"
+)
+
+func TestZZPerf500ms(t *testing.T) {
+	if os.Getenv("ZZPERF") == "" {
+		t.Skip("set ZZPERF=1")
+	}
+	start := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	now := start.Add(18 * 24 * time.Hour)
+	b := newBackend(t, backendOpts{start: now})
+	ctx := context.Background()
+	t0 := time.Now()
+
+	var devs []sess
+	for i := 0; i < 199; i++ {
+		role := store.RoleDeveloper
+		if i%40 == 0 {
+			role = store.RoleAdmin
+		}
+		devs = append(devs, b.newUser(fmt.Sprintf("user-%03d", i), store.StatusActive, role))
+	}
+	sizes := []string{"medium", "large", "extralarge"}
+	var setupIDs []int64
+	for i := 0; i < 100; i++ {
+		id, err := b.st.CreateSetup(ctx, store.Setup{Name: fmt.Sprintf("lab-%03d", i), Enabled: true,
+			Labels: map[string]string{"size": sizes[i%3], "site": fmt.Sprintf("s%d", i%4)}, DetailsJSON: `{"note":"x"}`})
+		if err != nil {
+			t.Fatal(err)
+		}
+		setupIDs = append(setupIDs, id)
+	}
+	// 100 holds: users 0..49 hold two setups each, acquired at the start of the month.
+	type hh struct{ id, user int64 }
+	var hs []hh
+	for i, sid := range setupIDs {
+		u := devs[i/2].user.ID
+		h, err := b.st.CreateHold(ctx, sid, u, start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := b.st.SetMeteringStarted(ctx, h.ID, start); err != nil {
+			t.Fatal(err)
+		}
+		hs = append(hs, hh{h.ID, u})
+	}
+	// 18 days of 5-minute polls: one pressure sample, one run, and per hold a sample and a debit.
+	polls := 0
+	for p := start.Add(5 * time.Minute); !p.After(now); p = p.Add(5 * time.Minute) {
+		polls++
+	}
+	day := 0
+	for p := start.Add(5 * time.Minute); !p.After(now); {
+		end := p.Add(24 * time.Hour)
+		err := b.st.Tx(ctx, func(tx *store.Tx) error {
+			for ; p.Before(end) && !p.After(now); p = p.Add(5 * time.Minute) {
+				run, err := tx.StartCollectorRun(ctx, p)
+				if err != nil {
+					return err
+				}
+				if err := tx.FinishCollectorRun(ctx, run, p.Add(time.Second), true, ""); err != nil {
+					return err
+				}
+				if err := tx.InsertPressureSample(ctx, store.PressureSample{PolledAt: p, Source: "inventory", Raw: 0.8, Smoothed: 0.8, Multiplier: 2}); err != nil {
+					return err
+				}
+				for _, h := range hs {
+					hid := h.id
+					if _, err := tx.InsertUsageSample(ctx, store.UsageSample{HoldID: hid, PolledAt: p, Weight: 2, Pressure: 0.8, Multiplier: 2, DebitMT: 333, Reason: "metering"}); err != nil {
+						return err
+					}
+					if _, err := tx.AppendLedger(ctx, store.LedgerEntry{UserID: h.user, Period: "2026-11", Type: "debit", AmountMT: -333, HoldID: &hid, CreatedAt: p}, "2026-10", p); err != nil { // cheap cache rebuild while seeding; rebuilt for 2026-11 below
+						return err
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		day++
+	}
+	for _, d := range devs {
+		if _, err := b.st.RebuildBalance(ctx, d.user.ID, "2026-11"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Logf("seeded %d users, %d setups, %d holds, %d polls (%d usage samples) in %s", len(devs)+1, len(setupIDs), len(hs), polls, polls*len(hs), time.Since(t0).Round(time.Second))
+
+	heavy := devs[1] // holds two setups (index 1 is a developer)
+	admin := devs[0] // admin role, holds two setups too
+	routes := []struct {
+		who  string
+		s    *sess
+		path string
+	}{
+		{"dev", &heavy, "/api/v1/session"},
+		{"dev", &heavy, "/api/v1/me"},
+		{"dev", &heavy, "/api/v1/me/holds"},
+		{"dev", &heavy, "/api/v1/me/ledger?period=2026-11"},
+		{"dev", &heavy, "/api/v1/me/usage?period=2026-11"},
+		{"dev", &heavy, "/api/v1/pressure"},
+		{"dev", &heavy, "/api/v1/setups"},
+		{"dev", &heavy, "/api/v1/setups?selector=size%3Dlarge"},
+		{"admin", &admin, "/api/v1/setups"},
+		{"admin", &admin, "/api/v1/admin/users"},
+		{"admin", &admin, "/api/v1/admin/users?status=pending"},
+		{"admin", &admin, "/api/v1/admin/rules"},
+		{"admin", &admin, "/api/v1/admin/settings"},
+		{"admin", &admin, "/api/v1/admin/collector"},
+		{"admin", &admin, "/api/v1/admin/audit"},
+	}
+	for _, r := range routes {
+		var ds []time.Duration
+		var size, code int
+		for i := 0; i < 5; i++ {
+			t1 := time.Now()
+			rec := b.serve("GET", r.path, r.s, false, "")
+			ds = append(ds, time.Since(t1))
+			size, code = rec.Body.Len(), rec.Code
+		}
+		sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
+		flag := ""
+		if ds[4] > 500*time.Millisecond {
+			flag = "  OVER 500ms"
+		}
+		t.Logf("%-5s %-40s %d %8d B  best %6.1f ms  median %6.1f ms  worst %6.1f ms%s", r.who, r.path, code, size,
+			float64(ds[0].Microseconds())/1000, float64(ds[2].Microseconds())/1000, float64(ds[4].Microseconds())/1000, flag)
+	}
+	// One acquire and one release as writes.
+	free := devs[150]
+	sid, _ := b.st.CreateSetup(ctx, store.Setup{Name: "lab-free", Enabled: true, Labels: map[string]string{}, DetailsJSON: `{}`})
+	t1 := time.Now()
+	rec := b.serve("POST", fmt.Sprintf("/api/v1/setups/%d/acquire", sid), &free, true, "")
+	t.Logf("dev   POST acquire %d in %.1f ms", rec.Code, float64(time.Since(t1).Microseconds())/1000)
+	// One collector poll over the full data.
+	t1 = time.Now()
+	b.clk.Advance(5 * time.Minute)
+	err := b.col.RunOnce(ctx)
+	t.Logf("collector poll over 100 holds: err=%v in %.1f ms", err, float64(time.Since(t1).Microseconds())/1000)
+}

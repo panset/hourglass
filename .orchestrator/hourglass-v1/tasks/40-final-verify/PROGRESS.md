@@ -1,0 +1,7 @@
+- 2026-11-19: cloned github panset/hourglass @05aaa3a (== local main == origin/main, local tree clean); started bazel build+test
+- bazel build //... ok (254 targets), bazel test //... 35/35 pass; go build ./... ok; API-only hd: /healthz 200, auth/methods 200, / 404; ci.sh rc 0
+- permissions tests: 151 PASS lines, seeded health-handler leak -> red, restored -> green
+- next: e2e bundled, then split, screenshots, then static checks
+- e2e bundled: exit 0, A0-A9 pass, 716 s (artifacts copied to scratch verify-40/e2e-out/bundled)
+- static checks done: coverage grep, events, config keys, LICENSE identical to MIT, SPDX ok, history scan clean except 32 MB simulator blob (b349a63 -> 74c76ba), stray internal/api/user_test.go-E
+- started e2e split; perf harness on 200 users/100 setups running in scratch clone; next: screenshots on a bundled stack
