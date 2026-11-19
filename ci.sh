@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 tools/check_spdx.sh
+tools/check_core_generic.sh
 go build ./...
 go vet ./...
 bazel run //:gazelle -- update -mode=diff -build_file_name=BUILD.bazel
