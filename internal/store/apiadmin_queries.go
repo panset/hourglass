@@ -18,26 +18,38 @@ type LedgerStat struct {
 	UserID    int64
 	BalanceMT int64 // sum of every entry of the period
 	DebitedMT int64 // debits of the period as a positive number
-	Entries   int   // entries in every period
+	Entries   int   // 1 when the user has any entry in any period (rows exist only then)
 }
 
-// LedgerStats returns one row per user that has any ledger entry. A non-zero
-// userID restricts the result to that user.
-func (q *queries) LedgerStats(ctx context.Context, period string, userID int64) ([]LedgerStat, error) {
-	query := `SELECT user_id,
-		COALESCE(SUM(CASE WHEN period = ? THEN amount_mt ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN period = ? AND type = 'debit' THEN -amount_mt ELSE 0 END), 0),
-		COUNT(*) FROM ledger`
-	args := []any{period, period}
-	if userID != 0 {
-		query += ` WHERE user_id = ?`
-		args = append(args, userID)
-	}
-	query += ` GROUP BY user_id ORDER BY user_id`
+// LedgerStats returns one row per user that has any ledger entry, in one
+// statement for the whole list: the balance from the users.balance_mt cache,
+// the month-to-date debits and whether the user has any entry from covering
+// indexes. A non-zero userID restricts the result to that user and a
+// non-empty status to users with that status; nothing is computed for the
+// users left out.
+func (q *queries) LedgerStats(ctx context.Context, period string, userID int64, status string) ([]LedgerStat, error) {
+	query := `SELECT u.id, u.balance_mt,
+		COALESCE((SELECT -SUM(l.amount_mt) FROM ledger l WHERE l.user_id = u.id AND l.period = ?1 AND l.type = 'debit'), 0)
+		FROM users u WHERE EXISTS (SELECT 1 FROM ledger l WHERE l.user_id = u.id)
+		AND (?2 = 0 OR u.id = ?2) AND (?3 = '' OR u.status = ?3) ORDER BY u.id`
 	return collect(ctx, q.db, func(r rowScanner) (LedgerStat, error) {
 		var s LedgerStat
-		return s, r.Scan(&s.UserID, &s.BalanceMT, &s.DebitedMT, &s.Entries)
-	}, query, args...)
+		s.Entries = 1
+		return s, r.Scan(&s.UserID, &s.BalanceMT, &s.DebitedMT)
+	}, query, period, userID, status)
+}
+
+// CountOverdrawn counts the users (not the local admin) that hold a role, have
+// a ledger and a cached balance of zero or below: one aggregate over the
+// balance cache, whatever the list a caller returns.
+func (q *queries) CountOverdrawn(ctx context.Context) (int, error) {
+	var n int
+	err := q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u
+		WHERE u.auth_source <> 'local'
+		AND EXISTS (SELECT 1 FROM user_roles r WHERE r.user_id = u.id)
+		AND EXISTS (SELECT 1 FROM ledger l WHERE l.user_id = u.id)
+		AND u.balance_mt <= 0`).Scan(&n)
+	return n, err
 }
 
 // PeriodTotals are the lab-wide ledger figures of one period.

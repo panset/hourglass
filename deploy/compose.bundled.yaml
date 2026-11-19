@@ -15,9 +15,9 @@ name: hourglass-bundled
 
 services:
   hourglass:
-    # hourglass-e2e adds the clock control endpoint on :8091; set
-    # HOURGLASS_IMAGE=hourglass:dev for the plain product image.
-    image: ${HOURGLASS_IMAGE:-hourglass-e2e:dev}
+    # The product image. The end-to-end test swaps in hourglass-e2e (clock
+    # control on :8091) through e2e/compose.bundled.yaml; see e2e/README.md.
+    image: ${HOURGLASS_IMAGE:-hourglass:dev}
     environment:
       HOURGLASS_CONFIG: /etc/hourglass/config.yaml
       HOURGLASS_ADMIN_PASSWORD: dev-only-not-a-secret
@@ -27,14 +27,12 @@ services:
       HOURGLASS_OIDC_CLIENT_ID: hourglass
       HOURGLASS_OIDC_CLIENT_SECRET: dev-only-not-a-secret
       HOURGLASS_OIDC_REDIRECT_URL: http://localhost:8080/auth/callback
-      HOURGLASS_E2E_CONTROL: ":8091"   # ignored by the plain image
     volumes:
       - data:/data
       - ./config.sample.yaml:/etc/hourglass/config.yaml:ro
       - ./seed.sample.yaml:/etc/hourglass/seed.yaml:ro
     ports:
       - "8080:8080"
-      - "8091:8091"
     depends_on:
       deps-ready:
         condition: service_healthy

@@ -125,7 +125,7 @@ describe("Setups page", () => {
     expect(within(table).getByText("8.0 / h")).toBeInTheDocument();
   });
 
-  it("UI-1 not-yet-charging cost shows the API reason text, and nothing when it is null", async () => {
+  it("UI-1 not-yet-charging setups show their cost per hour, with the API reason text as secondary text when there is one", async () => {
     const waiting = (id: number, reason: string | null): Setup => ({
       ...base, id, name: `wait-${id}`, labels: { size: "small" }, weight: 1, state: "held", deployed: false, held_since: "2026-11-16T10:00:00Z",
       holder: { user_id: 3, hold_id: 90 + id, name: "Sam Lee", balance_tokens: 5, overdrawn: false, is_you: false },
@@ -136,6 +136,10 @@ describe("Setups page", () => {
     mount();
     const table = await screen.findByRole("table", { name: "All setups" });
     expect(within(table).getByText("Charging starts when deployed")).toBeInTheDocument();
+    for (const name of ["wait-7", "wait-8"]) {
+      const row = within(table).getByText(name).closest("tr")!;
+      expect(within(row).getByText(/^2\.0 \/ h/)).toBeInTheDocument(); // the cost cell is never empty
+    }
     expect(within(table).queryByText(/Free for/)).toBeNull();
     expect(within(table).queryByText("Not charging yet")).toBeNull();
   });

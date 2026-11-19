@@ -53,7 +53,7 @@ func (a *API) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 		apierr.WriteField(w, http.StatusBadRequest, apierr.Validation, "status must be pending, active or rejected", "status")
 		return
 	}
-	s, err := a.loadAdminState(ctx, 0)
+	s, err := a.loadAdminState(ctx, 0, status)
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -76,27 +76,28 @@ func (a *API) listAdminUsers(w http.ResponseWriter, r *http.Request) {
 		Granted        float64 `json:"granted_this_month_tokens"`
 		GrantCount     int     `json:"grant_count_this_month"`
 	}
-	sum := summary{Debited: tokens(totals.DebitedMT), Granted: tokens(totals.GrantedMT), GrantCount: totals.GrantCount}
+	overdrawn, err := a.d.Store.CountOverdrawn(ctx)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	sum := summary{OverdrawnCount: overdrawn, Debited: tokens(totals.DebitedMT), Granted: tokens(totals.GrantedMT), GrantCount: totals.GrantCount}
 	pending := 0
 	users := []adminUserView{}
 	for _, u := range all {
-		v := s.userView(u)
 		switch u.Status {
 		case store.StatusPending:
 			pending++
 		case store.StatusActive:
 			sum.UserCount++
 		}
-		for _, role := range v.Roles {
+		for _, role := range s.roles[u.ID] {
 			if role == store.RoleAdmin {
 				sum.AdminCount++
 			}
 		}
-		if v.Overdrawn {
-			sum.OverdrawnCount++
-		}
 		if status == "" || u.Status == status {
-			users = append(users, v)
+			users = append(users, s.userView(u))
 		}
 	}
 	sortUsers(users, status == store.StatusPending)
@@ -642,7 +643,7 @@ func (a *API) writeSetup(w http.ResponseWriter, r *http.Request, caller *auth.Us
 		a.writeError(w, r, err)
 		return
 	}
-	s, err := a.loadAdminState(ctx, 0)
+	s, err := a.loadAdminState(ctx, noLedgerStats, "")
 	if err != nil {
 		a.writeError(w, r, err)
 		return

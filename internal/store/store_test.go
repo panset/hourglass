@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 2 {
+	if n != 3 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -793,4 +793,117 @@ func TestTimestampsAreFixedWidthUTC(t *testing.T) {
 		t.Errorf("raw %q", raw)
 	}
 	var _ sql.NullString
+}
+
+// appendTimes appends n debits for one user in one transaction and returns the
+// time each block of `block` appends took.
+func appendTimes(t *testing.T, s *Store, userID int64, n, block int) []time.Duration {
+	t.Helper()
+	var out []time.Duration
+	err := s.Tx(ctx, func(tx *Tx) error {
+		for i := 0; i < n; i += block {
+			start := time.Now()
+			for j := 0; j < block; j++ {
+				if _, err := tx.AppendLedger(ctx, LedgerEntry{UserID: userID, Period: "2026-11", Type: "debit", AmountMT: -3}, "2026-11", t0); err != nil {
+					return err
+				}
+			}
+			out = append(out, time.Since(start))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestNFR_LedgerAppendTimeIsLinear: appending must not re-sum the period's
+// ledger (the cache is maintained incrementally), so the cost of an append does
+// not grow with the entries already there. With a re-sum the last blocks of
+// 10,000 appends cost several times the first; here they cost about the same.
+func TestNFR_LedgerAppendTimeIsLinear(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	const n, block = 10000, 500
+	blocks := appendTimes(t, s, u.ID, n, block)
+	sum := func(d []time.Duration) (t time.Duration) {
+		for _, x := range d {
+			t += x
+		}
+		return
+	}
+	first, last := sum(blocks[:len(blocks)/4]), sum(blocks[len(blocks)*3/4:])
+	t.Logf("first quarter %s, last quarter %s for %d appends", first, last, n)
+	if last > 2*first+20*time.Millisecond {
+		t.Errorf("append cost grows with the ledger: first quarter %s, last quarter %s", first, last)
+	}
+	if g, _ := s.GetUser(ctx, u.ID); g.BalanceMT != -3*n {
+		t.Errorf("cache %d want %d", g.BalanceMT, -3*n)
+	}
+	if got, _ := s.SumLedger(ctx, u.ID, "2026-11", ""); got != -3*n {
+		t.Errorf("sum %d", got)
+	}
+}
+
+// LED-2: after any order of writes, including a rollover and a late entry for
+// a past period, the cache equals the current period's ledger sum.
+func TestLED2_CacheEqualsSumAfterAnyOrderOfWrites(t *testing.T) {
+	s := openTemp(t)
+	a, b := newUser(t, s, "a"), newUser(t, s, "b")
+	// Only the user just written is checked: another user's cache is the
+	// previous period's until their own rollover entry is appended.
+	check := func(u User, cur string) {
+		t.Helper()
+		{
+			want, _ := s.SumLedger(ctx, u.ID, cur, "")
+			if g, _ := s.GetUser(ctx, u.ID); g.BalanceMT != want {
+				t.Fatalf("user %d cache %d, ledger sum %d", u.ID, g.BalanceMT, want)
+			}
+		}
+	}
+	add := func(u User, period, typ string, amt int64, cur string) {
+		t.Helper()
+		if _, err := s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: period, Type: typ, AmountMT: amt}, cur, t0); err != nil {
+			t.Fatal(err)
+		}
+		check(u, cur)
+	}
+	add(a, "2026-10", "allowance", 300000, "2026-10")
+	add(b, "2026-10", "allowance", 300000, "2026-10")
+	add(a, "2026-10", "debit", -1000, "2026-10")
+	add(a, "2026-09", "expiry", -5, "2026-10") // late entry for a past period
+	// Rollover: expiry and carryover in the old period, then the new allowance.
+	add(a, "2026-10", "expiry", -299000, "2026-11")
+	add(a, "2026-11", "carryover", 100, "2026-11")
+	add(a, "2026-11", "allowance", 300000, "2026-11")
+	add(b, "2026-10", "grant", 7, "2026-11") // past-period entry before b's first current entry
+	add(b, "2026-11", "allowance", 300000, "2026-11")
+	add(a, "2026-11", "debit", -42, "2026-11")
+	add(a, "2026-10", "grant", 9, "2026-11") // late past-period entry
+	add(b, "2026-11", "debit", -1, "2026-11")
+	for _, u := range []User{a, b} {
+		if _, err := s.RebuildBalance(ctx, u.ID, "2026-11"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check(a, "2026-11")
+	check(b, "2026-11")
+}
+
+// RULE-5: later rule kinds (per-selector hold limits, allowance rules) must not
+// need a schema change: the rules table keeps any kind, each ordered on its own.
+func TestRULE5_RulesTableTakesAnyKindWithoutSchemaChange(t *testing.T) {
+	s := openTemp(t)
+	for _, kind := range []string{"rate", "hold_limit", "allowance"} {
+		if err := s.ReplaceRules(ctx, kind, []Rule{{Selector: "a=1", Value: 1}, {Selector: "", Value: 2}}, nil, t0); err != nil {
+			t.Fatalf("kind %q: %v", kind, err)
+		}
+	}
+	for _, kind := range []string{"rate", "hold_limit", "allowance"} {
+		got, err := s.ListRules(ctx, kind)
+		if err != nil || len(got) != 2 || got[0].Position != 0 || got[1].Position != 1 || got[1].Value != 2 {
+			t.Errorf("kind %q: %+v %v", kind, got, err)
+		}
+	}
 }

@@ -68,10 +68,12 @@ func (q *queries) HoldLastSamples(ctx context.Context, holdIDs []int64) (map[int
 	out := make(map[int64]LastSample, len(holdIDs))
 	for i := 0; i < len(holdIDs); i += idChunk {
 		list, args := inList(holdIDs, i, min(i+idChunk, len(holdIDs)))
+		// Driven from the holds: one seek per hold on UNIQUE (hold_id,
+		// polled_at), never a walk over the samples of every listed hold.
 		rows, err := q.db.QueryContext(ctx, `SELECT u.hold_id, u.polled_at, u.weight, u.multiplier, u.reason
-			FROM usage_samples u
-			JOIN (SELECT hold_id, MAX(polled_at) AS m FROM usage_samples WHERE hold_id IN `+list+` GROUP BY hold_id) x
-			  ON x.hold_id = u.hold_id AND x.m = u.polled_at`, args...)
+			FROM holds h JOIN usage_samples u ON u.hold_id = h.id
+			AND u.polled_at = (SELECT MAX(m.polled_at) FROM usage_samples m WHERE m.hold_id = h.id)
+			WHERE h.id IN `+list, args...)
 		if err != nil {
 			return nil, err
 		}

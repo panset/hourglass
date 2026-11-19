@@ -543,7 +543,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 	for _, h := range active {
 		holdOf[h.SetupID] = h
 	}
-	d, err := a.loadHoldData(ctx, active)
+	holders, err := a.usersByID(ctx) // the setups list shows holders only, not charges
 	if err != nil {
 		a.writeError(w, r, err)
 		return
@@ -583,7 +583,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case held:
 			v.State = "held"
-			hu := d.users[h.UserID]
+			hu := holders[h.UserID]
 			at := ts(h.AcquiredAt)
 			m := meteringOf(h, l.view)
 			v.HeldSince, v.Metering = &at, &m

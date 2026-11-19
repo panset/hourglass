@@ -20,14 +20,14 @@ func TestADM1_LedgerStatsAndTotals(t *testing.T) {
 	g := add(a, "2026-11", "grant", 10000, &b.ID)
 	add(b, "2026-11", "grant", -4000, &a.ID)
 
-	stats := must(s.LedgerStats(ctx, "2026-11", 0))
-	if len(stats) != 2 || stats[0].UserID != a.ID || stats[0].BalanceMT != 307500 || stats[0].DebitedMT != 2500 || stats[0].Entries != 4 {
+	stats := must(s.LedgerStats(ctx, "2026-11", 0, ""))
+	if len(stats) != 2 || stats[0].UserID != a.ID || stats[0].BalanceMT != 307500 || stats[0].DebitedMT != 2500 || stats[0].Entries != 1 {
 		t.Fatalf("stats %+v", stats)
 	}
 	if stats[1].BalanceMT != -4000 || stats[1].DebitedMT != 0 || stats[1].Entries != 1 {
 		t.Fatalf("stats[1] %+v", stats[1])
 	}
-	one := must(s.LedgerStats(ctx, "2026-11", b.ID))
+	one := must(s.LedgerStats(ctx, "2026-11", b.ID, ""))
 	if len(one) != 1 || one[0].UserID != b.ID {
 		t.Fatalf("filtered stats %+v", one)
 	}

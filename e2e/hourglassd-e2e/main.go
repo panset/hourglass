@@ -15,6 +15,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/fs"
 	"net"
@@ -118,6 +119,9 @@ func checkProvider(args []string) int {
 		Stdout:                os.Stdout,
 		Stderr:                os.Stderr,
 	})
+	if errors.Is(err, flag.ErrHelp) {
+		return 0 // -h: the usage was printed
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "hourglassd-e2e check-provider:", err)
 		return 1

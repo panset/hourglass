@@ -158,9 +158,10 @@ async function readLedger(page: Page): Promise<LedgerRow[]> {
     const m = /(\d+(?:\.\d+)?)×/.exec(c[1]!);
     out.push({ when: c[0]!, type: c[1]!, detail: c[2]!, amount: num(c[3]!), balance: num(c[4]!), mult: m ? Number(m[1]) : undefined });
   }
-  // The table is newest first; verify through the running balance and flip if not.
-  if (out.length >= 2 && Math.abs(out[0]!.balance - (out[1]!.balance + out[0]!.amount)) > 0.0015) out.reverse();
-  else out.reverse();
+  // The table is newest first: each row's balance is the next (older) row's balance plus its own amount.
+  // Verify that through the running balance and return oldest first; a table already oldest first is kept.
+  const newestFirst = out.length < 2 || Math.abs(out[0]!.balance - (out[1]!.balance + out[0]!.amount)) <= 0.0015;
+  if (newestFirst) out.reverse();
   return out;
 }
 const debits = (l: LedgerRow[], mult?: number) =>
@@ -232,7 +233,7 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     // Bands: base 1x below 5% pressure, 2x from 5%. The simulator's baseline (about 1%) is in the first band and
     // 100% CPU, even averaged with up to 14 baseline polls in the 15-minute window (at least 1/15 = 6.7%), is in the second.
     await p.getByLabel("Base multiplier", { exact: true }).fill("1");
-    await p.getByLabel("From pressure 1", { exact: true }).fill("0.05");
+    await p.getByLabel("From pressure 1 (0 to 1)", { exact: true }).fill("0.05");
     await p.getByLabel("Multiplier 1", { exact: true }).fill("2");
     for (const i of [3, 2]) {
       const rm = p.getByRole("button", { name: `Remove band ${i}` });
@@ -243,7 +244,7 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await p.reload();
     await expect(p.getByLabel("Template", { exact: true })).toHaveValue("{{.SetupName}}_RP");
     await expect(p.getByLabel("Poll interval")).toHaveValue("1m");
-    await expect(p.getByLabel("From pressure 1", { exact: true })).toHaveValue("0.05");
+    await expect(p.getByLabel("From pressure 1 (0 to 1)", { exact: true })).toHaveValue("0.05");
     await expect(p.getByRole("checkbox", { name: "Block acquiring at zero tokens" })).toBeChecked();
     asserted("template {{.SetupName}}_RP, label key size, poll 1m, enforcement ON, bands 1x / 2x from 0.05 saved and reloaded");
     observe("bands", "base 1, from 0.05 -> 2");
@@ -405,10 +406,15 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await p.getByRole("dialog").getByRole("button", { name: "Acquire", exact: true }).click();
     await expect(p.getByText(`Acquired ${SETUP_B}.`)).toBeVisible();
     await p.reload();
+    // Through the UI: with two holds the hold-limit message is shown and the Acquire control of a third
+    // setup is visible but disabled, so the browser cannot even attempt the third acquire.
     await expect(p.getByText("You already hold 2 of 2 allowed setups.")).toBeVisible();
-    await expect(p.getByRole("button", { name: `Acquire ${SETUP_FREE}` })).toBeDisabled();
-    asserted("Setups page says \"You already hold 2 of 2 allowed setups.\" and the Acquire buttons are disabled");
-    // The server refuses too (the UI never lets the click through).
+    const third = p.getByRole("button", { name: `Acquire ${SETUP_FREE}` });
+    await expect(third).toBeVisible();
+    await expect(third).toBeDisabled();
+    asserted("Setups page says \"You already hold 2 of 2 allowed setups.\" and the Acquire control of a third setup is disabled");
+    // The direct API call below is the proof that the server refuses too: the disabled control
+    // means the UI never lets that click through, so this is the only way to observe the 409 itself.
     const sess = await (await p.request.get("/api/v1/session")).json();
     const list = await (await p.request.get("/api/v1/setups")).json();
     const free = list.setups.find((s: { name: string }) => s.name === SETUP_FREE);

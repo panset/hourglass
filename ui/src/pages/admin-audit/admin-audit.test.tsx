@@ -61,7 +61,7 @@ describe("ADM-3 audit log page", () => {
     render(<Page />);
     await screen.findByRole("table", { name: "Audit log" });
     await userEvent.selectOptions(await screen.findByLabelText("Actor"), "Priya N.");
-    await userEvent.type(screen.getByLabelText("Action"), "grant.create");
+    await userEvent.type(screen.getByLabelText(/^Action/), "grant.create");
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     await vi.waitFor(() => {
       const last = calls.filter((c) => c.url.includes("/admin/audit")).at(-1)!;

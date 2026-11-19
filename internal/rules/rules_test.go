@@ -401,3 +401,32 @@ func TestRULE3_MatchCounts(t *testing.T) {
 		}
 	})
 }
+
+// RULE-5: the engine is generic. Matching is one function of selector and
+// labels; rule tables are tagged by kind, each kind is ordered and counted on
+// its own, and a kind the engine has never heard of needs no engine change.
+func TestRULE5_EngineIsGenericOverKinds(t *testing.T) {
+	sel, err := Parse("tier=a")
+	if err != nil || !sel.Matches(L{"tier": "a"}) || sel.Matches(L{"tier": "b"}) {
+		t.Fatalf("Match(selector, labels): %v", err)
+	}
+	rs := []Rule{
+		{ID: 1, Kind: KindRate, Position: 1, Selector: "tier=a", Value: "2"},
+		{ID: 2, Kind: "hold_limit", Position: 1, Selector: "tier=a", Value: "1"}, // a later kind
+		{ID: 3, Kind: "hold_limit", Position: 2, Selector: "", Value: "5"},
+	}
+	for _, c := range []struct {
+		kind   string
+		labels L
+		want   int64
+	}{{KindRate, L{"tier": "a"}, 1}, {"hold_limit", L{"tier": "a"}, 2}, {"hold_limit", L{"tier": "z"}, 3}} {
+		got, err := Evaluate(rs, c.kind, c.labels)
+		if err != nil || got == nil || got.ID != c.want {
+			t.Errorf("Evaluate(%q, %v) = %v, %v; want rule %d", c.kind, c.labels, got, err, c.want)
+		}
+	}
+	per, un := MatchCounts(rs, "hold_limit", []map[string]string{{"tier": "a"}, {"tier": "z"}})
+	if per[2] != 1 || per[3] != 1 || len(per) != 2 || len(un) != 0 {
+		t.Errorf("MatchCounts for a second kind: %v %v", per, un)
+	}
+}

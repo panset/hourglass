@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"modernc.org/sqlite"
@@ -63,9 +64,41 @@ type dbtx interface {
 
 // queries holds every read and write method; Store and Tx both embed it.
 type queries struct {
-	db   dbtx
-	root *sql.DB // non-nil only when not already inside a transaction
+	db    dbtx
+	root  *sql.DB // non-nil only when not already inside a transaction
+	count *atomic.Int64
 }
+
+// countDB counts the statements sent to the database (Store.StatementCount).
+type countDB struct {
+	dbtx
+	n *atomic.Int64
+}
+
+func (c countDB) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	c.n.Add(1)
+	return c.dbtx.ExecContext(ctx, query, args...)
+}
+
+func (c countDB) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	c.n.Add(1)
+	return c.dbtx.QueryContext(ctx, query, args...)
+}
+
+func (c countDB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	c.n.Add(1)
+	return c.dbtx.QueryRowContext(ctx, query, args...)
+}
+
+func newQueries(db *sql.DB) queries {
+	n := new(atomic.Int64)
+	return queries{db: countDB{db, n}, root: db, count: n}
+}
+
+// StatementCount is the number of statements sent to the database through
+// this store since it was opened. Tests use it to assert that a request runs a
+// constant number of statements however many rows exist.
+func (s *Store) StatementCount() int64 { return s.count.Load() }
 
 // Store is an open database.
 type Store struct {
@@ -98,7 +131,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
-	s := &Store{queries: queries{db: db, root: db}, sqldb: db}
+	s := &Store{queries: newQueries(db), sqldb: db}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -125,7 +158,7 @@ func OpenReadOnly(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{queries: queries{db: db, root: db}, sqldb: db}
+	s := &Store{queries: newQueries(db), sqldb: db}
 	migs, err := loadMigrations()
 	if err != nil {
 		db.Close()
@@ -161,7 +194,7 @@ func (s *Store) Tx(ctx context.Context, fn func(*Tx) error) error {
 			_ = tx.Rollback()
 		}
 	}()
-	if err := fn(&Tx{queries{db: tx}}); err != nil {
+	if err := fn(&Tx{queries{db: countDB{tx, s.count}, count: s.count}}); err != nil {
 		done = true
 		_ = tx.Rollback()
 		return err
@@ -179,7 +212,7 @@ func (q *queries) atomic(ctx context.Context, fn func(*queries) error) error {
 	if err != nil {
 		return err
 	}
-	if err := fn(&queries{db: tx}); err != nil {
+	if err := fn(&queries{db: countDB{tx, q.count}, count: q.count}); err != nil {
 		_ = tx.Rollback()
 		return err
 	}

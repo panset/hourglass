@@ -21,6 +21,7 @@ go_library(
     embedsrcs = [
         "migrations/0001_init.sql",
         "migrations/0002_ledger_no_replace.sql",
+        "migrations/0003_ledger_covering_indexes.sql",
     ],
     importpath = "github.com/panset/hourglass/internal/store",
     visibility = ["//:__subpackages__"],

@@ -10,10 +10,10 @@ Hourglass is an open-source token-management framework for shared lab setups. It
 
 This starts Hourglass, Keycloak as the login provider, and a simulator standing in for vCenter. You need Docker with Compose v2 and Bazel 7.4.1. Every secret in the local stack is a fake development value.
 
-1. Build and load the images into Docker (the first run takes a while):
+1. Build and load the images the bundled stack runs into Docker (the first run takes a while):
 
    ```sh
-   deploy/load-images.sh
+   deploy/load-images.sh hourglass hourglass-vcsim
    ```
 
 2. Start the bundled stack: one container serves the API and the UI.

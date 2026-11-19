@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Smoke test for the local stacks: deploy/smoke.sh <bundled|split>
 #
-# Loads the images, brings the stack up, checks it with curl, and always
+# Loads the product images the stack needs (no end-to-end builds), brings the stack up, checks it with curl, and always
 # tears it down (docker compose down -v). Exits non-zero on any failure.
 # Needs Bazel (to load images), Docker with compose v2, curl and python3.
 # Set HOURGLASS_SMOKE_NO_LOAD=1 to skip loading the images.
@@ -11,8 +11,8 @@ cd "$(dirname "$0")/.."
 
 mode="${1:-}"
 case "$mode" in
-  bundled) app=hourglass ;;
-  split) app=hourglass-api ;;
+  bundled) app=hourglass; images=(hourglass hourglass-vcsim) ;;
+  split) app=hourglass-api; images=(hourglass-api hourglass-ui hourglass-vcsim) ;;
   *) echo "usage: deploy/smoke.sh <bundled|split>" >&2; exit 2 ;;
 esac
 compose=(docker compose -f "deploy/compose.$mode.yaml")
@@ -40,7 +40,7 @@ json() { python3 -I -c "import sys,json; d=json.load(sys.stdin); $1"; }
 
 if [ "${HOURGLASS_SMOKE_NO_LOAD:-}" != 1 ]; then
   echo "== loading images"
-  deploy/load-images.sh >"$tmp/load.log" 2>&1 || { tail -20 "$tmp/load.log"; echo "FAIL load images"; exit 1; }
+  deploy/load-images.sh "${images[@]}" >"$tmp/load.log" 2>&1 || { tail -20 "$tmp/load.log"; echo "FAIL load images"; exit 1; }
 fi
 
 echo "== up ($mode)"

@@ -139,6 +139,19 @@ type holdData struct {
 	samples map[int64]store.LastSample
 }
 
+// usersByID reads every user once, keyed by id.
+func (a *API) usersByID(ctx context.Context) (map[int64]store.User, error) {
+	users, err := a.d.Store.ListUsers(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]store.User, len(users))
+	for _, u := range users {
+		out[u.ID] = u
+	}
+	return out, nil
+}
+
 func (a *API) loadHoldData(ctx context.Context, holds []store.Hold) (*holdData, error) {
 	st := a.d.Store
 	ids := make([]int64, len(holds))
@@ -153,12 +166,8 @@ func (a *API) loadHoldData(ctx context.Context, holds []store.Hold) (*holdData, 
 	for _, s := range setups {
 		d.setups[s.ID] = s
 	}
-	users, err := st.ListUsers(ctx, "")
-	if err != nil {
+	if d.users, err = a.usersByID(ctx); err != nil {
 		return nil, err
-	}
-	for _, u := range users {
-		d.users[u.ID] = u
 	}
 	if d.charges, err = st.HoldCharges(ctx, ids); err != nil {
 		return nil, err

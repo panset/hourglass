@@ -22,6 +22,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:8080",
     headless: true,
+    // e2e/run.sh sets E2E_BROWSER_CHANNEL=chrome when only system Chrome launches.
+    channel: process.env.E2E_BROWSER_CHANNEL || undefined,
     actionTimeout: 30_000,
     navigationTimeout: 60_000,
   },

@@ -46,7 +46,17 @@ npm run dev        # Vite dev server
 
 For UI development from another origin, set `HOURGLASS_CORS_ALLOWED_ORIGINS` on the server to the dev server's origin.
 
-The end-to-end test through a real browser is being added under `e2e/`; there is no `e2e/run.sh` yet. Until it lands, `deploy/smoke.sh bundled` and `deploy/smoke.sh split` start a local stack, check it, and tear it down (about 2 to 5 minutes, needs Docker).
+The end-to-end test through a real browser is `e2e/run.sh <bundled|split|both>` (about 12 to 25 minutes per mode, needs Docker; see `e2e/README.md`). `deploy/smoke.sh bundled` and `deploy/smoke.sh split` are the quick check: they start a local stack from the product images, check it, and tear it down (about 2 to 5 minutes).
+
+### Scale test
+
+The spec requires every API call to answer in under 500 ms with up to 200 users, 100 setups and 5-minute polling. `TestNFR_ApiUnder500msAtSpecScale` in `internal/api` checks it. In a normal `go test` it runs on a reduced data set of the same shape at two sizes and fails if any GET route runs more SQL statements on the larger one (a per-row query) or answers slowly. The full-size run seeds 200 users, 100 setups, 100 active holds and 18 days of 5-minute polls (about half a million usage samples and ledger debits, about a minute to seed), requires every GET route under 500 ms, and logs each route's time and one collector poll:
+
+```sh
+HOURGLASS_SCALE_TEST=1 go test ./internal/api -run NFR_ApiUnder500msAtSpecScale -v -count=1 -timeout 20m
+```
+
+Run it after changing a store query, a list handler or the ledger. `go test -race` runs the reduced version only.
 
 ## Rules CI enforces
 

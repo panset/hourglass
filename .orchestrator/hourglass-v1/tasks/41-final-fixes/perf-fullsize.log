@@ -1,0 +1,27 @@
+=== RUN   TestNFR_ApiUnder500msAtSpecScale
+    perf_scale_test.go:213: seeded 200 users, 100 setups, 100 holds, 5184 polls (518400 usage samples) in 47s
+    perf_scale_test.go:225: none  /auth/oidc/start                             404       53 B   0 stmts  best    0.0 ms  median    0.0 ms  worst    0.3 ms
+    perf_scale_test.go:225: none  /auth/callback                               404       53 B   0 stmts  best    0.0 ms  median    0.0 ms  worst    0.0 ms
+    perf_scale_test.go:225: none  /healthz                                     200       58 B   1 stmts  best    0.0 ms  median    0.0 ms  worst    0.1 ms
+    perf_scale_test.go:225: none  /api/v1/auth/methods                         200       28 B   0 stmts  best    0.0 ms  median    0.0 ms  worst    0.0 ms
+    perf_scale_test.go:225: dev   /api/v1/session                              200      276 B   3 stmts  best    0.0 ms  median    0.0 ms  worst    0.1 ms
+    perf_scale_test.go:225: dev   /api/v1/me                                   200      603 B  19 stmts  best    3.5 ms  median    3.6 ms  worst    4.2 ms
+    perf_scale_test.go:225: dev   /api/v1/me/holds                             200     1014 B  12 stmts  best    1.7 ms  median    1.7 ms  worst    1.9 ms
+    perf_scale_test.go:225: dev   /api/v1/me/ledger?period=2026-11             200  2334619 B  10 stmts  best   55.9 ms  median   56.8 ms  worst   58.0 ms
+    perf_scale_test.go:225: dev   /api/v1/me/usage?period=2026-11              200      985 B   5 stmts  best   16.8 ms  median   17.2 ms  worst   17.5 ms
+    perf_scale_test.go:225: dev   /api/v1/pressure                             200   149528 B   9 stmts  best    2.3 ms  median    2.5 ms  worst    2.7 ms
+    perf_scale_test.go:225: dev   /api/v1/setups                               200    45179 B  10 stmts  best    0.8 ms  median    0.9 ms  worst    1.0 ms
+    perf_scale_test.go:225: dev   /api/v1/setups?selector=tier%3Dt2            200    14985 B  10 stmts  best    0.7 ms  median    0.7 ms  worst    0.9 ms
+    perf_scale_test.go:225: admin /api/v1/setups                               200    56879 B  10 stmts  best    0.8 ms  median    0.8 ms  worst    1.0 ms
+    perf_scale_test.go:225: admin /api/v1/admin/users                          200    79205 B  14 stmts  best  141.5 ms  median  142.5 ms  worst  146.6 ms
+    perf_scale_test.go:225: admin /api/v1/admin/users?status=pending           200      648 B  14 stmts  best   98.6 ms  median   99.7 ms  worst  101.3 ms
+    perf_scale_test.go:225: admin /api/v1/admin/rules                          200     6245 B   7 stmts  best    0.2 ms  median    0.3 ms  worst    0.4 ms
+    perf_scale_test.go:225: admin /api/v1/admin/settings                       200      480 B   4 stmts  best    0.0 ms  median    0.0 ms  worst    0.1 ms
+    perf_scale_test.go:225: admin /api/v1/admin/collector                      200     2652 B  13 stmts  best    0.5 ms  median    0.5 ms  worst    1.1 ms
+    perf_scale_test.go:225: admin /api/v1/admin/audit                          200       47 B   5 stmts  best    0.1 ms  median    0.1 ms  worst    0.1 ms
+    perf_scale_test.go:236: dev   POST acquire 201 in 1.0 ms
+    perf_scale_test.go:240: collector poll over 100 holds: err=<nil> in 196.4 ms
+2026/11/19 11:57:07 WARN events: pending events dropped at shutdown dropped=2
+--- PASS: TestNFR_ApiUnder500msAtSpecScale (50.04s)
+PASS
+ok  	github.com/panset/hourglass/internal/api	50.318s

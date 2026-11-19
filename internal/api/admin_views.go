@@ -42,9 +42,15 @@ type adminState struct {
 	poll        collector.PollView
 }
 
+// noLedgerStats as the userID of loadAdminState loads no ledger figures at all
+// (callers that read balances from users.balance_mt).
+const noLedgerStats int64 = -1
+
 // loadAdminState reads the snapshot. A non-zero userID limits the ledger
-// figures to that user (the single-user responses).
-func (a *API) loadAdminState(ctx context.Context, userID int64) (*adminState, error) {
+// figures to that user (the single-user responses), noLedgerStats skips them,
+// and a non-empty status limits them to users with that status, so a filtered
+// list computes nothing for the users it does not return.
+func (a *API) loadAdminState(ctx context.Context, userID int64, status string) (*adminState, error) {
 	st := a.d.Store
 	s := &adminState{
 		now:         a.d.Clock.Now(),
@@ -75,7 +81,7 @@ func (a *API) loadAdminState(ctx context.Context, userID int64) (*adminState, er
 		s.holdBySetup[h.SetupID] = h
 		s.holdsByUser[h.UserID] = append(s.holdsByUser[h.UserID], h)
 	}
-	stats, err := st.LedgerStats(ctx, s.period, userID)
+	stats, err := st.LedgerStats(ctx, s.period, userID, status)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +237,7 @@ func (a *API) userViewByID(ctx context.Context, id int64) (adminUserView, error)
 	if err != nil {
 		return adminUserView{}, err
 	}
-	s, err := a.loadAdminState(ctx, id)
+	s, err := a.loadAdminState(ctx, id, "")
 	if err != nil {
 		return adminUserView{}, err
 	}
@@ -318,7 +324,7 @@ func (a *API) setupView(ctx context.Context, s *adminState, x store.Setup, calle
 	if err != nil {
 		return v, err
 	}
-	bal, _ := s.balance(h.UserID)
+	bal := hu.BalanceMT // the users.balance_mt cache (LED-2)
 	v.Holder = &holderView{UserID: h.UserID, HoldID: h.ID, Name: hu.Name, BalanceTokens: tokens(bal),
 		Overdrawn: bal <= 0, IsYou: h.UserID == callerID}
 	v.HeldSince = nullIfEmpty(ts(h.AcquiredAt))

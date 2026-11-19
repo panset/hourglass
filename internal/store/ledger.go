@@ -38,11 +38,16 @@ func scanLedger(r rowScanner) (LedgerEntry, error) {
 	return e, err
 }
 
-// AppendLedger appends an entry and, in the same transaction, sets
-// users.balance_mt to the sum of the user's ledger entries for currentPeriod
-// (LED-2: the cache is the current period's sum), whatever period the entry
-// itself belongs to. The caller computes currentPeriod (YYYY-MM) from the
-// configured timezone. CreatedAt is set from now.
+// AppendLedger appends an entry and, in the same transaction, keeps
+// users.balance_mt equal to the sum of the user's ledger entries for
+// currentPeriod (LED-2), whatever period the entry itself belongs to. The
+// cache is maintained incrementally, so an append costs O(log n) however long
+// the ledger is: an entry of the current period adds its amount, an entry of
+// another period leaves the cache alone, and the first entry the user gets in
+// the current period (the rollover) starts the cache from scratch, since the
+// cache still held the previous period. currentPeriod (YYYY-MM, from the
+// configured timezone) must not move backwards between appends; RebuildBalance
+// is the from-scratch repair. CreatedAt is set from now.
 func (q *queries) AppendLedger(ctx context.Context, e LedgerEntry, currentPeriod string, now time.Time) (LedgerEntry, error) {
 	var out LedgerEntry
 	err := q.atomic(ctx, func(q *queries) error {
@@ -53,7 +58,20 @@ func (q *queries) AppendLedger(ctx context.Context, e LedgerEntry, currentPeriod
 			return mapErr(err)
 		}
 		id, _ := res.LastInsertId()
-		if _, err := q.RebuildBalance(ctx, e.UserID, currentPeriod); err != nil {
+		var earlier bool
+		if err := q.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM ledger WHERE user_id = ? AND period = ? AND id < ?)`,
+			e.UserID, currentPeriod, id).Scan(&earlier); err != nil {
+			return err
+		}
+		var delta int64 // the entry's own contribution to the current period
+		if e.Period == currentPeriod {
+			delta = e.AmountMT
+		}
+		stmt := `UPDATE users SET balance_mt = balance_mt + ? WHERE id = ?`
+		if !earlier {
+			stmt = `UPDATE users SET balance_mt = ? WHERE id = ?`
+		}
+		if _, err := q.db.ExecContext(ctx, stmt, delta, e.UserID); err != nil {
 			return err
 		}
 		out, err = scanLedger(q.db.QueryRowContext(ctx, `SELECT `+ledgerCols+` FROM ledger WHERE id = ?`, id))
@@ -83,7 +101,8 @@ func (q *queries) SumLedger(ctx context.Context, userID int64, period, typ strin
 }
 
 // RebuildBalance recomputes users.balance_mt from the ledger for
-// currentPeriod (LED-2) and returns it.
+// currentPeriod (LED-2), and returns the sum. It
+// is the from-scratch path; AppendLedger maintains the cache incrementally.
 func (q *queries) RebuildBalance(ctx context.Context, userID int64, currentPeriod string) (int64, error) {
 	var sum int64
 	err := q.atomic(ctx, func(q *queries) error {

@@ -42,6 +42,7 @@ go_test(
         "admin_users_test.go",
         "contract_test.go",
         "helpers_test.go",
+        "perf_scale_test.go",
         "permissions_test.go",
         "registration_test.go",
         "router_test.go",

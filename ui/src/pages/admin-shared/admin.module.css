@@ -101,6 +101,13 @@
   align-items: center;
   flex-wrap: wrap;
 }
+/* Controls whose labels sit above them: the inputs and buttons share one bottom edge. */
+.rowBottom {
+  display: flex;
+  gap: var(--gap-control);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
 .rowEnd {
   display: flex;
   gap: 8px;

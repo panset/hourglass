@@ -491,7 +491,7 @@ var capMatrix = []capRow{
 
 // permExtraCover lists routes no spec row names, with where they are covered.
 var permExtraCover = map[string]string{
-	"changeLocalPassword": "TestPermissions_LocalAdmin (AUTH-8) and the exhaustive test",
+	"changeLocalPassword": "TestAUTH8_LocalAdminIsPermanent (AUTH-8) and the exhaustive test",
 }
 
 func routeOf(t *testing.T, op string) Route {
@@ -772,7 +772,7 @@ func TestAUTH3_EveryStateChangingRouteRejectsMissingOrWrongCSRF(t *testing.T) {
 
 // ---- the local admin (AUTH-8) ----
 
-func TestPermissions_LocalAdmin(t *testing.T) {
+func TestAUTH8_LocalAdminIsPermanent(t *testing.T) {
 	f := newPermFix(t)
 	ctx := context.Background()
 	local := f.actor(actLocal)

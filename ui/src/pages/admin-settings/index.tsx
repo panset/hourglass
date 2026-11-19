@@ -253,8 +253,8 @@ export default function Page() {
               </Field>
             </div>
             {form.bands.map((b, i) => (
-              <div className={shared.row} key={i}>
-                <Field label={`From pressure ${i + 1}`} hint="0 to 1" error={fieldError(`bands.steps[${i}].from`)}>
+              <div className={shared.rowBottom} key={i}>
+                <Field label={`From pressure ${i + 1} (0 to 1)`} error={fieldError(`bands.steps[${i}].from`)}>
                   {(p) => (
                     <Input
                       {...p}

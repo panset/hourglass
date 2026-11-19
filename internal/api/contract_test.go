@@ -27,10 +27,10 @@ import (
 
 // The contract test (UI-2): api/openapi.yaml and the Go handlers must agree.
 //
-//   - TestContract_RoutesMatch: the (method, path) set, the access level
+//   - TestUI2_ContractRoutesMatch: the (method, path) set, the access level
 //     (x-roles) and where CSRF is enforced (x-csrf) equal Routes() and the
 //     router's behavior.
-//   - TestContract_ResponsesMatchSchemas: real responses of every operation,
+//   - TestUI2_ContractResponsesMatchSchemas: real responses of every operation,
 //     from a world with data, validate against the operation's schemas, which
 //     are treated as closed (an unknown field fails) unless they declare
 //     additionalProperties. Request bodies the test sends validate too.
@@ -169,7 +169,7 @@ func TestContract_TheDocumentLoadsAndTimestampsAreStrict(t *testing.T) {
 
 // ---- route parity ----
 
-func TestContract_RoutesMatch(t *testing.T) {
+func TestUI2_ContractRoutesMatch(t *testing.T) {
 	doc := loadContract(t)
 	type key struct{ method, path string }
 	inYAML := map[key]*openapi3.Operation{}
@@ -495,7 +495,7 @@ func (w *world) status(rec *httptest.ResponseRecorder, want int) {
 	}
 }
 
-func TestContract_ResponsesMatchSchemas(t *testing.T) {
+func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 	w := newWorld(t)
 	c := w.c
 	dateTimesSeen = 0

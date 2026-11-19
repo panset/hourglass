@@ -1,0 +1,5 @@
+perf 0
+smoke-bundled 0
+smoke-split 0
+e2e 0
+end

@@ -110,13 +110,20 @@ export default function SetupsPage() {
     }
   };
 
+  // Every setup shows its cost per hour (the API sends it for all of them). A held setup that is not
+  // metering yet adds the policy's own reason text from the API as secondary text, and nothing when it sends none.
   const costCell = (s: Setup) => {
-    if (s.state === "free") return `${formatPerHour(s.cost_per_hour_tokens.now)} if acquired`;
+    const perHour = formatPerHour(s.cost_per_hour_tokens.now);
+    if (s.state === "free") return `${perHour} if acquired`;
     if (s.state === "held" && s.metering && !s.metering.active) {
-      // The policy's own reason text from the API; nothing when it sends none.
-      return s.metering.reason ?? "";
+      return (
+        <>
+          {perHour}
+          {s.metering.reason ? <span className={styles.reason}>{s.metering.reason}</span> : null}
+        </>
+      );
     }
-    return formatPerHour(s.cost_per_hour_tokens.now);
+    return perHour;
   };
 
   const columns = [

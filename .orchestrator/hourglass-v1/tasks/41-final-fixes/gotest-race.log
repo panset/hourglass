@@ -1,0 +1,33 @@
+ok  	github.com/panset/hourglass/cmd/hourglass-ui	1.246s
+?   	github.com/panset/hourglass/cmd/hourglassd	[no test files]
+ok  	github.com/panset/hourglass/e2e/hourglassd-e2e	1.440s
+ok  	github.com/panset/hourglass/e2e/simulator	3.749s
+ok  	github.com/panset/hourglass/examples/custom/busiestsite	1.169s
+ok  	github.com/panset/hourglass/examples/custom/businesshours	1.181s
+ok  	github.com/panset/hourglass/examples/custom/cmd/labd	2.261s
+ok  	github.com/panset/hourglass/examples/custom/filedir	1.165s
+ok  	github.com/panset/hourglass/examples/custom/logfile	1.156s
+ok  	github.com/panset/hourglass/hooks/webhook	1.399s
+ok  	github.com/panset/hourglass/internal/api	121.313s
+ok  	github.com/panset/hourglass/internal/api/apierr	1.204s
+ok  	github.com/panset/hourglass/internal/app	16.158s
+?   	github.com/panset/hourglass/internal/app/runhook	[no test files]
+ok  	github.com/panset/hourglass/internal/auth	49.951s
+ok  	github.com/panset/hourglass/internal/collector	6.251s
+ok  	github.com/panset/hourglass/internal/config	1.383s
+ok  	github.com/panset/hourglass/internal/events	1.628s
+ok  	github.com/panset/hourglass/internal/holds	3.283s
+ok  	github.com/panset/hourglass/internal/ledger	2.854s
+ok  	github.com/panset/hourglass/internal/metering	1.152s
+ok  	github.com/panset/hourglass/internal/rules	1.146s
+ok  	github.com/panset/hourglass/internal/settings	1.241s
+ok  	github.com/panset/hourglass/internal/store	25.869s
+ok  	github.com/panset/hourglass/internal/uiserve	1.186s
+ok  	github.com/panset/hourglass/internal/version	1.146s
+ok  	github.com/panset/hourglass/pkg/hourglass	1.164s
+?   	github.com/panset/hourglass/pkg/hourglass/server	[no test files]
+ok  	github.com/panset/hourglass/pkg/hourglasstest	2.239s
+ok  	github.com/panset/hourglass/policies/default	1.146s
+ok  	github.com/panset/hourglass/pressure/inventory	1.151s
+ok  	github.com/panset/hourglass/providers/static	1.198s
+ok  	github.com/panset/hourglass/providers/vsphere	7.167s

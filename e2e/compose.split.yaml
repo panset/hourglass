@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Override for the end-to-end test (e2e/run.sh), layered over
+# deploy/compose.split.yaml: the test build of the API with a clock the test
+# can move, and its control port. Test only; never deploy this image.
+services:
+  hourglass-api:
+    image: ${HOURGLASS_E2E_API_IMAGE:-hourglass-api-e2e:dev}
+    environment:
+      HOURGLASS_E2E_CONTROL: ":8091"
+    ports:
+      - "8091:8091"
