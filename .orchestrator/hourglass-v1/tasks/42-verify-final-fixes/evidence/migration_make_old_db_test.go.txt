@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: MIT
+
+package collector
+
+import (
+	"os"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/store"
+)
+
+// Creates a database with the previous commit's code (migrations 0001-0002).
+func TestV42_MakeOldDB(t *testing.T) {
+	path := os.Getenv("V42_DB")
+	if path == "" {
+		t.Skip()
+	}
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &env{t: t, st: st}
+	e.clk = nil
+	_ = e
+	t.Cleanup(func() { st.Close() })
+	en := newEnv(t, false)
+	_ = en
+	// Reuse the collector harness on this store.
+	en.st.Close()
+	en.st = st
+	en.led.Service = nil
+	en2 := newEnvOn(t, st)
+	en2.clk.Set(time.Date(2026, 10, 30, 23, 0, 0, 0, time.UTC))
+	u, _ := en2.basic()
+	v := en2.user("v")
+	en2.allowance(u)
+	en2.allowance(v)
+	for i := 0; i < 30; i++ { // crosses into November
+		en2.step(poll)
+	}
+	if _, err := st.CreateOIDCUser(bg, "pend", "p@example.test", "pend", en2.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: MIT
+
+package store
+
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+)
+
+// Opens a database made by the previous commit and checks migration 0003.
+func TestV42_UpgradeOldDB(t *testing.T) {
+	path := os.Getenv("V42_DB")
+	if path == "" {
+		t.Skip()
+	}
+	ctx := context.Background()
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	var v int
+	st.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
+	rows, _ := st.sqldb.Query(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='ledger' ORDER BY name`)
+	var idx []string
+	for rows.Next() {
+		var n string
+		rows.Scan(&n)
+		idx = append(idx, n)
+	}
+	rows.Close()
+	var n int
+	st.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&n)
+	t.Logf("schema version %d, ledger rows %d, ledger indexes %v", v, n, idx)
+	var ic string
+	st.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
+	t.Logf("integrity_check: %s", ic)
+	us, _ := st.ListUsers(ctx, "")
+	for _, u := range us {
+		sum, _ := st.SumLedger(ctx, u.ID, "2026-10", "")
+		t.Logf("user %d %s status %s cache %d oct-sum %d", u.ID, u.Username, u.Status, u.BalanceMT, sum)
+		if u.AuthSource != AuthLocal && sum != u.BalanceMT {
+			t.Errorf("user %d cache %d != sum %d", u.ID, u.BalanceMT, sum)
+		}
+	}
+	// append through the new incremental path on the migrated data
+	if len(us) > 0 {
+		before := us[0].BalanceMT
+		if _, err := st.AppendLedger(ctx, LedgerEntry{UserID: us[0].ID, Period: "2026-10", Type: "grant", AmountMT: 1234, Reason: "v42"}, "2026-10", time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)); err != nil {
+			t.Fatal(err)
+		}
+		u, _ := st.GetUser(ctx, us[0].ID)
+		sum, _ := st.SumLedger(ctx, u.ID, "2026-10", "")
+		if u.BalanceMT != before+1234 || sum != u.BalanceMT {
+			t.Errorf("append after upgrade: cache %d sum %d", u.BalanceMT, sum)
+		}
+	}
+	st.Close()
+	// reopen: no migration re-run
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st2.Close()
+}

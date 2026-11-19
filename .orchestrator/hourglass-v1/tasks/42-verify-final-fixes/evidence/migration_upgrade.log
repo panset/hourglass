@@ -1,0 +1,8 @@
+    zz_v42_mig_test.go:36: schema version 3, ledger rows 31, ledger indexes [ledger_hold_type ledger_period_type ledger_user_period_type]
+    zz_v42_mig_test.go:39: integrity_check: ok
+    zz_v42_mig_test.go:43: user 1  status pending cache 295157 oct-sum 295157
+    zz_v42_mig_test.go:43: user 2  status pending cache 300000 oct-sum 300000
+    zz_v42_mig_test.go:43: user 3  status pending cache 0 oct-sum 0
+--- PASS: TestV42_UpgradeOldDB (0.01s)
+PASS
+ok  	github.com/panset/hourglass/internal/store	0.255s

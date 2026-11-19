@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MIT
+// Verification task 42: screenshots of Setups, Settings and Audit log.
+import { test, expect, Page } from "@playwright/test";
+const OUT = process.env.V42_SHOTS!;
+const SIM = "http://localhost:8990";
+const NEWPW = "dev-only-v42-admin-password";
+
+async function adminSignIn(page: Page) {
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("dev-only-not-a-secret");
+  await page.getByRole("button", { name: "Sign in as admin" }).click();
+  await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
+  await page.getByLabel("Current password").fill("dev-only-not-a-secret");
+  await page.getByLabel("New password", { exact: true }).fill(NEWPW);
+  await page.getByLabel("Repeat new password").fill(NEWPW);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+}
+
+async function shoot(page: Page, path: string, name: string, ready: () => Promise<void>) {
+  for (const [w, h] of [[1280, 800], [1440, 900]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto(path);
+    await ready();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${OUT}/${name}-${w}x${h}.png` });
+  }
+}
+
+test("v42 screenshots", async ({ browser }) => {
+  const adminCtx = await browser.newContext();
+  const aliceCtx = await browser.newContext();
+  const admin = await adminCtx.newPage();
+  const alice = await aliceCtx.newPage();
+  await adminSignIn(admin);
+  await admin.goto("/admin/settings");
+  await admin.getByLabel("Template", { exact: true }).fill("{{.SetupName}}_RP");
+  await admin.getByLabel("Display label keys").fill("size");
+  await admin.getByLabel("Poll interval").fill("1m");
+  await admin.getByRole("button", { name: "Save changes" }).click();
+  await expect(admin.getByText("Settings saved. They apply from the next poll.")).toBeVisible();
+
+  await alice.goto("/login");
+  await alice.getByRole("link", { name: "Sign in with SSO" }).click();
+  await alice.waitForURL(/keycloak\.localhost:8081/);
+  await alice.locator("#username").fill("alice");
+  await alice.locator("#password").fill("dev-only-alice");
+  await alice.locator("#kc-login").click();
+  await alice.waitForURL((u) => u.origin === "http://localhost:8080" && !u.pathname.startsWith("/auth/"));
+
+  await admin.goto("/admin/users");
+  const item = admin.getByRole("listitem").filter({ hasText: "alice@example.com" });
+  await expect(item).toBeVisible({ timeout: 90_000 });
+  await item.getByRole("group").getByLabel("Developer").check();
+  await item.getByRole("button", { name: /^Approve/ }).click();
+  await expect(admin.getByRole("listitem").filter({ hasText: "alice@example.com" })).toHaveCount(0);
+
+  const sess = await (await alice.request.get("/api/v1/session")).json();
+  const list = await (await alice.request.get("/api/v1/setups")).json();
+  const id = (n: string) => list.setups.find((s: any) => s.name === n).id;
+  for (const n of ["lab-03", "lab-04"]) {
+    const r = await alice.request.post(`/api/v1/setups/${id(n)}/acquire`, { headers: { "X-CSRF-Token": sess.csrf_token } });
+    expect(r.status()).toBe(201);
+  }
+  const pr = await fetch(`${SIM}/pools`, { method: "POST", body: JSON.stringify({ name: "lab-03_RP" }) });
+  expect(pr.status).toBe(201);
+  await expect.poll(async () => {
+    const l = await (await alice.request.get("/api/v1/setups")).json();
+    return l.setups.find((s: any) => s.name === "lab-03").metering?.active === true;
+  }, { timeout: 9 * 60_000, intervals: [10_000] }).toBeTruthy();
+  // an audit entry or two exist (approve, settings)
+  const fs = await import("node:fs");
+  fs.writeFileSync(`${OUT}/../setups-api-alice.json`, JSON.stringify(await (await alice.request.get("/api/v1/setups")).json(), null, 1));
+
+  const setupsReady = (p: Page) => async () => { await expect(p.getByRole("table", { name: "All setups" })).toBeVisible(); };
+  await shoot(alice, "/setups", "setups-developer", setupsReady(alice));
+  await shoot(admin, "/setups", "setups-admin", setupsReady(admin));
+  await shoot(admin, "/admin/settings", "settings-admin", async () => { await expect(admin.getByRole("heading", { name: "Settings" })).toBeVisible(); });
+  await shoot(admin, "/admin/audit", "audit-admin", async () => { await expect(admin.getByRole("heading", { name: /Audit/ })).toBeVisible(); });
+  // cost cells, as text, for the report
+  for (const [who, p] of [["developer", alice], ["admin", admin]] as const) {
+    await p.goto("/setups");
+    const rows = p.getByRole("table", { name: "All setups" }).locator("tbody tr");
+    const txt = await rows.allInnerTexts();
+    fs.writeFileSync(`${OUT}/../setups-rows-${who}.txt`, txt.map((t) => t.replace(/\s+/g, " ")).join("\n"));
+  }
+});

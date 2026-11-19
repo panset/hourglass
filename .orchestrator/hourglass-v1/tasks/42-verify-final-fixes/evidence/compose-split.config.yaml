@@ -1,0 +1,146 @@
+name: hourglass-split
+services:
+  deps-ready:
+    depends_on:
+      keycloak:
+        condition: service_healthy
+        required: true
+      vcsim:
+        condition: service_started
+        required: true
+    entrypoint:
+      - sleep
+      - infinity
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS -o /dev/null http://vcsim:8990/healthz && curl -fsS -o /dev/null http://keycloak:8081/realms/hourglass/.well-known/openid-configuration
+      timeout: 5s
+      interval: 3s
+      retries: 60
+    image: curlimages/curl:8.11.1
+    networks:
+      default: null
+  hourglass-api:
+    depends_on:
+      deps-ready:
+        condition: service_healthy
+        required: true
+    environment:
+      HOURGLASS_ADMIN_PASSWORD: dev-only-not-a-secret
+      HOURGLASS_CONFIG: /etc/hourglass/config.yaml
+      HOURGLASS_OIDC_CLIENT_ID: hourglass
+      HOURGLASS_OIDC_CLIENT_SECRET: dev-only-not-a-secret
+      HOURGLASS_OIDC_ISSUER: http://keycloak.localhost:8081/realms/hourglass
+      HOURGLASS_OIDC_REDIRECT_URL: http://localhost:8080/auth/callback
+      HOURGLASS_SESSION_KEY: dev-only-not-a-secret-dev-only-not-a-secret
+      HOURGLASS_UI_SERVE: "false"
+      HOURGLASS_VSPHERE_PASSWORD: pass
+    image: hourglass-api:dev
+    networks:
+      default: null
+    volumes:
+      - type: volume
+        source: data
+        target: /data
+        volume: {}
+      - type: bind
+        source: /private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-42/hourglass/deploy/config.sample.yaml
+        target: /etc/hourglass/config.yaml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-42/hourglass/deploy/seed.sample.yaml
+        target: /etc/hourglass/seed.yaml
+        read_only: true
+        bind:
+          create_host_path: true
+  hourglass-ui:
+    depends_on:
+      hourglass-api:
+        condition: service_started
+        required: true
+    environment:
+      HOURGLASS_UI_API: http://hourglass-api:8080
+    image: hourglass-ui:dev
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8080"
+        protocol: tcp
+  keycloak:
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_PASSWORD: dev-only-not-a-secret
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_HOSTNAME: http://keycloak.localhost:8081
+      KC_HTTP_PORT: "8081"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'exec 3<>/dev/tcp/127.0.0.1/8081 && printf ''GET /realms/hourglass/.well-known/openid-configuration HTTP/1.0\r\nHost: keycloak.localhost\r\n\r\n'' >&3 && read -r line <&3 && case "$$line" in *" 200 "*) exit 0;; esac; exit 1'
+      timeout: 5s
+      interval: 5s
+      retries: 60
+      start_period: 10s
+    image: quay.io/keycloak/keycloak:26.4.0
+    networks:
+      default:
+        aliases:
+          - keycloak.localhost
+    ports:
+      - mode: ingress
+        target: 8081
+        published: "8081"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-42/hourglass/deploy/keycloak/realm-hourglass.json
+        target: /opt/keycloak/data/import/realm-hourglass.json
+        read_only: true
+        bind:
+          create_host_path: true
+  stack-ready:
+    depends_on:
+      hourglass-api:
+        condition: service_started
+        required: true
+      hourglass-ui:
+        condition: service_started
+        required: true
+    entrypoint:
+      - sleep
+      - infinity
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS -o /dev/null http://hourglass-api:8080/healthz && curl -fsS -o /dev/null http://hourglass-ui:8080/ui-healthz
+      timeout: 5s
+      interval: 3s
+      retries: 60
+    image: curlimages/curl:8.11.1
+    networks:
+      default: null
+  vcsim:
+    environment:
+      VCSIM_PASSWORD: pass
+      VCSIM_USERNAME: user
+    image: hourglass-vcsim:dev
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8990
+        published: "8990"
+        protocol: tcp
+networks:
+  default:
+    name: hourglass-split_default
+volumes:
+  data:
+    name: hourglass-split_data

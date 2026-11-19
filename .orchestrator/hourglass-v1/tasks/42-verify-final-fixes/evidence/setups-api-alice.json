@@ -1,0 +1,164 @@
+{
+ "display_label_keys": [
+  "size"
+ ],
+ "metering_description": null,
+ "setups": [
+  {
+   "id": 1,
+   "name": "lab-01",
+   "labels": {
+    "size": "medium"
+   },
+   "weight": 1,
+   "state": "free",
+   "holder": null,
+   "held_since": null,
+   "deployed": false,
+   "metering": null,
+   "cost_per_hour_tokens": {
+    "now": 0,
+    "at_peak": 3
+   },
+   "details": {
+    "note": "sample setup",
+    "notes": "no real data"
+   },
+   "admin": null
+  },
+  {
+   "id": 2,
+   "name": "lab-02",
+   "labels": {
+    "size": "medium"
+   },
+   "weight": 1,
+   "state": "free",
+   "holder": null,
+   "held_since": null,
+   "deployed": false,
+   "metering": null,
+   "cost_per_hour_tokens": {
+    "now": 0,
+    "at_peak": 3
+   },
+   "details": {
+    "note": "sample setup"
+   },
+   "admin": null
+  },
+  {
+   "id": 3,
+   "name": "lab-03",
+   "labels": {
+    "size": "large"
+   },
+   "weight": 2,
+   "state": "held",
+   "holder": {
+    "user_id": 2,
+    "hold_id": 1,
+    "name": "Alice Example",
+    "balance_tokens": 300,
+    "overdrawn": false,
+    "is_you": true
+   },
+   "held_since": "2026-11-19T20:42:10.979Z",
+   "deployed": true,
+   "metering": {
+    "active": true,
+    "started_at": "2026-11-19T20:46:41.063Z",
+    "expected_start_at": null,
+    "reason": "resource reported by provider"
+   },
+   "cost_per_hour_tokens": {
+    "now": 0,
+    "at_peak": 6
+   },
+   "details": {
+    "note": "sample setup"
+   },
+   "admin": null
+  },
+  {
+   "id": 4,
+   "name": "lab-04",
+   "labels": {
+    "size": "large"
+   },
+   "weight": 2,
+   "state": "held",
+   "holder": {
+    "user_id": 2,
+    "hold_id": 2,
+    "name": "Alice Example",
+    "balance_tokens": 300,
+    "overdrawn": false,
+    "is_you": true
+   },
+   "held_since": "2026-11-19T20:42:10.984Z",
+   "deployed": false,
+   "metering": {
+    "active": false,
+    "started_at": null,
+    "expected_start_at": null,
+    "reason": "waiting for the provider to report the resource or 2h since acquire"
+   },
+   "cost_per_hour_tokens": {
+    "now": 0,
+    "at_peak": 6
+   },
+   "details": {
+    "note": "sample setup"
+   },
+   "admin": null
+  },
+  {
+   "id": 5,
+   "name": "lab-05",
+   "labels": {
+    "size": "extralarge"
+   },
+   "weight": 4,
+   "state": "free",
+   "holder": null,
+   "held_since": null,
+   "deployed": false,
+   "metering": null,
+   "cost_per_hour_tokens": {
+    "now": 0,
+    "at_peak": 12
+   },
+   "details": {
+    "note": "sample setup"
+   },
+   "admin": null
+  },
+  {
+   "id": 6,
+   "name": "lab-06",
+   "labels": {
+    "size": "extralarge"
+   },
+   "weight": 4,
+   "state": "free",
+   "holder": null,
+   "held_since": null,
+   "deployed": false,
+   "metering": null,
+   "cost_per_hour_tokens": {
+    "now": 0,
+    "at_peak": 12
+   },
+   "details": {
+    "note": "sample setup"
+   },
+   "admin": null
+  }
+ ],
+ "summary": {
+  "deployed": 1,
+  "enabled": 6,
+  "free": 4
+ }
+}

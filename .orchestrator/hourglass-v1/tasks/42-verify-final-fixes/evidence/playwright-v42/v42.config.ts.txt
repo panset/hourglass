@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT
+import { defineConfig } from "@playwright/test";
+export default defineConfig({
+  testDir: ".",
+  timeout: 20 * 60_000,
+  workers: 1,
+  reporter: [["list"]],
+  use: { baseURL: "http://localhost:8080", headless: true, channel: process.env.E2E_BROWSER_CHANNEL || undefined },
+});

@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: MIT
+
+// Verification task 42: GET /admin/users (all, pending) and GET /setups
+// compared field by field with figures computed independently from the
+// ledger and holds tables. Not product code.
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"math"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/store"
+)
+
+func TestV42_ResponsesMatchLedgerAndHolds(t *testing.T) {
+	ctx := context.Background()
+	e := newAdEnv(t)
+	e.pressure.SetValue(0.8)
+	q := func(query string, args ...any) int64 {
+		var n int64
+		if err := e.st.RawDBForV42().QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	// users: created at distinct times so pending order is meaningful
+	p2 := e.user("pend-b", store.StatusPending)
+	e.clk.Advance(time.Minute)
+	over := e.dev("zz-over")
+	rich := e.dev("aa-rich")
+	idle := e.dev("mm-idle")
+	norole := e.dev("nn-norole")
+	e.clk.Advance(time.Minute)
+	p1 := e.user("pend-a", store.StatusPending)
+	e.clk.Advance(time.Minute)
+	p3 := e.user("pend-c", store.StatusPending)
+	_ = e.user("rej", store.StatusRejected)
+	zero := e.dev("zero")
+	_, _, _ = p1, p2, p3
+	// make p2 the oldest by created_at (created first) and p1/p3 later
+	if _, err := e.led.Grant(ctx, e.admin.ID, over.user.ID, -400000, "drive negative"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.led.Grant(ctx, e.admin.ID, zero.user.ID, -300000, "to zero"); err != nil {
+		t.Fatal(err)
+	}
+	s1 := e.setup("lab-1", true, map[string]string{"tier": "a"})
+	s2 := e.setup("lab-2", true, map[string]string{"tier": "b"})
+	s3 := e.setup("lab-3", true, map[string]string{"tier": "b"})
+	s4 := e.setup("lab-4", true, nil) // free
+	s5 := e.setup("lab-5", false, nil) // disabled
+	s6 := e.setup("lab-6", true, nil)  // held, not yet metering
+	_, _ = s4, s5
+	e.hold(s1, over.user.ID)
+	e.hold(s2, rich.user.ID)
+	e.hold(s3, rich.user.ID)
+	for i := 0; i < 6; i++ {
+		if err := e.col.RunOnce(ctx); err != nil {
+			t.Fatal(err)
+		}
+		e.clk.Advance(5 * time.Minute)
+	}
+	e.hold(s6, idle.user.ID)
+	// norole had an allowance and a debit-free month; then loses its role
+	if err := e.st.SetUserRoles(ctx, norole.user.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	period := e.led.CurrentPeriod()
+
+	type U struct {
+		ID          int64    `json:"id"`
+		Username    string   `json:"username"`
+		Status      string   `json:"status"`
+		Roles       []string `json:"roles"`
+		Local       bool     `json:"is_local_admin"`
+		Balance     *float64 `json:"balance_tokens"`
+		Overdrawn   bool     `json:"overdrawn"`
+		MTD         float64  `json:"month_to_date_burn_tokens"`
+		BurnPerHour float64  `json:"burn_per_hour_tokens"`
+		Holds       []struct {
+			HoldID, SetupID int64
+		} `json:"active_holds"`
+		First string `json:"first_sign_in_at"`
+	}
+	type L struct {
+		Users   []U            `json:"users"`
+		Summary map[string]any `json:"summary"`
+		Pending *int           `json:"pending_count"`
+	}
+	get := func(path string) (L, []byte) {
+		rec := e.get(path)
+		if rec.Code != 200 {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body)
+		}
+		var l L
+		if err := json.Unmarshal(rec.Body.Bytes(), &l); err != nil {
+			t.Fatal(err)
+		}
+		return l, rec.Body.Bytes()
+	}
+	all, rawAll := get("/api/v1/admin/users")
+	pend, rawPend := get("/api/v1/admin/users?status=pending")
+	tok := func(mt int64) float64 { return float64(mt) / 1000 }
+	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
+	overdrawnN := 0
+	seen := map[int64]bool{}
+	for _, u := range all.Users {
+		seen[u.ID] = true
+		hasLedger := q(`SELECT COUNT(*) FROM ledger WHERE user_id = ?`, u.ID) > 0
+		bal := q(`SELECT COALESCE(SUM(amount_mt),0) FROM ledger WHERE user_id = ? AND period = ?`, u.ID, period)
+		mtd := -q(`SELECT COALESCE(SUM(amount_mt),0) FROM ledger WHERE user_id = ? AND period = ? AND type='debit'`, u.ID, period)
+		nh := q(`SELECT COUNT(*) FROM holds WHERE user_id = ? AND released_at IS NULL`, u.ID)
+		nroles := q(`SELECT COUNT(*) FROM user_roles WHERE user_id = ?`, u.ID)
+		if u.Local {
+			if u.Balance != nil {
+				t.Errorf("local admin has a balance")
+			}
+			continue
+		}
+		switch {
+		case !hasLedger && u.Balance != nil:
+			t.Errorf("%s: balance %v without ledger", u.Username, *u.Balance)
+		case hasLedger && (u.Balance == nil || !near(*u.Balance, tok(bal))):
+			t.Errorf("%s: balance %v, ledger %v", u.Username, u.Balance, tok(bal))
+		}
+		if !near(u.MTD, tok(mtd)) {
+			t.Errorf("%s: mtd %v, ledger %v", u.Username, u.MTD, tok(mtd))
+		}
+		if int64(len(u.Holds)) != nh {
+			t.Errorf("%s: %d holds, table %d", u.Username, len(u.Holds), nh)
+		}
+		wantOver := nroles > 0 && hasLedger && bal <= 0
+		if u.Overdrawn != wantOver {
+			t.Errorf("%s: overdrawn %v, want %v", u.Username, u.Overdrawn, wantOver)
+		}
+		if wantOver {
+			overdrawnN++
+		}
+	}
+	if n := q(`SELECT COUNT(*) FROM users`); int64(len(all.Users)) != n {
+		t.Errorf("list has %d users, table %d", len(all.Users), n)
+	}
+	// ordering: overdrawn first, then by name
+	for i := 1; i < len(all.Users); i++ {
+		a, b := all.Users[i-1], all.Users[i]
+		if !a.Overdrawn && b.Overdrawn {
+			t.Errorf("order: %s before overdrawn %s", a.Username, b.Username)
+		}
+	}
+	if got := all.Summary["overdrawn_count"]; fmt.Sprint(got) != fmt.Sprint(overdrawnN) {
+		t.Errorf("summary overdrawn_count %v, want %d", got, overdrawnN)
+	}
+	// pending: only pending users, oldest first, count right
+	np := q(`SELECT COUNT(*) FROM users WHERE status='pending'`)
+	if int64(len(pend.Users)) != np {
+		t.Errorf("pending list %d, table %d", len(pend.Users), np)
+	}
+	for i, u := range pend.Users {
+		if u.Status != "pending" {
+			t.Errorf("non-pending %s in pending list", u.Username)
+		}
+		if i > 0 && pend.Users[i-1].First > u.First {
+			t.Errorf("pending order: %s (%s) before %s (%s)", pend.Users[i-1].Username, pend.Users[i-1].First, u.Username, u.First)
+		}
+	}
+	t.Logf("pending order: %v", func() []string {
+		var s []string
+		for _, u := range pend.Users {
+			s = append(s, u.Username)
+		}
+		return s
+	}())
+	t.Logf("summary all: %v; summary pending: %v", all.Summary, pend.Summary)
+	if !strings.Contains(string(rawAll), "pending") {
+		t.Log("no pending field")
+	}
+
+	// GET /setups as a developer and as the admin
+	type S struct {
+		ID     int64  `json:"id"`
+		Name   string `json:"name"`
+		State  string `json:"state"`
+		Holder *struct {
+			UserID  int64   `json:"user_id"`
+			HoldID  int64   `json:"hold_id"`
+			Balance float64 `json:"balance_tokens"`
+			Over    bool    `json:"overdrawn"`
+		} `json:"holder"`
+		Cost     *costJSON       `json:"cost_per_hour_tokens"`
+		Metering json.RawMessage `json:"metering"`
+	}
+	for _, who := range []*adSess{&rich, &e.adminS} {
+		rec := e.do("GET", "/api/v1/setups", who, false, "")
+		if rec.Code != 200 {
+			t.Fatal(rec.Code)
+		}
+		var body struct {
+			Setups []S `json:"setups"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &body)
+		nEnabled := q(`SELECT COUNT(*) FROM setups WHERE enabled = 1`)
+		nAll := q(`SELECT COUNT(*) FROM setups`)
+		want := nEnabled
+		if who == &e.adminS {
+			want = nAll
+		}
+		if int64(len(body.Setups)) != want {
+			t.Errorf("%s sees %d setups, want %d", who.user.Username, len(body.Setups), want)
+		}
+		for _, s := range body.Setups {
+			var holder, hold int64
+			_ = e.st.RawDBForV42().QueryRowContext(ctx, `SELECT user_id, id FROM holds WHERE setup_id = ? AND released_at IS NULL`, s.ID).Scan(&holder, &hold)
+			if holder == 0 {
+				if s.Holder != nil {
+					t.Errorf("%s: holder shown on a free setup", s.Name)
+				}
+			} else {
+				bal := q(`SELECT COALESCE(SUM(amount_mt),0) FROM ledger WHERE user_id = ? AND period = ?`, holder, period)
+				if s.Holder == nil || s.Holder.UserID != holder || s.Holder.HoldID != hold || !near(s.Holder.Balance, tok(bal)) || s.Holder.Over != (bal <= 0) {
+					t.Errorf("%s: holder %+v, want user %d hold %d balance %v", s.Name, s.Holder, holder, hold, tok(bal))
+				}
+			}
+			if s.Cost == nil || s.Cost.Now <= 0 {
+				t.Errorf("%s (%s): cost per hour %+v", s.Name, s.State, s.Cost)
+			}
+			t.Logf("%s sees %s state=%s cost=%+v metering=%s", who.user.Username, s.Name, s.State, s.Cost, s.Metering)
+		}
+		if dir := os.Getenv("V42_DUMP"); dir != "" {
+			os.WriteFile(fmt.Sprintf("%s/setups-%s.json", dir, who.user.Username), rec.Body.Bytes(), 0o644)
+		}
+	}
+	if dir := os.Getenv("V42_DUMP"); dir != "" {
+		os.WriteFile(dir+"/admin-users.json", rawAll, 0o644)
+		os.WriteFile(dir+"/admin-users-pending.json", rawPend, 0o644)
+	}
+}

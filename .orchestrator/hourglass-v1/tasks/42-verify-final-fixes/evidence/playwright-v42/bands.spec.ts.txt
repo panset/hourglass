@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: MIT
+import { test, expect } from "@playwright/test";
+const OUT = process.env.V42_SHOTS!;
+test("v42 settings bands", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("dev-only-v42-admin-password");
+  await page.getByRole("button", { name: "Sign in as admin" }).click();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  for (const [w, h] of [[1280, 800], [1440, 900]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("/admin/settings");
+    const f = page.getByLabel("From pressure 1 (0 to 1)", { exact: true });
+    await f.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 150));
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUT}/settings-bands-${w}x${h}.png` });
+    const boxes = [];
+    for (const l of ["Base multiplier", "From pressure 1 (0 to 1)", "Multiplier 1"]) {
+      const b = await page.getByLabel(l, { exact: true }).boundingBox();
+      boxes.push(`${l}: y=${b?.y.toFixed(1)} h=${b?.height.toFixed(1)}`);
+    }
+    console.log(`${w}x${h} ${boxes.join("; ")}`);
+  }
+});

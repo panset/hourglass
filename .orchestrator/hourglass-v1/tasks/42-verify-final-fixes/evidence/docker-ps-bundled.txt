@@ -1,0 +1,5 @@
+hourglass-bundled-stack-ready-1	curlimages/curl:8.11.1	
+hourglass-bundled-hourglass-1	hourglass:dev	0.0.0.0:8080->8080/tcp
+hourglass-bundled-deps-ready-1	curlimages/curl:8.11.1	
+hourglass-bundled-keycloak-1	quay.io/keycloak/keycloak:26.4.0	8080/tcp, 8443/tcp, 9000/tcp, 0.0.0.0:8081->8081/tcp
+hourglass-bundled-vcsim-1	hourglass-vcsim:dev	8989/tcp, 0.0.0.0:8990->8990/tcp
