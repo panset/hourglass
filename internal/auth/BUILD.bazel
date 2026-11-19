@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "auth",
+    srcs = [
+        "auth.go",
+        "cors.go",
+        "handlers.go",
+        "localadmin.go",
+        "middleware.go",
+        "oidc.go",
+        "password.go",
+        "ratelimit.go",
+        "session.go",
+    ],
+    importpath = "github.com/panset/hourglass/internal/auth",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/api/apierr",
+        "//internal/store",
+        "//pkg/hourglass",
+        "@com_github_coreos_go_oidc_v3//oidc",
+        "@org_golang_x_crypto//argon2",
+        "@org_golang_x_oauth2//:oauth2",
+    ],
+)
+
+go_test(
+    name = "auth_test",
+    srcs = [
+        "helpers_test.go",
+        "local_test.go",
+        "oidc_test.go",
+        "session_test.go",
+    ],
+    embed = [":auth"],
+    deps = [
+        "//internal/api/apierr",
+        "//internal/store",
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)

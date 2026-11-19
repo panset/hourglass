@@ -1,0 +1,34 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:gazelle (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 0.146s, Critical Path: 0.00s
+INFO: 1 process: 1 internal.
+INFO: Build completed successfully, 1 total action
+INFO: Running command line: bazel-bin/gazelle update '-mode=diff' internal/auth internal/api
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 4 targets (2 packages loaded, 0 targets configured)
+Analyzing: 4 targets (2 packages loaded, 0 targets configured)
+
+INFO: Analyzed 4 targets (12 packages loaded, 85 targets configured).
+[28 / 29] 1 / 2 tests; [Prepa] Testing //internal/auth:auth_test
+[28 / 29] 1 / 2 tests; Testing //internal/auth:auth_test; 1s darwin-sandbox
+[28 / 29] 2 / 2 tests; Testing //internal/auth:auth_test; 4s darwin-sandbox
+INFO: Found 2 targets and 2 test targets...
+INFO: Elapsed time: 5.655s, Critical Path: 5.49s
+INFO: 8 processes: 1 internal, 7 darwin-sandbox.
+INFO: Build completed successfully, 8 total actions
+//internal/api/apierr:apierr_test                               (cached) PASSED in 0.2s
+//internal/auth:auth_test                                                PASSED in 4.4s
+
+Executed 1 out of 2 tests: 2 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

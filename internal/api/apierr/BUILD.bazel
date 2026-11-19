@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "apierr",
+    srcs = ["apierr.go"],
+    importpath = "github.com/panset/hourglass/internal/api/apierr",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "apierr_test",
+    srcs = ["apierr_test.go"],
+    embed = [":apierr"],
+)
