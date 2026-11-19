@@ -1,0 +1,20 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 2 targets (1 packages loaded, 0 targets configured)
+Analyzing: 2 targets (1 packages loaded, 0 targets configured)
+
+Analyzing: 2 targets (1 packages loaded, 2 targets configured)
+
+Analyzing: 2 targets (5 packages loaded, 631 targets configured)
+
+INFO: Analyzed 2 targets (38 packages loaded, 2004 targets configured).
+[49 / 50] [Prepa] Testing //internal/holds:holds_test
+INFO: Found 1 target and 1 test target...
+INFO: Elapsed time: 4.448s, Critical Path: 1.42s
+INFO: 11 processes: 4 internal, 7 darwin-sandbox.
+INFO: Build completed successfully, 11 total actions
+//internal/holds:holds_test                                              PASSED in 0.4s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

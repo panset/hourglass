@@ -1,0 +1,86 @@
+diff --git a/pkg/hourglasstest/hourglasstest_test.go b/pkg/hourglasstest/hourglasstest_test.go
+index 61cb6fc..502c6d4 100644
+--- a/pkg/hourglasstest/hourglasstest_test.go
++++ b/pkg/hourglasstest/hourglasstest_test.go
+@@ -29,9 +29,12 @@ func (c *collector) Errorf(f string, a ...any) {
+ }
+ 
+ // failures runs the checks and returns failure messages keyed by check name.
+-func failures(checks []check) map[string][]string {
++func failures(checks []check, only string) map[string][]string {
+ 	out := map[string][]string{}
+ 	for _, c := range checks {
++		if only != "" && c.name != only {
++			continue
++		}
+ 		col := &collector{}
+ 		guarded(col, c.fn)
+ 		if len(col.msgs) > 0 {
+@@ -106,6 +109,7 @@ func okList(context.Context) ([]hourglass.Allocation, error) {
+ }
+ 
+ func TestEXT5_BrokenProviderIsCaught(t *testing.T) {
++	t.Parallel()
+ 	cases := []struct {
+ 		check string
+ 		p     func() hourglass.ResourceProvider
+@@ -146,7 +150,7 @@ func TestEXT5_BrokenProviderIsCaught(t *testing.T) {
+ 		c := c
+ 		t.Run(fmt.Sprint(i, "_", c.check), func(t *testing.T) {
+ 			t.Parallel()
+-			mustFail(t, failures(providerChecks(c.p)), c.check)
++			mustFail(t, failures(providerChecks(c.p), c.check), c.check)
+ 		})
+ 	}
+ }
+@@ -162,6 +166,7 @@ func (b brokenPressure) Pressure(ctx context.Context, s hourglass.Snapshot) (flo
+ }
+ 
+ func TestEXT5_BrokenPressureSourceIsCaught(t *testing.T) {
++	t.Parallel()
+ 	val := func(v float64) func(context.Context, hourglass.Snapshot) (float64, error) {
+ 		return func(context.Context, hourglass.Snapshot) (float64, error) { return v, nil }
+ 	}
+@@ -192,7 +197,7 @@ func TestEXT5_BrokenPressureSourceIsCaught(t *testing.T) {
+ 		c := c
+ 		t.Run(fmt.Sprint(i, "_", c.check), func(t *testing.T) {
+ 			t.Parallel()
+-			mustFail(t, failures(pressureChecks(func() hourglass.PressureSource { return c.p }, []hourglass.Snapshot{snap})), c.check)
++			mustFail(t, failures(pressureChecks(func() hourglass.PressureSource { return c.p }, []hourglass.Snapshot{snap}), c.check), c.check)
+ 		})
+ 	}
+ }
+@@ -208,6 +213,7 @@ func (b brokenPolicy) Decide(ctx context.Context, h hourglass.HoldState, s hourg
+ }
+ 
+ func TestEXT5_BrokenPolicyIsCaught(t *testing.T) {
++	t.Parallel()
+ 	dec := func(d hourglass.Decision) func(context.Context, hourglass.HoldState, hourglass.Snapshot) (hourglass.Decision, error) {
+ 		return func(context.Context, hourglass.HoldState, hourglass.Snapshot) (hourglass.Decision, error) {
+ 			return d, nil
+@@ -246,7 +252,7 @@ func TestEXT5_BrokenPolicyIsCaught(t *testing.T) {
+ 		c := c
+ 		t.Run(fmt.Sprint(i, "_", c.check), func(t *testing.T) {
+ 			t.Parallel()
+-			mustFail(t, failures(policyChecks(func() hourglass.MeteringPolicy { return c.p }, pc)), c.check)
++			mustFail(t, failures(policyChecks(func() hourglass.MeteringPolicy { return c.p }, pc), c.check), c.check)
+ 		})
+ 	}
+ }
+@@ -260,6 +266,7 @@ func (b brokenHook) Name() string                                        { retur
+ func (b brokenHook) Handle(ctx context.Context, e hourglass.Event) error { return b.fn(ctx, e) }
+ 
+ func TestEXT5_BrokenHookIsCaught(t *testing.T) {
++	t.Parallel()
+ 	ok := func(context.Context, hourglass.Event) error { return nil }
+ 	cases := []struct {
+ 		check string
+@@ -286,7 +293,7 @@ func TestEXT5_BrokenHookIsCaught(t *testing.T) {
+ 		c := c
+ 		t.Run(fmt.Sprint(i, "_", c.check), func(t *testing.T) {
+ 			t.Parallel()
+-			mustFail(t, failures(hookChecks(func() hourglass.Hook { return c.h })), c.check)
++			mustFail(t, failures(hookChecks(func() hourglass.Hook { return c.h }), c.check), c.check)
+ 		})
+ 	}
+ }
