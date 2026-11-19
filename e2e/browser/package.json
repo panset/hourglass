@@ -1,0 +1,14 @@
+{
+  "name": "hourglass-e2e-browser",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Headless-browser acceptance test for the bundled and split stacks (needs Docker; not part of bazel test)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1",
+    "@types/node": "22.10.2",
+    "typescript": "5.7.2"
+  }
+}

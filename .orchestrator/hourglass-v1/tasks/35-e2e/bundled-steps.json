@@ -1,0 +1,175 @@
+{
+  "mode": "bundled",
+  "seconds": 661,
+  "steps": [
+    {
+      "id": "A0",
+      "title": "local admin signs in, changes the password, configures Settings",
+      "status": "pass",
+      "seconds": 2,
+      "asserted": [
+        "admin form sign-in, forced password change completed, navigation shown",
+        "template {{.SetupName}}_RP, label key size, poll 1m, enforcement ON, bands 1x / 2x from 0.05 saved and reloaded"
+      ],
+      "observed": {
+        "bands": "base 1, from 0.05 -> 2",
+        "keycloak": "realm token and SSO session lifetimes set to 40 days (see A8)"
+      }
+    },
+    {
+      "id": "A1",
+      "title": "new user signs in and sees the not-authorized page",
+      "status": "pass",
+      "seconds": 1,
+      "asserted": [
+        "exact sentence; signed-in email; no navigation or header; no setup names or balances in the page text",
+        "GET /api/v1/setups from this session: 403 no_role"
+      ],
+      "observed": {
+        "url": "http://localhost:8080/unauthorized"
+      }
+    },
+    {
+      "id": "A2",
+      "title": "the local admin approves the user",
+      "status": "pass",
+      "seconds": 0,
+      "asserted": [
+        "alice appears under Pending access requests with her email alice@example.com",
+        "after approval alice lands on My usage; Tokens left card and top bar show 300"
+      ],
+      "observed": {
+        "tokens_left": 300
+      }
+    },
+    {
+      "id": "A3",
+      "title": "acquire a size=large setup",
+      "status": "pass",
+      "seconds": 0,
+      "asserted": [
+        "acquire dialog shows weight 2 and a cost per hour",
+        "lab-03 is held by \"You\" (alice; admin Users page lists it under Holding), state Acquired · deploying, nothing metering"
+      ],
+      "observed": {
+        "acquire_dialog": "Acquire lab-03? Weight 2. Costs 0.0 / h now (0×), up to 4.0 / h at the highest band. Acquire Cancel"
+      }
+    },
+    {
+      "id": "A4",
+      "title": "pool created in the simulator, metering starts at weight 2",
+      "status": "pass",
+      "seconds": 413,
+      "asserted": [
+        "hold row shows Deployed and weight 2",
+        "weight 2 x multiplier 1x x one poll = 0.0333 tokens; each of the first two debits within 25 percent",
+        "Tokens left = 300 + sum of the debits listed in the ledger (within rounding)",
+        "Burning now shows lab-03 · weight 2 × 1×; top bar pill shows 1×"
+      ],
+      "observed": {
+        "hold_row": "lab-03 | size=large | Deployed | 2 | 2.0 tokens / hour | 4 min | Release",
+        "burning_now": "Burning now 2.0 / h lab-03 · weight 2 × 1×",
+        "debits_1x": [
+          -0.033,
+          -0.033
+        ],
+        "expected_per_poll": 0.03333333333333333,
+        "balance": 299.934,
+        "pill": "Lab 1% · 1×"
+      }
+    },
+    {
+      "id": "A5",
+      "title": "pressure driven across a band, the debit rate changes",
+      "status": "pass",
+      "seconds": 121,
+      "asserted": [
+        "top bar pill moved from \"Lab 1% · 1×\" to \"Lab 21% · 2×\"; smoothed pressure is on the right side of the 5 percent threshold",
+        "two consecutive debits at 2x are twice the two last debits at 1x (ratio 1.75 to 2.25, absorbing rounding to 0.001 and poll jitter)"
+      ],
+      "observed": {
+        "pill_before": "Lab 1% · 1×",
+        "pill_after": "Lab 21% · 2×",
+        "debits_1x_last2": [
+          0.033,
+          0.033
+        ],
+        "debits_2x_first2": [
+          0.067,
+          0.067
+        ],
+        "ratio": 2.03
+      }
+    },
+    {
+      "id": "A6",
+      "title": "a third acquire is refused by the hold limit",
+      "status": "pass",
+      "seconds": 0,
+      "asserted": [
+        "Setups page says \"You already hold 2 of 2 allowed setups.\" and the Acquire buttons are disabled",
+        "POST acquire on a free setup: refused with code hold_limit and the hold-limit message"
+      ],
+      "observed": {
+        "api_status": 409,
+        "api_error": {
+          "code": "hold_limit",
+          "message": "You already hold the maximum of 2 setups."
+        }
+      }
+    },
+    {
+      "id": "A7",
+      "title": "release is refused while the pool exists, succeeds after it is destroyed",
+      "status": "pass",
+      "seconds": 61,
+      "asserted": [
+        "Release on a deployed setup shows \"This setup is still deployed. Tear it down, then release.\" and the hold stays",
+        "after the pool is destroyed and one poll, Release succeeds; lab-03 is Free on Setups; holds 1 of 2"
+      ],
+      "observed": {}
+    },
+    {
+      "id": "A8",
+      "title": "month rollover with a negative balance, the debt carries",
+      "status": "pass",
+      "seconds": 61,
+      "asserted": [
+        "admin grant of -400 with a reason leaves alice overdrawn (balance -100.267)",
+        "new month December 2026: ledger has Allowance +300 and Carryover -100.267 (the debt of -100.267); balance = 300 + carry-over + debits since",
+        "the jump itself is not charged (no debit entry covers the 30-day gap)"
+      ],
+      "observed": {
+        "balance_before_grant": 299.733,
+        "balance_overdrawn": -100.267,
+        "clock_jump": "2026-11-19T17:19:21.396Z -> 2026-12-01T03:00:00.000Z",
+        "ledger_new_month": [
+          "Carryover -100.267 -> -100.267",
+          "Allowance 300 -> 199.733"
+        ],
+        "balance_after_rollover": 199.733
+      }
+    },
+    {
+      "id": "A9",
+      "title": "bundled mode: one container serves page and API, one origin",
+      "status": "pass",
+      "seconds": 0,
+      "asserted": [
+        "/ui-healthz does not exist: there is no separate UI container; /healthz and the page share the origin",
+        "every browser request went to http://localhost:8080 (or Keycloak's login) - the page never called the API on another origin"
+      ],
+      "observed": {
+        "healthz": {
+          "status": "ok",
+          "database": "ok",
+          "last_poll_age_seconds": 5
+        },
+        "browser_origins": [
+          "http://localhost:8080",
+          "http://keycloak.localhost:8081"
+        ]
+      }
+    }
+  ]
+}

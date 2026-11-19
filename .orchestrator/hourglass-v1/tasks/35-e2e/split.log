@@ -1,0 +1,40 @@
+== [split] start 09:20:57
+(node:70454) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:70455) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+== A0 local admin signs in, changes the password, configures Settings
+== A1 new user signs in and sees the not-authorized page
+== A2 the local admin approves the user
+== A3 acquire a size=large setup
+== A4 pool created in the simulator, metering starts at weight 2
+== A5 pressure driven across a band, the debit rate changes
+== A6 a third acquire is refused by the hold limit
+== A7 release is refused while the pool exists, succeeds after it is destroyed
+== A8 month rollover with a negative balance, the debt carries
+== A9 split mode: page and API from different containers, one origin
+ok   A0 local admin signs in, changes the password, configures Settings (2s)
+ok   A1 new user signs in and sees the not-authorized page (1s)
+ok   A2 the local admin approves the user (0s)
+ok   A3 acquire a size=large setup (1s)
+ok   A4 pool created in the simulator, metering starts at weight 2 (414s)
+ok   A5 pressure driven across a band, the debit rate changes (121s)
+ok   A6 a third acquire is refused by the hold limit (0s)
+ok   A7 release is refused while the pool exists, succeeds after it is destroyed (61s)
+ok   A8 month rollover with a negative balance, the debt carries (61s)
+ok   A9 split mode: page and API from different containers, one origin (0s)
+  ✓  1 [chromium] › acceptance.spec.ts:202:5 › acceptance path: sign in, approve, acquire, meter, pressure, hold limit, release, rollover (11.0m)
+
+  Slow test file: [chromium] › acceptance.spec.ts (11.0m)
+  Consider splitting slow test files to speed up parallel execution
+  1 passed (11.0m)
+
+To open last HTML report run:
+
+  npx playwright show-report ../out/split/playwright-report
+
+== [split] exit 0 after 714 s (artifacts in e2e/out/split)
+rc=0
