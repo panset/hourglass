@@ -297,3 +297,11 @@ func TestEXT1_SnapshotHelpers(t *testing.T) {
 		t.Error("empty snapshot returned an allocation")
 	}
 }
+
+func TestEXT5_RunWithoutServerImportNamesThePackage(t *testing.T) {
+	// This test binary does not link internal/app, so Run has no implementation.
+	err := Run(context.Background(), Options{})
+	if err == nil || !strings.Contains(err.Error(), `"github.com/panset/hourglass/pkg/hourglass/server"`) {
+		t.Fatalf("err = %v", err)
+	}
+}

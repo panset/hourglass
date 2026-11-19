@@ -4,6 +4,8 @@ package hourglass
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 
@@ -36,13 +38,13 @@ type Options struct {
 // in order (HTTP, collector, events, store) within 10 seconds. It returns
 // nil after a clean shutdown.
 //
-// Run is implemented by internal/app, which imports this package for the
-// extension types, so the implementation is reached through
-// internal/app/runhook: a binary must link internal/app in (the bundled
-// cmd/hourglassd does, with a blank import). A binary that does not gets
-// runhook.ErrNoImpl.
+// The implementation lives in internal/app, which imports this package for
+// the extension types, so it is reached through internal/app/runhook. A main
+// links it by importing github.com/panset/hourglass/pkg/hourglass/server for
+// its side effect (cmd/hourglassd does). Without that import Run returns an
+// error saying so.
 func Run(ctx context.Context, opts Options) error {
-	return runhook.Call(ctx, runhook.Options{
+	err := runhook.Call(ctx, runhook.Options{
 		ConfigPath:            opts.ConfigPath,
 		DefaultPressureSource: opts.DefaultPressureSource,
 		DefaultMeteringPolicy: opts.DefaultMeteringPolicy,
@@ -51,4 +53,11 @@ func Run(ctx context.Context, opts Options) error {
 		Stderr:                opts.Stderr,
 		UI:                    opts.UI,
 	})
+	if errors.Is(err, runhook.ErrNoImpl) {
+		return fmt.Errorf("%w: add the import _ %q to your main package", err, serverImportPath)
+	}
+	return err
 }
+
+// serverImportPath is the package a third-party main imports to link Run.
+const serverImportPath = "github.com/panset/hourglass/pkg/hourglass/server"

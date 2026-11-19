@@ -57,7 +57,31 @@
 //		})
 //	}
 //
-// and a custom binary enables it with a blank import in its own main:
+// and a custom binary enables it with a blank import in its own main. The
+// binary also imports pkg/hourglass/server, which links the implementation of
+// Run (without it Run returns an error), and then calls Run:
 //
-//	import _ "example.com/lab/audit"
+//	package main
+//
+//	import (
+//		"context"
+//		"log"
+//		"os"
+//
+//		"github.com/panset/hourglass/pkg/hourglass"
+//		_ "github.com/panset/hourglass/pkg/hourglass/server"
+//
+//		_ "example.com/lab/audit"
+//	)
+//
+//	func main() {
+//		err := hourglass.Run(context.Background(), hourglass.Options{
+//			DefaultPressureSource: "inventory", // some registered pressure source
+//			DefaultMeteringPolicy: "default",   // some registered metering policy
+//			Args:                  os.Args[1:],
+//		})
+//		if err != nil {
+//			log.Fatal(err)
+//		}
+//	}
 package hourglass

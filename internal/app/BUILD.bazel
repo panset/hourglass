@@ -5,6 +5,7 @@ go_library(
     name = "app",
     srcs = [
         "app.go",
+        "checkprovider.go",
         "metrics.go",
         "seed.go",
     ],
@@ -30,6 +31,7 @@ go_test(
     name = "app_test",
     srcs = [
         "app_test.go",
+        "checkprovider_test.go",
         "metrics_test.go",
         "seed_test.go",
     ],

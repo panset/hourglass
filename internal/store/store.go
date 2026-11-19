@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -101,6 +102,44 @@ func Open(path string) (*Store, error) {
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
+	}
+	return s, nil
+}
+
+// OpenReadOnly opens an existing database without writing to it: no file is
+// created, no migration or pragma that changes the file is run, and every
+// write fails. A missing file is an error, as is a schema newer or older than
+// this binary (it cannot be migrated read-only).
+func OpenReadOnly(path string) (*Store, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("store: open %s read-only: %w", path, err)
+	}
+	u := url.URL{Scheme: "file", Opaque: (&url.URL{Path: path}).EscapedPath()}
+	q := url.Values{}
+	q.Set("mode", "ro")
+	q.Add("_pragma", "foreign_keys(1)")
+	q.Add("_pragma", "busy_timeout(10000)")
+	q.Add("_pragma", "query_only(1)")
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{queries: queries{db: db, root: db}, sqldb: db}
+	migs, err := loadMigrations()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	var current sql.NullInt64
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&current); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("store: open %s read-only: %w", path, err)
+	}
+	if want := migs[len(migs)-1].version; int(current.Int64) != want {
+		db.Close()
+		return nil, fmt.Errorf("store: database schema version %d differs from this binary's %d; start the server once to migrate it",
+			current.Int64, want)
 	}
 	return s, nil
 }

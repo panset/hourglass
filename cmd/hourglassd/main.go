@@ -5,6 +5,8 @@
 // with its own packages) and hands control to hourglass.Run.
 //
 //	hourglassd [-config file]     run the server
+//	hourglassd check-provider [-config file]
+//	                              list and report what the provider and pressure source see; writes nothing
 //	hourglassd version            print the version
 package main
 
@@ -16,12 +18,14 @@ import (
 	"syscall"
 
 	_ "github.com/panset/hourglass/hooks/webhook"
-	_ "github.com/panset/hourglass/internal/app" // implements hourglass.Run
+	"github.com/panset/hourglass/internal/app"
 	"github.com/panset/hourglass/internal/version"
 	"github.com/panset/hourglass/pkg/hourglass"
+	_ "github.com/panset/hourglass/pkg/hourglass/server" // implements hourglass.Run (EXT-5)
 	_ "github.com/panset/hourglass/policies/default"
 	_ "github.com/panset/hourglass/pressure/inventory"
 	_ "github.com/panset/hourglass/providers/static"
+	_ "github.com/panset/hourglass/providers/vsphere"
 )
 
 // Defaults used when the config does not name a pressure source or policy.
@@ -31,8 +35,9 @@ const (
 )
 
 // subcommands are run instead of the server when named as the first
-// argument. A later task adds check-provider here.
+// argument.
 var subcommands = map[string]func(args []string) int{
+	"check-provider": checkProvider,
 	"version": func([]string) int {
 		fmt.Println("hourglassd", version.Version)
 		return 0
@@ -58,6 +63,23 @@ func run(args []string) int {
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "hourglassd:", err)
+		return 1
+	}
+	return 0
+}
+
+// checkProvider is `hourglassd check-provider` (EXT-3 first-run check).
+func checkProvider(args []string) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := app.CheckProvider(ctx, app.CheckOptions{
+		Args:                  args,
+		DefaultPressureSource: defaultPressureSource,
+		Stdout:                os.Stdout,
+		Stderr:                os.Stderr,
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "hourglassd check-provider:", err)
 		return 1
 	}
 	return 0

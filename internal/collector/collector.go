@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -352,12 +351,9 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 		if err != nil {
 			return nil, fmt.Errorf("provider %s: %w", p.Name(), err)
 		}
-		for _, a := range list {
-			if _, dup := reported[a.ResourceName]; dup {
-				continue
-			}
+		allocs = DedupAllocations(list)
+		for _, a := range allocs {
 			reported[a.ResourceName] = a
-			allocs = append(allocs, a)
 		}
 	}
 	allocationFor := func(si *setupInfo) *hourglass.Allocation {
@@ -575,16 +571,11 @@ func writeOrphans(ctx context.Context, tx *store.Tx, setups []*setupInfo, holds 
 	for _, h := range holds {
 		heldNames[h.setup.state.ResourceName] = true
 	}
-	var names []string
-	seen := map[string]bool{}
-	for _, si := range setups {
-		rn := si.state.ResourceName
-		if _, ok := reported[rn]; ok && rn != "" && !heldNames[rn] && !seen[rn] {
-			seen[rn] = true
-			names = append(names, rn)
-		}
+	resources := make([]string, len(setups))
+	for i, si := range setups {
+		resources[i] = si.state.ResourceName
 	}
-	sort.Strings(names)
+	names := OrphanNames(resources, heldNames, reported)
 	for _, rn := range names {
 		labels := reported[rn].Labels
 		if labels == nil {
