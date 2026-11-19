@@ -17,19 +17,19 @@ detail when the one before it is verified.
 | 05 | 2 | `internal/metering`: bands, 15-minute smoothing, debit in milli-tokens with gap cap (MET-3,4) | build | sonnet | 03 | `internal/metering/` | verified |
 | 06 | 2 | `internal/ledger` pure logic: entry types, balance, rollover with expiry and carry-over, reset, grant (LED-1..6) | build | sonnet | 03 | `internal/ledger/` | verified |
 | 07 | 2 | Verify 04-06: run tests, count them, mutation spot-checks, spec worked examples | verify | sonnet | 04,05,06 | (read-only) | done |
-| 08 | 3 | `internal/store`: SQLite (modernc), WAL, embedded numbered migrations for all 15 tables, repositories | build | sonnet | 07 | `internal/store/` | running |
-| 09 | 3 | Verify 08 against the data-model table, column by column | verify | sonnet | 08 | (read-only) | pending |
+| 08 | 3 | `internal/store`: SQLite (modernc), WAL, embedded numbered migrations for all 15 tables, repositories | build | sonnet | 07 | `internal/store/` | verified |
+| 09 | 3 | Verify 08 against the data-model table, column by column | verify | sonnet | 08 | (read-only) | done |
 | 10 | 4 | `pkg/hourglass`: four interfaces, Setup/Allocation/Decision/Event, Snapshot/HoldState, registry with unknown-name error (EXT-1,2) | build | opus | 07 | `pkg/hourglass/` | done |
-| 11 | 4 | `pkg/hourglasstest`: fake provider, pressure source, policy, hook, clock; conformance suite per interface (EXT-5) | build | sonnet | 10 | `pkg/hourglasstest/` | running |
-| 12 | 4 | `pressure/inventory` and `policies/default` (MET-7) | build | sonnet | 11 | `pressure/`, `policies/` | pending |
-| 13 | 4 | `providers/static` and `hooks/webhook` | build | sonnet | 11 | `providers/static/`, `hooks/` | pending |
+| 11 | 4 | `pkg/hourglasstest`: fake provider, pressure source, policy, hook, clock; conformance suite per interface (EXT-5) | build | sonnet | 10 | `pkg/hourglasstest/` | done |
+| 12 | 4 | `pressure/inventory` and `policies/default` (MET-7) | build | sonnet | 11 | `pressure/`, `policies/` | done |
+| 13 | 4 | `providers/static` and `hooks/webhook` | build | sonnet | 11 | `providers/static/`, `hooks/` | done |
 | 14 | 4 | Core-genericity check: script failing CI if a core package imports or mentions vCenter, sizes or a concrete extension | build | haiku | 10 | `tools/` | done |
-| 15 | 4 | Verify 10-14 | verify | sonnet | 12,13,14 | (read-only) | pending |
-| 16 | 5 | `internal/events`: in-order queue, veto path, 30 s timeout, delivery records (EXT-6,7) | build | sonnet | 09,15 | `internal/events/` | pending |
+| 15 | 4 | Verify 10-14 | verify | sonnet | 12,13,14 | (read-only) | running |
+| 16 | 5 | `internal/events`: in-order queue, veto path, 30 s timeout, delivery records (EXT-6,7) | build | sonnet | 09,15 | `internal/events/` | done |
 | 17 | 5 | `internal/collector`: snapshot, matching, orphans, outages, idempotent debits in one transaction, hold lifecycle events (MET-1..6, HOLD-3,4) | build | opus | 16 | `internal/collector/` | pending |
 | 18 | 5 | Verify 16-17, including restart and failed-poll cases | verify | opus | 17 | (read-only) | pending |
-| 19 | 6 | `api/openapi.yaml` for every route in the spec's HTTP API table | build | sonnet | 15 | `api/` | pending |
-| 20 | 6 | `internal/auth`: local admin (argon2id, forced change, rate limit), OIDC code flow with PKCE, sessions, CSRF, role middleware (AUTH-1..8) | build | opus | 09 | `internal/auth/` | pending |
+| 19 | 6 | `api/openapi.yaml` for every route in the spec's HTTP API table | build | sonnet | 15 | `api/` | running |
+| 20 | 6 | `internal/auth`: local admin (argon2id, forced change, rate limit), OIDC code flow with PKCE, sessions, CSRF, role middleware (AUTH-1..8) | build | opus | 09 | `internal/auth/` | running |
 | 21 | 6 | `internal/api`: handlers for holds, setups, me, pressure, admin; settings, audit, seed import; `pkg/hourglass.Run`, config loading, `hourglassd` wiring | build | sonnet (split into 2-3 at re-plan) | 18,19,20 | `internal/api/`, `cmd/`, `pkg/hourglass/` | pending |
 | 22 | 6 | Permissions-table HTTP tests (every cell, unassigned gets no data) and the OpenAPI contract test | build | sonnet | 21 | `internal/api/` tests | pending |
 | 23 | 6 | Verify 19-22; security read of auth | verify | opus | 22 | (read-only) | pending |
@@ -50,6 +50,16 @@ detail when the one before it is verified.
 | 38 | 10 | `examples/custom` third-party main with its own extensions | build | sonnet | 15 | `examples/custom/` | pending |
 | 39 | 10 | Dependency license check in CI; Prometheus metrics listener and JSON logs if not already done | build | sonnet | 36 | `tools/`, `internal/` | pending |
 | 40 | 10 | Final verification against "Done means", from a clean clone, with a requirement-id coverage table | verify | opus | 37,38,39 | (read-only) | pending |
+
+## Added during re-planning
+
+| # | M | Task | Model | Status |
+|---|---|---|---|---|
+| 07b | 2 | Fix findings of 07 | haiku | verified |
+| 09b | 3 | Fix findings of 09 (ledger replace, Tx panic, balance cache) | sonnet | done |
+| 16b | 5 | `internal/settings`: typed admin settings, resource-name template | sonnet | done |
+| 17b | 5 | Ledger service: store-backed grant, reset, first allowance, rollover | sonnet | running |
+| 17c | 5 | `internal/holds`: acquire and release rules | sonnet | pending |
 
 ## Notes
 
