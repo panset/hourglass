@@ -877,7 +877,7 @@ paths:
         - name: action
           in: query
           schema: {type: string}
-          description: Exact action name, e.g. `grant.create`.
+          description: Exact action name, e.g. `ledger.grant`.
         - name: limit
           in: query
           schema: {type: integer, minimum: 1, maximum: 200, default: 50}
@@ -1460,9 +1460,13 @@ components:
           allOf: [{$ref: '#/components/schemas/Tokens'}]
           type: number
           nullable: true
-          description: Null for the local admin and for users who never had a role.
+          description: Null for the local admin, for users with no role (they have no allowance) and for users who never had a role.
         overdrawn: {type: boolean}
-        month_to_date_burn_tokens: {$ref: '#/components/schemas/Tokens'}
+        month_to_date_burn_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          type: number
+          nullable: true
+          description: Null for users with no role; 0 for the local admin.
         burn_per_hour_tokens: {$ref: '#/components/schemas/Tokens'}
         active_holds:
           type: array
@@ -1729,7 +1733,7 @@ components:
           properties:
             id: {type: integer, format: int64}
             name: {type: string}
-        action: {type: string, example: grant.create}
+        action: {type: string, example: ledger.grant}
         target: {type: string, description: "What was changed, e.g. `user:12` or `setup:4`", example: 'user:12'}
         before: {type: object, nullable: true, additionalProperties: true}
         after: {type: object, nullable: true, additionalProperties: true}

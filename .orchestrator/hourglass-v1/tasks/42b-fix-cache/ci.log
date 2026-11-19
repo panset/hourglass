@@ -1,0 +1,97 @@
+core-genericity: OK (138 core files, 154 Go files checked, no violations)
+license check ok: 25 Go modules, 267 npm packages
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:gazelle (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 0.639s, Critical Path: 0.00s
+INFO: 1 process: 1 internal.
+INFO: Build completed successfully, 1 total action
+INFO: Running command line: bazel-bin/gazelle update '-mode=diff' '-build_file_name=BUILD.bazel'
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (2 packages loaded, 0 targets configured)
+Analyzing: 254 targets (2 packages loaded, 0 targets configured)
+
+INFO: Analyzed 254 targets (2 packages loaded, 166 targets configured).
+[129 / 331] JsRunBinary ui/schema.fresh.ts; 0s darwin-sandbox ... (7 actions, 6 running)
+[147 / 331] JsRunBinary ui/schema.fresh.ts; 1s darwin-sandbox ... (8 actions, 7 running)
+[168 / 331] JsRunBinary ui/schema.fresh.ts; 2s darwin-sandbox ... (8 actions, 7 running)
+[183 / 331] Vite ui/dist; 3s darwin-sandbox ... (8 actions, 7 running)
+[199 / 331] Vite ui/dist; 4s darwin-sandbox ... (8 actions, 7 running)
+[219 / 331] GoLink deploy/images/hourglass-api_bin_amd64_/hourglass-api_bin_amd64; 1s darwin-sandbox ... (8 actions, 7 running)
+[243 / 331] OCI Image //deploy/images:hourglass-api-e2e_arm64; 1s darwin-sandbox ... (8 actions, 7 running)
+[264 / 331] GoLink deploy/images/hourglass-e2e_bin_amd64_/hourglass-e2e_bin_amd64; 1s darwin-sandbox ... (8 actions, 7 running)
+[286 / 331] GoLink e2e/hourglassd-e2e/hourglassd-e2e_/hourglassd-e2e; 1s darwin-sandbox ... (8 actions, 7 running)
+[310 / 331] GoLink cmd/hourglassd/hourglassd_/hourglassd; 0s darwin-sandbox ... (6 actions, 5 running)
+[329 / 331] [Prepa] Copying file bazel-out/darwin_arm64-fastbuild/bin/deploy/images/hourglass_index
+INFO: Found 254 targets...
+INFO: Elapsed time: 11.822s, Critical Path: 10.61s
+INFO: 230 processes: 2 internal, 196 darwin-sandbox, 32 local.
+INFO: Build completed successfully, 230 total actions
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+[0 / 1] checking cached actions
+INFO: Analyzed 254 targets (0 packages loaded, 0 targets configured).
+[103 / 123] 16 / 35 tests; Testing //examples/custom/cmd/labd:labd_test; 1s darwin-sandbox ... (8 actions running)
+[116 / 123] 28 / 35 tests; Testing //internal/app:app_test; 2s darwin-sandbox ... (7 actions running)
+[118 / 123] 30 / 35 tests; Testing //internal/api:api_test; 3s darwin-sandbox ... (5 actions running)
+[119 / 123] 31 / 35 tests; Testing //internal/api:api_test; 4s darwin-sandbox ... (4 actions running)
+[119 / 123] 31 / 35 tests; Testing //internal/api:api_test; 9s darwin-sandbox ... (4 actions running)
+[120 / 123] 32 / 35 tests; Testing //internal/api:api_test; 10s darwin-sandbox ... (3 actions running)
+[120 / 123] 33 / 35 tests; Testing //internal/api:api_test; 12s darwin-sandbox ... (3 actions running)
+[122 / 123] 34 / 35 tests; Testing //internal/api:api_test; 13s darwin-sandbox
+[122 / 123] 35 / 35 tests; Testing //internal/api:api_test; 18s darwin-sandbox
+INFO: Found 219 targets and 35 test targets...
+INFO: Elapsed time: 18.764s, Critical Path: 18.49s
+INFO: 17 processes: 18 darwin-sandbox, 2 local.
+INFO: Build completed successfully, 17 total actions
+//cmd/hourglass-ui:hourglass-ui_test                            (cached) PASSED in 0.5s
+//e2e/simulator:simulator_test                                  (cached) PASSED in 1.6s
+//examples/custom/busiestsite:busiestsite_test                  (cached) PASSED in 0.2s
+//examples/custom/businesshours:businesshours_test              (cached) PASSED in 0.2s
+//examples/custom/filedir:filedir_test                          (cached) PASSED in 0.2s
+//examples/custom/logfile:logfile_test                          (cached) PASSED in 0.2s
+//hooks/webhook:webhook_test                                    (cached) PASSED in 0.6s
+//internal/api/apierr:apierr_test                               (cached) PASSED in 0.2s
+//internal/config:config_test                                   (cached) PASSED in 0.4s
+//internal/metering:metering_test                               (cached) PASSED in 0.2s
+//internal/rules:rules_test                                     (cached) PASSED in 0.3s
+//internal/uiserve:uiserve_test                                 (cached) PASSED in 0.3s
+//internal/version:version_test                                 (cached) PASSED in 0.2s
+//pkg/hourglass:hourglass_test                                  (cached) PASSED in 0.3s
+//pkg/hourglasstest:hourglasstest_test                          (cached) PASSED in 1.3s
+//policies/default:default_test                                 (cached) PASSED in 0.3s
+//pressure/inventory:inventory_test                             (cached) PASSED in 0.2s
+//providers/static:static_test                                  (cached) PASSED in 0.2s
+//providers/vsphere:vsphere_test                                (cached) PASSED in 3.6s
+//cmd/hourglassd:ui_modes_test                                           PASSED in 2.1s
+//e2e/hourglassd-e2e:hourglassd-e2e_test                                 PASSED in 0.5s
+//examples/custom/cmd/labd:labd_test                                     PASSED in 1.0s
+//internal/api:api_test                                                  PASSED in 18.4s
+//internal/app:app_test                                                  PASSED in 3.7s
+//internal/auth:auth_test                                                PASSED in 12.2s
+//internal/collector:collector_test                                      PASSED in 1.8s
+//internal/events:events_test                                            PASSED in 0.7s
+//internal/holds:holds_test                                              PASSED in 0.6s
+//internal/ledger:ledger_test                                            PASSED in 0.7s
+//internal/settings:settings_test                                        PASSED in 0.3s
+//internal/store:store_test                                              PASSED in 1.6s
+//internal/uiserve:uiserve_ui_test                                       PASSED in 0.2s
+//ui:api_schema_drift_test                                               PASSED in 0.1s
+//ui:test                                                                PASSED in 9.2s
+//ui:typecheck                                                           PASSED in 6.5s
+
+Executed 16 out of 35 tests: 35 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

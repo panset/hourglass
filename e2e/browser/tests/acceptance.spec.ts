@@ -158,11 +158,16 @@ async function readLedger(page: Page): Promise<LedgerRow[]> {
     const m = /(\d+(?:\.\d+)?)×/.exec(c[1]!);
     out.push({ when: c[0]!, type: c[1]!, detail: c[2]!, amount: num(c[3]!), balance: num(c[4]!), mult: m ? Number(m[1]) : undefined });
   }
-  // The table is newest first: each row's balance is the next (older) row's balance plus its own amount.
-  // Verify that through the running balance and return oldest first; a table already oldest first is kept.
-  const newestFirst = out.length < 2 || Math.abs(out[0]!.balance - (out[1]!.balance + out[0]!.amount)) <= 0.0015;
-  if (newestFirst) out.reverse();
-  return out;
+  // The table must be newest first: each row's balance is the next (older) row's balance plus its own
+  // amount (within display rounding). Assert that for every pair, then return the rows oldest first.
+  for (let i = 0; i + 1 < out.length; i++) {
+    const a = out[i]!, b = out[i + 1]!;
+    expect(
+      Math.abs(a.balance - (b.balance + a.amount)),
+      `ledger not newest first at row ${i + 1}: ${a.when} ${a.type} ${a.amount} -> ${a.balance}, then ${b.when} ${b.type} ${b.amount} -> ${b.balance}`,
+    ).toBeLessThanOrEqual(0.002);
+  }
+  return out.reverse();
 }
 const debits = (l: LedgerRow[], mult?: number) =>
   l.filter((r) => r.type.startsWith("Debit") && (mult === undefined || r.mult === mult));

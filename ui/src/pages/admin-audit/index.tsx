@@ -71,7 +71,7 @@ export default function Page() {
           </Select>
         )}
       </Field>
-      <Field label="Action (exact name, e.g. grant.create)">
+      <Field label="Action (exact name, e.g. ledger.grant)">
         {(p) => <Input {...p} value={action} onChange={(e) => setAction(e.target.value)} />}
       </Field>
       <Button type="submit" variant="primary">

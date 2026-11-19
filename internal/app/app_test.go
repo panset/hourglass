@@ -559,3 +559,66 @@ func TestStartupOrder_BadConfigurationLeavesNoDatabaseAndLogsNoPassword(t *testi
 		})
 	}
 }
+
+// LED-2 self-repair: at start-up, before the first poll and before serving,
+// every balance cache is rebuilt from the ledger for the current period; a
+// change is logged as a warning with the count and the total moved.
+func TestLED2_StartupRebuildsBalanceCachesBeforeServing(t *testing.T) {
+	cfg, db := writeConfig(t, "")
+	ctx := context.Background()
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _, err := st.UpsertOIDCLogin(ctx, "sub-1", "a@example.test", "A", time.Date(2031, 3, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserRoles(ctx, u.ID, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	// Appending with a wrong current period leaves the cache at 0 while the
+	// March ledger sums to 300 tokens: a wrong cache, as a bug would leave it.
+	if _, err := st.AppendLedger(ctx, store.LedgerEntry{UserID: u.ID, Period: "2031-03", Type: "allowance", AmountMT: 300000},
+		"2031-02", time.Date(2031, 3, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if x, _ := st.GetUser(ctx, u.ID); x.BalanceMT != 0 {
+		t.Fatalf("setup: cache %d, want a wrong 0", x.BalanceMT)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	r := startWithClock(t, cfg, db, hourglasstest.NewFakeClock(time.Date(2031, 3, 5, 12, 0, 0, 0, time.UTC)))
+	line := r.out.logLine(t, "balance caches rebuilt from the ledger: some were wrong")
+	if line["level"] != "WARN" || line["changed"] != float64(1) || line["abs_delta_mt"] != float64(300000) ||
+		line["net_delta_mt"] != float64(300000) || line["period"] != "2031-03" {
+		t.Errorf("repair log %v", line)
+	}
+	log := r.out.String()
+	if strings.Index(log, "balance caches rebuilt") > strings.Index(log, `"http listening"`) {
+		t.Error("caches were rebuilt after the server started listening")
+	}
+	if err := r.stop(); err != nil {
+		t.Fatal(err)
+	}
+	st, err = store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if x, _ := st.GetUser(ctx, u.ID); x.BalanceMT != 300000 {
+		t.Errorf("cache %d after start-up, want 300000", x.BalanceMT)
+	}
+
+	// A second start finds nothing to change and says so at info level.
+	r = startWithClock(t, cfg, db, hourglasstest.NewFakeClock(time.Date(2031, 3, 5, 12, 0, 0, 0, time.UTC)))
+	line = r.out.logLine(t, "balance caches checked against the ledger")
+	if line["level"] != "INFO" || line["changed"] != float64(0) {
+		t.Errorf("clean start log %v", line)
+	}
+	if strings.Contains(r.out.String(), "some were wrong") {
+		t.Error("clean start logged a repair")
+	}
+}

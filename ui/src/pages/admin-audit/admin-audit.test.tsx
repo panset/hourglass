@@ -8,7 +8,7 @@ import Page from "./index";
 const entry = (id: number, over: Partial<AuditEntry> = {}): AuditEntry => ({
   id,
   actor: { id: 3, name: "Riley Admin" },
-  action: "grant.create",
+  action: "ledger.grant",
   target: "user:10",
   before: { balance: -12 },
   after: { balance: 88 },
@@ -29,7 +29,7 @@ describe("ADM-3 audit log page", () => {
     const rows = within(await screen.findByRole("table", { name: "Audit log" })).getAllByRole("row");
     expect(rows).toHaveLength(3);
     expect(rows[1]).toHaveTextContent("Riley Admin");
-    expect(rows[1]).toHaveTextContent("grant.create");
+    expect(rows[1]).toHaveTextContent("ledger.grant");
     expect(rows[1]).toHaveTextContent("user:10");
     expect(rows[2]).toHaveTextContent("setup:4");
   });
@@ -56,17 +56,26 @@ describe("ADM-3 audit log page", () => {
     expect(screen.getByText(/"balance": 88/)).toBeInTheDocument();
   });
 
+  it("ADM-3 the action filter's example is a name the server writes (ledger.grant)", async () => {
+    mockApi(routes(list([entry(1)])));
+    render(<Page />);
+    await screen.findByRole("table", { name: "Audit log" });
+    // Grants are audited as ledger.grant (internal/ledger/service.go AuditGrant).
+    expect(screen.getByLabelText(/^Action/).closest("label, div")!.parentElement!).toHaveTextContent("e.g. ledger.grant");
+    expect(document.body).not.toHaveTextContent("grant.create");
+  });
+
   it("filters by actor and action through query parameters", async () => {
     const { calls } = mockApi(routes(list([entry(1)])));
     render(<Page />);
     await screen.findByRole("table", { name: "Audit log" });
     await userEvent.selectOptions(await screen.findByLabelText("Actor"), "Priya N.");
-    await userEvent.type(screen.getByLabelText(/^Action/), "grant.create");
+    await userEvent.type(screen.getByLabelText(/^Action/), "ledger.grant");
     await userEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     await vi.waitFor(() => {
       const last = calls.filter((c) => c.url.includes("/admin/audit")).at(-1)!;
       expect(last.url).toContain("actor=10");
-      expect(last.url).toContain("action=grant.create");
+      expect(last.url).toContain("action=ledger.grant");
       expect(last.url).toContain("offset=0");
     });
   });

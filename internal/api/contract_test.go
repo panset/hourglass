@@ -465,6 +465,10 @@ func newWorld(t *testing.T) *world {
 	w.must(200, "PUT", "/api/v1/admin/users/"+uid(p2)+"/roles", &w.adm, `{"roles":["developer"]}`)
 	w.must(200, "POST", "/api/v1/admin/users/"+uid(p3)+"/reject", &w.adm, "")
 	w.must(201, "POST", "/api/v1/admin/users/"+uid(p2)+"/reset", &w.adm, `{"reason":"month start"}`)
+	// A developer whose roles are removed: the admin list has null balance and
+	// month-to-date burn for them (LED-3), which the schema must allow.
+	demoted := b.newUser("demoted", store.StatusActive, store.RoleDeveloper)
+	w.must(200, "PUT", "/api/v1/admin/users/"+uid(demoted)+"/roles", &w.adm, `{"roles":[]}`)
 	extra := mk("lab-05", true, `{"tier":"a"}`)
 	w.must(200, "PUT", fmt.Sprintf("/api/v1/admin/setups/%d", extra), &w.adm,
 		`{"name":"lab-05","labels":{"tier":"a"},"details":{"edited":true},"enabled":true,"resource_name_override":"LAB05"}`)

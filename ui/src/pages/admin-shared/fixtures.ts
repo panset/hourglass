@@ -71,10 +71,25 @@ export const morgan: AdminUser = {
   roles: [],
   balance_tokens: null,
   overdrawn: false,
-  month_to_date_burn_tokens: 0,
+  month_to_date_burn_tokens: null,
   burn_per_hour_tokens: 0,
   active_holds: [],
   first_sign_in_at: "2026-11-18T09:14:00Z",
+};
+
+// An active user whose roles were removed: no allowance, so no balance or burn.
+export const dana: AdminUser = {
+  ...priya,
+  id: 21,
+  username: "dana",
+  email: "dana@example.com",
+  name: "Dana R.",
+  roles: [],
+  balance_tokens: null,
+  overdrawn: false,
+  month_to_date_burn_tokens: null,
+  burn_per_hour_tokens: 0,
+  active_holds: [],
 };
 
 const summary = {

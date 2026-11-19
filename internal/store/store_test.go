@@ -907,3 +907,71 @@ func TestRULE5_RulesTableTakesAnyKindWithoutSchemaChange(t *testing.T) {
 		}
 	}
 }
+
+// Migration 0003 on a database made by schema version 2 (adopted from
+// verification task 42): the version-2 schema is rebuilt by undoing 0003's
+// index changes on a populated database, then Open upgrades it. Rows, balance
+// caches and the append path survive, the old index is replaced, the file
+// passes integrity_check and a reopen runs nothing.
+func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "h.db")
+	s := must(Open(path))
+	a, b := newUser(t, s, "a"), newUser(t, s, "b")
+	h := must(s.CreateHold(ctx, newSetup(t, s, "lab-01"), a.ID, t0))
+	for _, u := range []int64{a.ID, b.ID} {
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: u, Period: "2026-10", Type: "allowance", AmountMT: 300000}, "2026-10", t0))
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: u, Period: "2026-11", Type: "allowance", AmountMT: 300000}, "2026-11", t0))
+	}
+	for i := 0; i < 10; i++ {
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: a.ID, Period: "2026-11", Type: "debit", AmountMT: -167, HoldID: &h.ID}, "2026-11", t0))
+	}
+	for _, q := range []string{`DROP INDEX ledger_user_period_type`, `DROP INDEX ledger_hold_type`, `DROP INDEX ledger_period_type`,
+		`CREATE INDEX ledger_user_period ON ledger (user_id, period)`, `DELETE FROM schema_migrations WHERE version = 3`} {
+		if _, err := s.sqldb.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	s.Close()
+
+	s = must(Open(path))
+	defer func() { s.Close() }()
+	var v, rows int
+	var ic string
+	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
+	s.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&rows)
+	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
+	if v != 3 || rows != 14 || ic != "ok" {
+		t.Fatalf("after upgrade: version %d, ledger rows %d, integrity %q", v, rows, ic)
+	}
+	var idx []string
+	r, err := s.sqldb.Query(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ledger' AND sql IS NOT NULL ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for r.Next() {
+		var n string
+		r.Scan(&n)
+		idx = append(idx, n)
+	}
+	r.Close()
+	if want := []string{"ledger_hold_type", "ledger_period_type", "ledger_user_period_type"}; !reflect.DeepEqual(idx, want) {
+		t.Errorf("ledger indexes %v, want %v", idx, want)
+	}
+	for _, u := range []User{a, b} {
+		got := must(s.GetUser(ctx, u.ID)).BalanceMT
+		if sum := must(s.SumLedger(ctx, u.ID, "2026-11", "")); got != sum {
+			t.Errorf("user %d: cache %d, ledger %d", u.ID, got, sum)
+		}
+	}
+	must(s.AppendLedger(ctx, LedgerEntry{UserID: a.ID, Period: "2026-11", Type: "grant", AmountMT: 1234}, "2026-11", t0))
+	if got, sum := must(s.GetUser(ctx, a.ID)).BalanceMT, must(s.SumLedger(ctx, a.ID, "2026-11", "")); got != sum || got != 300000-1670+1234 {
+		t.Errorf("append after upgrade: cache %d, ledger %d", got, sum)
+	}
+	s.Close()
+	s = must(Open(path)) // reopen: nothing to run
+	var n int
+	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
+	if n != 3 {
+		t.Errorf("schema_migrations rows = %d after reopen", n)
+	}
+}

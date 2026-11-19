@@ -1,0 +1,507 @@
+// SPDX-License-Identifier: MIT
+
+// Balance cache regression tests (LED-2, LED-3), adopted from verification
+// task 42: the users.balance_mt cache is checked against the ledger sum of the
+// current period after every step, against a real store, the real ledger
+// service and the collector, with a fake clock.
+package collector
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/store"
+)
+
+// inv returns every role holder's (cache, current-period sum) mismatch.
+func (e *env) inv(svc *ledger.Service) []string {
+	e.t.Helper()
+	us, err := e.st.ListUsers(bg, "")
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	cur := svc.CurrentPeriod()
+	var bad []string
+	for _, u := range us {
+		if u.AuthSource == store.AuthLocal {
+			continue
+		}
+		sum, err := e.st.SumLedger(bg, u.ID, cur, "")
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		if sum != u.BalanceMT {
+			bad = append(bad, fmt.Sprintf("user %d (%s): cache %d, ledger sum for %s %d (diff %+d)", u.ID, u.Username, u.BalanceMT, cur, sum, u.BalanceMT-sum))
+		}
+	}
+	return bad
+}
+
+// check asserts the invariant after a step and logs the step.
+func (e *env) check(step string) {
+	e.t.Helper()
+	if bad := e.inv(e.led.Service); len(bad) > 0 {
+		e.t.Errorf("after %q at %s: %v", step, e.clk.Now().Format(time.RFC3339), bad)
+	}
+}
+
+// soft logs a mismatch without failing (windows the design documents).
+func (e *env) soft(step string) {
+	e.t.Helper()
+	if bad := e.inv(e.led.Service); len(bad) > 0 {
+		e.t.Logf("SOFT after %q at %s: %v", step, e.clk.Now().Format(time.RFC3339), bad)
+	}
+}
+
+// rebuildNoop asserts RebuildBalance changes nothing for every user.
+func (e *env) rebuildNoop() {
+	e.t.Helper()
+	us, _ := e.st.ListUsers(bg, "")
+	cur := e.led.CurrentPeriod()
+	for _, u := range us {
+		if u.AuthSource == store.AuthLocal {
+			continue
+		}
+		got, err := e.st.RebuildBalance(bg, u.ID, cur)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		if got != u.BalanceMT {
+			e.t.Errorf("RebuildBalance moved user %d from %d to %d", u.ID, u.BalanceMT, got)
+		}
+	}
+}
+
+func (e *env) adminID() int64 {
+	a, err := e.st.CreateLocalAdmin(bg, "admin", "x", false, e.clk.Now())
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return a.ID
+}
+
+func (e *env) grant(admin, u, mt int64) {
+	e.t.Helper()
+	if _, err := e.led.Grant(bg, admin, u, mt, "test"); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+func (e *env) reset(admin, u int64) {
+	e.t.Helper()
+	if _, err := e.led.Reset(bg, admin, u, "test"); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+func utc(y int, m time.Month, d, h, mi int) time.Time {
+	return time.Date(y, m, d, h, mi, 0, 0, time.UTC)
+}
+
+func TestLED2_CacheEqualsLedgerDebitsWithinMonth(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 10, 9, 0))
+	u, _ := e.basic()
+	e.check("hold created, no allowance")
+	e.allowance(u)
+	e.check("first allowance")
+	e.runOK()
+	e.check("metering-start poll")
+	for i := 0; i < 50; i++ {
+		e.step(poll)
+		e.check(fmt.Sprintf("poll %d", i))
+	}
+	e.rebuildNoop()
+}
+
+// Positive, zero and negative closing balances through a collector-driven
+// rollover, checked after every poll.
+func TestLED3_CacheEqualsLedgerRolloverPositiveZeroNegative(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 30, 23, 40))
+	admin := e.adminID()
+	pos, _ := e.basic()
+	zero := e.user("zero")
+	neg := e.user("neg")
+	for _, u := range []int64{pos, zero, neg} {
+		e.allowance(u)
+	}
+	e.grant(admin, zero, -300000)
+	e.grant(admin, neg, -340000)
+	e.check("setup")
+	e.runOK()
+	e.check("23:40 poll")
+	for i := 0; i < 8; i++ { // crosses 00:00 at i=3
+		e.step(poll)
+		e.check(fmt.Sprintf("poll at %s", e.clk.Now().Format("15:04")))
+	}
+	if got := e.inv(e.led.Service); len(got) > 0 {
+		t.Fatal(got)
+	}
+	cache := func(u int64) int64 { x, _ := e.st.GetUser(bg, u); return x.BalanceMT }
+	if cache(zero) != 300000 || cache(neg) != 260000 {
+		t.Fatalf("zero %d neg %d", cache(zero), cache(neg))
+	}
+	e.rebuildNoop()
+}
+
+// The process is down from Sep 29 to Dec 1 and comes back; plain case.
+func TestLED3_CacheEqualsLedgerDownAcrossTwoBoundaries(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 9, 29, 12, 0))
+	admin := e.adminID()
+	pos, _ := e.basic()
+	neg := e.user("neg")
+	e.allowance(pos)
+	e.allowance(neg)
+	e.grant(admin, neg, -340000)
+	e.runOK()
+	e.step(poll)
+	e.check("september")
+	e.clk.Set(utc(2026, 12, 1, 3, 0))
+	e.soft("restart, before first poll (pending rollover window)")
+	e.runOK()
+	e.check("first poll after restart")
+	e.step(poll)
+	e.check("second poll")
+	e.rebuildNoop()
+}
+
+// Same, but an admin grant lands for the current period (December) before
+// the first poll after the restart runs the two pending rollovers (the API
+// serves requests while the collector's first RunOnce has not run yet).
+func TestLED2_LED3_MultiPeriodRolloverWithCurrentPeriodGrantKeepsCache(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 9, 29, 12, 0))
+	admin := e.adminID()
+	u := e.user("dev")
+	e.allowance(u)
+	e.check("september")
+	e.clk.Set(utc(2026, 12, 1, 3, 0))
+	e.grant(admin, u, 5000)
+	e.check("grant during pending window")
+	e.runOK() // closes 2026-09, 2026-10 and 2026-11
+	e.check("first poll after restart")
+	// One allowance (300) plus the grant (5), not two allowances.
+	if got := e.cacheOf(u); got != 305000 {
+		t.Errorf("cache %d after the multi-period rollover, want 305000", got)
+	}
+	e.step(poll)
+	e.check("second poll")
+	e.rebuildNoop()
+}
+
+// Same with a single pending boundary (the normal 5-minute window).
+func TestLED2_LED3_GrantResetAroundOneBoundary(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 30, 23, 50))
+	admin := e.adminID()
+	u, _ := e.basic()
+	v := e.user("v")
+	e.allowance(u)
+	e.allowance(v)
+	e.runOK()
+	e.grant(admin, u, 7000)
+	e.check("grant before boundary")
+	e.reset(admin, v)
+	e.check("reset before boundary")
+	e.clk.Set(utc(2026, 12, 1, 0, 2))
+	e.soft("boundary passed, rollover pending")
+	e.grant(admin, u, 1000)
+	e.soft("grant in pending window")
+	e.reset(admin, v)
+	e.soft("reset in pending window")
+	e.runOK()
+	e.check("poll runs rollover")
+	e.grant(admin, u, 3000)
+	e.check("grant after rollover")
+	e.reset(admin, v)
+	e.check("reset after rollover")
+	e.rebuildNoop()
+	x, _ := e.st.GetUser(bg, v)
+	if x.BalanceMT != 300000 {
+		t.Errorf("reset after rollover left %d, want 300000", x.BalanceMT)
+	}
+}
+
+func TestLED3_CacheEqualsLedgerPollExactlyAtMidnight(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 30, 23, 50))
+	u, _ := e.basic()
+	e.allowance(u)
+	e.runOK()
+	e.step(poll)
+	e.check("23:55")
+	e.clk.Set(utc(2026, 12, 1, 0, 0))
+	e.runOK()
+	e.check("00:00:00 poll")
+	e.step(poll)
+	e.check("00:05")
+	e.rebuildNoop()
+}
+
+// A debit written to a past period: after the rollover, and while one is pending.
+func TestLED2_LatePastPeriodEntryLeavesCache(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 30, 23, 50))
+	u, h := e.basic()
+	e.allowance(u)
+	e.runOK()
+	e.clk.Set(utc(2026, 12, 1, 0, 10))
+	e.runOK() // rollover
+	e.check("after rollover")
+	late := func() {
+		if err := e.st.Tx(bg, func(tx *store.Tx) error {
+			_, err := e.led.DebitTx(tx, u, h.ID, 999, utc(2026, 11, 30, 23, 59))
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	late()
+	e.check("late november debit after rollover")
+	// pending window: December -> January
+	e.clk.Set(utc(2027, 1, 1, 0, 1))
+	if err := e.st.Tx(bg, func(tx *store.Tx) error {
+		_, err := e.led.DebitTx(tx, u, h.ID, 777, utc(2026, 12, 31, 23, 59))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e.soft("late december debit while January rollover pending")
+	decSum, _ := e.st.SumLedger(bg, u, "2026-12", "")
+	e.runOK()
+	e.check("january rollover")
+	// rollover must close December from the ledger, including the late debit
+	exp, _ := e.st.SumLedger(bg, u, "2026-12", "")
+	if exp != 0 && exp != decSum && decSum > 0 {
+		t.Errorf("december after close %d (before %d)", exp, decSum)
+	}
+	e.rebuildNoop()
+}
+
+func TestLED2_LED3_FirstRoleMidMonthAndDuringPendingRollover(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 15, 12, 0))
+	a := e.user("a")
+	e.allowance(a)
+	e.runOK()
+	u, err := e.st.CreateOIDCUser(bg, "late", "late@example.test", "late", e.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.check("pending user, no role")
+	if err := e.st.SetUserRoles(bg, u.ID, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	e.allowance(u.ID)
+	e.check("first role mid-month")
+	w, _ := e.st.CreateOIDCUser(bg, "w", "w@example.test", "w", e.clk.Now())
+	e.clk.Set(utc(2026, 12, 1, 0, 1))
+	if err := e.st.SetUserRoles(bg, w.ID, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	e.allowance(w.ID) // deferred to rollover
+	e.soft("first role during pending rollover")
+	e.runOK()
+	e.check("rollover after first role")
+	e.rebuildNoop()
+}
+
+func TestLED2_LED3_RolesRemovedAcrossBoundaryCacheFollowsLedger(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 20, 12, 0))
+	admin := e.adminID()
+	u := e.user("dev")
+	e.allowance(u)
+	e.grant(admin, u, -100000)
+	e.check("november")
+	if err := e.st.SetUserRoles(bg, u, nil); err != nil {
+		t.Fatal(err)
+	}
+	e.allowance(u)
+	e.check("roles removed mid-month")
+	if err := e.st.SetUserRoles(bg, u, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	e.allowance(u)
+	e.check("roles restored same month")
+	if err := e.st.SetUserRoles(bg, u, nil); err != nil {
+		t.Fatal(err)
+	}
+	e.clk.Set(utc(2026, 12, 1, 0, 5))
+	// keep the rollover running for someone
+	o := e.user("other")
+	_ = o
+	e.runOK()
+	e.check("rollover while roles removed (user skipped)")
+	if err := e.st.SetUserRoles(bg, u, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	e.allowance(u)
+	e.check("roles restored in new month")
+	e.rebuildNoop()
+}
+
+// Two goroutines append debits concurrently for the same user, and for two
+// different users, through the real DebitTx in Store.Tx. (The verifier ran
+// 1,000 each; 300 keeps two back-to-back writers inside SQLite's 10 s busy
+// timeout when the whole suite runs under -race.)
+func TestLED2_ConcurrentAppendsKeepCache(t *testing.T) {
+	const perWriter = 300
+	for _, same := range []bool{true, false} {
+		t.Run(fmt.Sprintf("same=%v", same), func(t *testing.T) {
+			e := newEnv(t, false)
+			e.clk.Set(utc(2026, 11, 10, 9, 0))
+			u1, h := e.basic()
+			u2 := e.user("two")
+			e.allowance(u1)
+			e.allowance(u2)
+			targets := []int64{u1, u1}
+			if !same {
+				targets = []int64{u1, u2}
+			}
+			var wg sync.WaitGroup
+			errs := make(chan error, 2)
+			for _, u := range targets {
+				wg.Add(1)
+				go func(u int64) {
+					defer wg.Done()
+					for i := 0; i < perWriter; i++ {
+						if err := e.st.Tx(bg, func(tx *store.Tx) error {
+							_, err := e.led.DebitTx(tx, u, h.ID, int64(i%7+1), e.clk.Now())
+							return err
+						}); err != nil {
+							errs <- err
+							return
+						}
+					}
+				}(u)
+			}
+			wg.Wait()
+			close(errs)
+			for err := range errs {
+				t.Fatal(err)
+			}
+			e.check("2 concurrent writers")
+			n1, _ := e.st.CountLedger(bg, u1, "2026-11", "debit")
+			if same && n1 != 2*perWriter || !same && n1 != perWriter {
+				t.Fatalf("debit rows %d", n1)
+			}
+			e.rebuildNoop()
+		})
+	}
+}
+
+func TestLED2_RollbackLeavesCache(t *testing.T) {
+	e := newEnv(t, false)
+	e.clk.Set(utc(2026, 11, 10, 9, 0))
+	u, h := e.basic()
+	e.allowance(u)
+	before, _ := e.st.GetUser(bg, u)
+	boom := errors.New("boom")
+	err := e.st.Tx(bg, func(tx *store.Tx) error {
+		if _, err := e.led.DebitTx(tx, u, h.ID, 5000, e.clk.Now()); err != nil {
+			return err
+		}
+		x, _ := tx.GetUser(bg, u)
+		if x.BalanceMT != before.BalanceMT-5000 {
+			t.Errorf("inside tx cache %d", x.BalanceMT)
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatal(err)
+	}
+	after, _ := e.st.GetUser(bg, u)
+	if after.BalanceMT != before.BalanceMT {
+		t.Fatalf("cache moved on rollback: %d -> %d", before.BalanceMT, after.BalanceMT)
+	}
+	// Also a rolled-back first entry of a new period (rollover path).
+	e.clk.Set(utc(2026, 12, 1, 0, 1))
+	_ = e.st.Tx(bg, func(tx *store.Tx) error {
+		if _, err := e.led.DebitTx(tx, u, h.ID, 5000, e.clk.Now()); err != nil {
+			return err
+		}
+		return boom
+	})
+	after2, _ := e.st.GetUser(bg, u)
+	if after2.BalanceMT != before.BalanceMT {
+		t.Fatalf("cache moved on rolled-back rollover-path append: %d -> %d", before.BalanceMT, after2.BalanceMT)
+	}
+	e.soft("rollbacks in the pending rollover window (D-A)")
+	e.runOK()
+	e.check("rollover after the rollbacks")
+	e.rebuildNoop()
+}
+
+// The configured timezone changes between restarts so that the current
+// period moves backwards, then forwards.
+func TestLED2_TimezoneChangeBetweenRestartsCacheRepaired(t *testing.T) {
+	east := time.FixedZone("UTC+2", 2*3600)
+	for _, c := range []struct {
+		name     string
+		from, to *time.Location
+		at       time.Time // the restart instant
+	}{
+		{"backwards", east, time.UTC, utc(2026, 11, 30, 23, 0)}, // Dec 1 01:00 east -> Nov 30 23:00 UTC
+		{"forwards", time.UTC, east, utc(2026, 11, 30, 22, 30)}, // Nov 30 22:30 UTC -> Dec 1 00:30 east
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnv(t, false)
+			e.led = &failingLedger{Service: ledger.NewService(e.st, e.rec, e.clk, c.from)}
+			e.c = e.newCollector()
+			admin := e.adminID()
+			e.clk.Set(c.at.Add(-3 * time.Hour))
+			u, _ := e.basic()
+			e.allowance(u)
+			e.grant(admin, u, -100000) // 200 tokens
+			e.runOK()
+			e.step(poll)
+			if c.name == "backwards" {
+				// make sure the December rollover in the east zone has run
+				e.clk.Set(c.at.Add(-50 * time.Minute)) // Dec 1 00:10 east
+				e.runOK()
+			}
+			e.check("before restart")
+			t.Logf("before restart: period %s, cache %d", e.led.CurrentPeriod(), e.cacheOf(u))
+			// restart with the other zone; start-up rebuilds every cache (LED-2)
+			e.led = &failingLedger{Service: ledger.NewService(e.st, e.rec, e.clk, c.to)}
+			e.c = e.newCollector()
+			e.clk.Set(c.at)
+			if _, err := e.led.RepairBalances(bg); err != nil {
+				t.Fatal(err)
+			}
+			e.check("restart in new zone, start-up repair, before poll")
+			t.Logf("after restart: period %s, cache %d", e.led.CurrentPeriod(), e.cacheOf(u))
+			for i := 0; i < 15; i++ { // 75 minutes: crosses 00:00 UTC in the backwards case
+				e.step(poll)
+				e.check(fmt.Sprintf("poll %s (%s)", e.clk.Now().Format("15:04"), e.led.CurrentPeriod()))
+			}
+			e.grant(admin, u, 1000)
+			bad := e.inv(e.led.Service)
+			t.Logf("end: period %s, cache %d, mismatches %v", e.led.CurrentPeriod(), e.cacheOf(u), bad)
+			for _, p := range []string{"2026-11", "2026-12"} {
+				s, _ := e.st.SumLedger(bg, u, p, "")
+				l, _ := e.st.ListLedger(bg, u, p)
+				var kinds []string
+				for _, x := range l {
+					if x.Type != "debit" {
+						kinds = append(kinds, fmt.Sprintf("%s:%d", x.Type, x.AmountMT))
+					}
+				}
+				nd, _ := e.st.CountLedger(bg, u, p, "debit")
+				t.Logf("ledger %s: sum %d, %d debits, other %v", p, s, nd, kinds)
+			}
+			if len(bad) > 0 {
+				t.Errorf("cache wrong after timezone change (%s): %v", c.name, bad)
+			}
+		})
+	}
+}
+
+func (e *env) cacheOf(u int64) int64 { x, _ := e.st.GetUser(bg, u); return x.BalanceMT }

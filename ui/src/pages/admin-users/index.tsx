@@ -269,13 +269,17 @@ export default function Page() {
                   u.is_local_admin ? (
                     "No balance"
                   ) : (
-                    <span className={u.overdrawn ? shared.overdrawn : undefined}>{formatTokens(u.balance_tokens)}</span>
+                    // A user with no role has no allowance: the API sends null and the cell shows a dash.
+                    <span className={u.overdrawn ? shared.overdrawn : undefined}>
+                      {u.roles.length === 0 ? "—" : formatTokens(u.balance_tokens)}
+                    </span>
                   ),
               },
               {
                 key: "burn",
                 header: "Burned this month",
-                render: (u) => (u.is_local_admin ? "" : formatTokens(u.month_to_date_burn_tokens)),
+                render: (u) =>
+                  u.is_local_admin ? "" : u.roles.length === 0 ? "—" : formatTokens(u.month_to_date_burn_tokens),
               },
               {
                 key: "holding",
@@ -287,7 +291,7 @@ export default function Page() {
                 key: "act",
                 header: "",
                 render: (u) =>
-                  u.is_local_admin || u.balance_tokens === null ? null : (
+                  u.is_local_admin || u.roles.length === 0 || u.balance_tokens === null ? null : (
                     <Button
                       onClick={() => {
                         setNotice(undefined);

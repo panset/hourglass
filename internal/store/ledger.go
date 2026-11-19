@@ -47,7 +47,9 @@ func scanLedger(r rowScanner) (LedgerEntry, error) {
 // the current period (the rollover) starts the cache from scratch, since the
 // cache still held the previous period. currentPeriod (YYYY-MM, from the
 // configured timezone) must not move backwards between appends; RebuildBalance
-// is the from-scratch repair. CreatedAt is set from now.
+// and RebuildBalances are the from-scratch repairs (the ledger service runs
+// the latter at start-up and at the end of every rollover). CreatedAt is set
+// from now.
 func (q *queries) AppendLedger(ctx context.Context, e LedgerEntry, currentPeriod string, now time.Time) (LedgerEntry, error) {
 	var out LedgerEntry
 	err := q.atomic(ctx, func(q *queries) error {
@@ -120,4 +122,37 @@ func (q *queries) RebuildBalance(ctx context.Context, userID int64, currentPerio
 		return nil
 	})
 	return sum, err
+}
+
+// BalanceRepair reports what RebuildBalances changed: how many caches moved,
+// the sum of the absolute changes and the net change, in milli-tokens.
+type BalanceRepair struct {
+	Changed    int
+	AbsDeltaMT int64
+	NetDeltaMT int64
+}
+
+// RebuildBalances sets every user's users.balance_mt to the sum of the
+// user's ledger entries for currentPeriod (LED-2), zero for a user with none,
+// and reports what changed. The new values come from one grouped statement
+// over the ledger and are written by one statement, whatever the number of
+// users; both run in one transaction (the caller's, if any).
+func (q *queries) RebuildBalances(ctx context.Context, currentPeriod string) (BalanceRepair, error) {
+	var r BalanceRepair
+	const sums = `SELECT u.id AS uid, u.balance_mt AS old, COALESCE(SUM(l.amount_mt), 0) AS total
+		FROM users u LEFT JOIN ledger l ON l.user_id = u.id AND l.period = ?1
+		GROUP BY u.id`
+	err := q.atomic(ctx, func(q *queries) error {
+		if err := q.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(ABS(total - old)), 0), COALESCE(SUM(total - old), 0)
+			FROM (`+sums+`) WHERE total <> old`, currentPeriod).Scan(&r.Changed, &r.AbsDeltaMT, &r.NetDeltaMT); err != nil {
+			return err
+		}
+		if r.Changed == 0 {
+			return nil
+		}
+		_, err := q.db.ExecContext(ctx, `UPDATE users SET balance_mt = s.total FROM (`+sums+`) AS s
+			WHERE users.id = s.uid AND users.balance_mt <> s.total`, currentPeriod)
+		return err
+	})
+	return r, err
 }

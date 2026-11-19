@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { App } from "../../App";
 import { setCsrfToken } from "../../api/client";
 import { adminSession, barRoutes, developerSession, errorResponse, mockApi } from "../../test/mockApi";
-import { localAdmin, morgan, priya, sam, userList } from "../admin-shared/fixtures";
+import { dana, localAdmin, morgan, priya, sam, userList } from "../admin-shared/fixtures";
 import Page from "./index";
 
 const everyone = userList([priya, sam, localAdmin, morgan]);
@@ -47,6 +47,22 @@ describe("ADM-1 users page states", () => {
     mockApi({ "GET /api/v1/admin/users": () => errorResponse(500, "internal", "database is down") });
     renderPage();
     expect(await screen.findByText("database is down")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["null figures", dana],
+    // what a server before this change sent: the stale cached figures
+    ["stale figures", { ...dana, balance_tokens: 200, month_to_date_burn_tokens: 12 }],
+  ])("ADM-1 LED-3 a user with no role shows a dash for balance and burn, and no Grant (%s)", async (_, user) => {
+    mockApi({ "GET /api/v1/admin/users": userList([priya, user]) });
+    renderPage();
+    const table = await screen.findByRole("table", { name: "Users" });
+    const row = within(table).getByText("Dana R.").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(cells[headers.indexOf("Tokens left")]).toHaveTextContent(/^—$/);
+    expect(cells[headers.indexOf("Burned this month")]).toHaveTextContent(/^—$/);
+    expect(within(row).queryByRole("button", { name: "Grant to Dana R." })).toBeNull();
   });
 
   it("ADM-1 local admin row has no role or balance actions", async () => {

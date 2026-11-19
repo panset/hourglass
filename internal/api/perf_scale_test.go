@@ -59,15 +59,19 @@ func seedScale(t *testing.T, sh scaleShape) *scaleEnv {
 	ctx := context.Background()
 	t0 := time.Now()
 	e := &scaleEnv{b: b}
-	for i := 0; i < sh.users-1; i++ {
+	// Pending users in proportion to the size, so a per-user query in the
+	// status=pending path changes the statement count between the two sizes.
+	pending := max(2, sh.users/6)
+	for i := 0; i < sh.users-pending; i++ {
 		role := store.RoleDeveloper
 		if i%40 == 0 {
 			role = store.RoleAdmin
 		}
 		e.devs = append(e.devs, b.newUser(fmt.Sprintf("user-%03d", i), store.StatusActive, role))
 	}
-	// One pending user so the pending filter has something to return.
-	b.newUser("pending-user", store.StatusPending)
+	for i := 0; i < pending; i++ {
+		b.newUser(fmt.Sprintf("pending-%03d", i), store.StatusPending)
+	}
 	tiers := []string{"t1", "t2", "t3"}
 	var setupIDs []int64
 	for i := 0; i < sh.setups; i++ {
@@ -240,6 +244,13 @@ func runFullScale(t *testing.T) {
 	t.Logf("collector poll over %d holds: err=%v in %.1f ms", fullScale.holds, err, ms(time.Since(t1)))
 	if err != nil {
 		t.Error(err)
+	}
+	// The start-up rebuild of every balance cache (LED-2), which also ends each rollover.
+	t1 = time.Now()
+	rep, err := e.b.led.RepairBalances(ctx)
+	t.Logf("rebuild of %d balance caches: err=%v changed=%d in %.1f ms", fullScale.users, err, rep.Changed, ms(time.Since(t1)))
+	if err != nil || rep.Changed != 0 {
+		t.Errorf("rebuild at full scale: %+v %v (the caches should already be right)", rep, err)
 	}
 }
 

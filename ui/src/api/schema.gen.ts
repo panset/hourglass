@@ -1009,10 +1009,11 @@ export interface components {
             roles: components["schemas"]["Role"][];
             /** @description Role cannot be changed; no balance; cannot hold. */
             is_local_admin: boolean;
-            /** @description Null for the local admin and for users who never had a role. */
+            /** @description Null for the local admin, for users with no role (they have no allowance) and for users who never had a role. */
             balance_tokens: (number & components["schemas"]["Tokens"]) | null;
             overdrawn: boolean;
-            month_to_date_burn_tokens: components["schemas"]["Tokens"];
+            /** @description Null for users with no role; 0 for the local admin. */
+            month_to_date_burn_tokens: (number & components["schemas"]["Tokens"]) | null;
             burn_per_hour_tokens: components["schemas"]["Tokens"];
             active_holds: components["schemas"]["ActiveHoldRef"][];
             /** Format: date-time */
@@ -1234,7 +1235,7 @@ export interface components {
                 id: number;
                 name: string;
             };
-            /** @example grant.create */
+            /** @example ledger.grant */
             action: string;
             /**
              * @description What was changed, e.g. `user:12` or `setup:4`
@@ -2159,7 +2160,7 @@ export interface operations {
             query?: {
                 /** @description Actor user id. */
                 actor?: number;
-                /** @description Exact action name, e.g. `grant.create`. */
+                /** @description Exact action name, e.g. `ledger.grant`. */
                 action?: string;
                 limit?: number;
                 offset?: number;

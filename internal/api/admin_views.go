@@ -164,7 +164,7 @@ type adminUserView struct {
 	IsLocalAdmin    bool            `json:"is_local_admin"`
 	BalanceTokens   *float64        `json:"balance_tokens"`
 	Overdrawn       bool            `json:"overdrawn"`
-	MonthToDateBurn float64         `json:"month_to_date_burn_tokens"`
+	MonthToDateBurn *float64        `json:"month_to_date_burn_tokens"`
 	BurnPerHour     float64         `json:"burn_per_hour_tokens"`
 	ActiveHolds     []activeHoldRef `json:"active_holds"`
 	FirstSignInAt   string          `json:"first_sign_in_at"`
@@ -174,9 +174,11 @@ type adminUserView struct {
 	sortName  string
 }
 
-// userView builds the AdminUser of a row. Balance is null for the local admin
-// and for a user whose ledger has never had an entry (never had a role); a
-// user is overdrawn when they hold a role and the balance is zero or below.
+// userView builds the AdminUser of a row. Balance and month-to-date burn are
+// null for a user with no role (no allowance; the rollover skips them, LED-3,
+// so a figure would be stale). The balance is also null for the local admin,
+// whose burn is 0, and for a user whose ledger has never had an entry. A user
+// is overdrawn when they hold a role and the balance is zero or below.
 func (s *adminState) userView(u store.User) adminUserView {
 	roles := s.roles[u.ID]
 	if roles == nil {
@@ -187,13 +189,18 @@ func (s *adminState) userView(u store.User) adminUserView {
 		Status: u.Status, Roles: roles, IsLocalAdmin: u.AuthSource == store.AuthLocal,
 		ActiveHolds: []activeHoldRef{}, FirstSignInAt: ts(u.CreatedAt), LastLoginAt: tsPtr(u.LastLoginAt),
 	}
-	if !v.IsLocalAdmin {
+	if !v.IsLocalAdmin && len(roles) > 0 {
 		if mt, ok := s.balance(u.ID); ok {
 			b := tokens(mt)
 			v.BalanceTokens = &b
-			v.Overdrawn = len(roles) > 0 && mt <= 0
+			v.Overdrawn = mt <= 0
 		}
-		v.MonthToDateBurn = tokens(s.stats[u.ID].DebitedMT)
+		burn := tokens(s.stats[u.ID].DebitedMT)
+		v.MonthToDateBurn = &burn
+	}
+	if v.IsLocalAdmin {
+		zero := 0.0
+		v.MonthToDateBurn = &zero // the local admin is never charged (unchanged)
 	}
 	var burn int64
 	for _, h := range s.holdsByUser[u.ID] {

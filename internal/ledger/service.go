@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/panset/hourglass/internal/settings"
@@ -51,6 +52,12 @@ type Service struct {
 	emit  Emitter
 	clock Clock
 	loc   *time.Location
+
+	// cacheMu guards cachePeriod: the period every users.balance_mt cache was
+	// last rebuilt for from the ledger (RepairBalances or a rollover). When the
+	// current period differs from it, RolloverDue rebuilds (see there).
+	cacheMu     sync.Mutex
+	cachePeriod string
 }
 
 // NewService returns a ledger service. A nil loc means UTC and a nil emitter
@@ -282,6 +289,8 @@ func (s *Service) RolloverDue(ctx context.Context) ([]string, error) {
 		next := NextPeriod(old)
 		n := 0
 		at := s.clock.Now()
+		var rep store.BalanceRepair
+		cur := s.CurrentPeriod()
 		err := s.st.Tx(ctx, func(tx *store.Tx) error {
 			cfg, err := settings.Load(ctx, tx)
 			if err != nil {
@@ -304,16 +313,28 @@ func (s *Service) RolloverDue(ctx context.Context) ([]string, error) {
 					if e.Type == TypeAllowance && has > 0 {
 						continue
 					}
-					if _, err := tx.AppendLedger(ctx, toStore(e), next, at); err != nil {
+					// The cache follows the real current period, not next: when
+					// several periods are closed at once, the entries of the older
+					// ones must not touch it (LED-2).
+					if _, err := tx.AppendLedger(ctx, toStore(e), cur, at); err != nil {
 						return err
 					}
 				}
 				n++
 			}
-			return nil
+			// Belt and braces (LED-2): whatever the incremental updates did, every
+			// cache leaves this transaction equal to the ledger sum of the
+			// current period, from one grouped statement.
+			rep, err = tx.RebuildBalances(ctx, cur)
+			return err
 		})
 		if err != nil {
 			return closed, err
+		}
+		s.setCachePeriod(cur)
+		if rep.Changed > 0 {
+			slog.Info("ledger rollover corrected balance caches", "period", old, "current", cur,
+				"changed", rep.Changed, "abs_delta_mt", rep.AbsDeltaMT, "net_delta_mt", rep.NetDeltaMT)
 		}
 		if n == 0 {
 			continue
@@ -323,7 +344,43 @@ func (s *Service) RolloverDue(ctx context.Context) ([]string, error) {
 		s.EmitEvents(hourglass.Event{Type: hourglass.EventPeriodClosed, Time: at,
 			Data: map[string]any{"period": old, "next": next, "users": n}})
 	}
+	// The current period moved without a rollover to rebuild the caches (the
+	// configured timezone moved it backwards and the clock has now come back to
+	// a period already opened): appends since then assumed the caches held this
+	// period, so rebuild them all from the ledger.
+	if cur, done := s.CurrentPeriod(), s.getCachePeriod(); done != "" && cur != done {
+		rep, err := s.RepairBalances(ctx)
+		if err != nil {
+			return closed, err
+		}
+		if rep.Changed > 0 {
+			slog.Warn("ledger balance caches rebuilt after the current period moved", "from", done, "to", cur,
+				"changed", rep.Changed, "abs_delta_mt", rep.AbsDeltaMT, "net_delta_mt", rep.NetDeltaMT)
+		}
+	}
 	return closed, nil
+}
+
+func (s *Service) setCachePeriod(p string) { s.cacheMu.Lock(); s.cachePeriod = p; s.cacheMu.Unlock() }
+
+func (s *Service) getCachePeriod() string {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	return s.cachePeriod
+}
+
+// RepairBalances rebuilds every user's balance cache from the ledger for the
+// current period (LED-2) in one grouped statement and reports what changed.
+// The application calls it at start-up, before the first poll and before
+// serving requests; a non-zero change means a cache was wrong.
+func (s *Service) RepairBalances(ctx context.Context) (store.BalanceRepair, error) {
+	cur := s.CurrentPeriod()
+	rep, err := s.st.RebuildBalances(ctx, cur)
+	if err != nil {
+		return rep, err
+	}
+	s.setCachePeriod(cur)
+	return rep, nil
 }
 
 // Balance is a user's balance in the current period, from the ledger.

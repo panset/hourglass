@@ -97,6 +97,7 @@ Rules:
 - Hourglass logs its configuration at start with `session_key`, `admin_password`, `oidc.client_secret` and every extension `config` block replaced by `[redacted]`.
 - `provider`, `pressure`, `metering` and each hook allow only `type` and `config`.
 - A `provider` block with a `config` but no `type` is an error.
+- Changing `timezone` across a month boundary can move ledger entries between months, because each entry's month is taken from the configured zone. Change it just after a rollover, early in a month, so that no month boundary lies between the old and the new zone's time.
 
 ### Extensions in the config file
 

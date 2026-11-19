@@ -379,3 +379,65 @@ func TestLED5_ResetShapeAndRefusals(t *testing.T) {
 	nobody := e.user("nobody", store.StatusActive)
 	adErr(t, e.send("POST", path(nobody.user.ID), `{"reason":"x"}`), 409, "conflict")
 }
+
+// ADM-1, LED-3: a user whose roles were removed has no allowance and is
+// skipped by the rollover, so the admin list shows their balance and
+// month-to-date burn as null (the UI shows a dash), not a stale cached figure,
+// in the month the roles were removed and after the next rollover.
+func TestADM1_LED3_UserWithNoRoleHasNullBalanceAndBurn(t *testing.T) {
+	e := newAdEnv(t)
+	gone := e.dev("gone")
+	stay := e.dev("stay")
+	for _, u := range []int64{gone.user.ID, stay.user.ID} {
+		if _, err := e.st.AppendLedger(uBg, store.LedgerEntry{UserID: u, Period: "2026-11", Type: "debit", AmountMT: -12_500}, "2026-11", e.clk.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	uWantOK(t, e.send("PUT", "/api/v1/admin/users/"+uItoa(gone.user.ID)+"/roles", `{"roles":[]}`), 200)
+	check := func(when string, stayBalance float64) {
+		t.Helper()
+		body := uWantOK(t, e.get("/api/v1/admin/users"), 200)
+		var g, s ujobj
+		for _, u := range adArr(t, body, "users") {
+			m := adObjOf(t, u)
+			switch m["id"] {
+			case float64(gone.user.ID):
+				g = m
+			case float64(stay.user.ID):
+				s = m
+			}
+		}
+		if g == nil || s == nil {
+			t.Fatalf("%s: users missing from %v", when, body)
+		}
+		if v, ok := g["balance_tokens"]; !ok || v != nil {
+			t.Errorf("%s: role-less balance_tokens = %v, want null", when, v)
+		}
+		if v, ok := g["month_to_date_burn_tokens"]; !ok || v != nil {
+			t.Errorf("%s: role-less month_to_date_burn_tokens = %v, want null", when, v)
+		}
+		if g["overdrawn"] != false {
+			t.Errorf("%s: role-less overdrawn = %v", when, g["overdrawn"])
+		}
+		if uNum(t, s, "balance_tokens") != stayBalance {
+			t.Errorf("%s: developer balance = %v, want %v", when, s["balance_tokens"], stayBalance)
+		}
+		if _, ok := s["month_to_date_burn_tokens"].(float64); !ok {
+			t.Errorf("%s: developer month_to_date_burn_tokens = %v, want a number", when, s["month_to_date_burn_tokens"])
+		}
+	}
+	check("same month", 287.5)
+	// Across the boundary: the rollover skips the role-less user.
+	e.clk.Set(time.Date(2026, 12, 1, 0, 5, 0, 0, time.UTC))
+	if _, err := e.led.RolloverDue(uBg); err != nil {
+		t.Fatal(err)
+	}
+	check("after the rollover", 300)
+	// The local admin keeps a null balance and a zero burn.
+	body := uWantOK(t, e.get("/api/v1/admin/users"), 200)
+	for _, u := range adArr(t, body, "users") {
+		if m := adObjOf(t, u); m["is_local_admin"] == true && (m["balance_tokens"] != nil || m["month_to_date_burn_tokens"] != float64(0)) {
+			t.Errorf("local admin = %v", m)
+		}
+	}
+}

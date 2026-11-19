@@ -193,6 +193,13 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	disp := events.New(ext.hooks, st, events.WithLogger(log), events.WithClock(clock))
 	disp.Start(context.WithoutCancel(ctx))
 	led := ledger.NewService(st, disp, clock, loc)
+	// Self-repair (LED-2): before the first poll and before any request, every
+	// balance cache is rebuilt from the ledger for the current period.
+	if err := repairBalances(ctx, led, log); err != nil {
+		_ = disp.Close(ctx)
+		closeStore()
+		return err
+	}
 	coll := collector.New(collector.Deps{
 		Store: st, Provider: ext.provider, Pressure: ext.pressure, Policy: ext.policy,
 		Events: countingEmitter{next: disp, m: m}, Ledger: led, Clock: clock, Logger: log,
@@ -285,6 +292,24 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	closeStore()
 	log.Info("stopped")
 	return runErr
+}
+
+// repairBalances rebuilds every user's balance cache at start-up and logs how
+// many changed and by how much; any change is logged as a warning, since it
+// means a cache was wrong (or the configured timezone moved the period).
+func repairBalances(ctx context.Context, led *ledger.Service, log *slog.Logger) error {
+	rep, err := led.RepairBalances(ctx)
+	if err != nil {
+		return fmt.Errorf("rebuilding balance caches: %w", err)
+	}
+	attrs := []any{"period", led.CurrentPeriod(), "changed", rep.Changed,
+		"abs_delta_mt", rep.AbsDeltaMT, "net_delta_mt", rep.NetDeltaMT}
+	if rep.Changed > 0 {
+		log.Warn("balance caches rebuilt from the ledger: some were wrong", attrs...)
+	} else {
+		log.Info("balance caches checked against the ledger", attrs...)
+	}
+	return nil
 }
 
 func wrapServe(name string, err error) error {
