@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "collector",
+    srcs = ["collector.go"],
+    importpath = "github.com/panset/hourglass/internal/collector",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/ledger",
+        "//internal/metering",
+        "//internal/rules",
+        "//internal/settings",
+        "//internal/store",
+        "//pkg/hourglass",
+    ],
+)
+
+go_test(
+    name = "collector_test",
+    srcs = ["collector_test.go"],
+    embed = [":collector"],
+    deps = [
+        "//internal/ledger",
+        "//internal/settings",
+        "//internal/store",
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)
