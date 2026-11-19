@@ -254,7 +254,7 @@ func signIn(t *testing.T, e *env) flowResult {
 
 func wantFailure(t *testing.T, r flowResult) {
 	t.Helper()
-	if r.location != "/login?error=unauthenticated" || r.session != nil {
+	if r.location != "/?auth_error=unauthenticated" || r.session != nil {
 		t.Fatalf("want failure redirect, got %q session=%v", r.location, r.session != nil)
 	}
 }
@@ -278,7 +278,7 @@ func TestAUTH1_FullCodeFlow(t *testing.T) {
 	}
 
 	r := signIn(t, e)
-	if r.location != "/unauthorized" || r.session == nil {
+	if r.location != "/" || r.session == nil {
 		t.Fatalf("result %+v", r)
 	}
 	if !r.session.HttpOnly || !r.session.Secure || r.session.SameSite != http.SameSiteLaxMode {
@@ -294,7 +294,7 @@ func TestAUTH1_FullCodeFlow(t *testing.T) {
 		t.Fatal("secret in logs")
 	}
 
-	// With a role the callback lands on "/".
+	// With a role the callback also lands on "/" (UI-7: the UI decides).
 	u, _ := e.st.GetUserBySub(e.ctx(), "sub-alice")
 	_ = e.st.SetUserStatus(e.ctx(), u.ID, store.StatusActive)
 	_ = e.st.SetUserRoles(e.ctx(), u.ID, []string{store.RoleDeveloper})

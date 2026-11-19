@@ -40,15 +40,15 @@ describe("AUTH-6 login page", () => {
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
   });
 
-  it("shows the ?error= from a failed SSO callback", async () => {
+  it("shows the ?auth_error= from a failed SSO callback", async () => {
     mockApi({ ...noSession, "GET /api/v1/auth/methods": { oidc: true, local: true } });
-    renderLogin("/login?error=forbidden");
+    renderLogin("/login?auth_error=forbidden");
     expect(await screen.findByRole("alert")).toHaveTextContent("Single sign-on was refused.");
   });
 
-  it("shows an unknown ?error= code as given", async () => {
+  it("shows an unknown ?auth_error= code as given", async () => {
     mockApi({ ...noSession, "GET /api/v1/auth/methods": { oidc: true, local: true } });
-    renderLogin("/login?error=weird_code");
+    renderLogin("/login?auth_error=weird_code");
     expect(await screen.findByRole("alert")).toHaveTextContent("weird_code");
   });
 

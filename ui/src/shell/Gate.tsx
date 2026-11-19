@@ -17,14 +17,17 @@ const PUBLIC_ONLY = new Set(["/login", "/unauthorized", "/change-password"]);
  */
 export function Gate() {
   const { state, refresh } = useSessionState();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   if (state.status === "loading") return <p className="public-column muted">Loading…</p>;
 
   if (state.status === "error") return <SessionError message={state.message} retry={refresh} />;
 
   if (state.status === "anonymous") {
-    return pathname === "/login" ? <Login /> : <Navigate to="/login" replace />;
+    // UI-7: the backend redirects to "/?auth_error=<code>"; forward the code to the sign-in page.
+    const authError = new URLSearchParams(search).get("auth_error");
+    const to = authError ? `/login?auth_error=${encodeURIComponent(authError)}` : "/login";
+    return pathname === "/login" ? <Login /> : <Navigate to={to} replace />;
   }
 
   const s = state.session;

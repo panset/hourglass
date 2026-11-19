@@ -39,6 +39,16 @@ describe("UI-5 shell routing by session state", () => {
     expect(where()).toBe("/login");
   });
 
+  it("UI-7 forwards ?auth_error= from the backend's redirect to the sign-in page", async () => {
+    mockApi({
+      "GET /api/v1/session": () => errorResponse(401, "unauthenticated", "sign in required"),
+      "GET /api/v1/auth/methods": { oidc: true, local: true },
+    });
+    renderAt("/?auth_error=forbidden");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Single sign-on was refused.");
+    expect(where()).toBe("/login");
+  });
+
   it("AUTH-5 no roles shows only /unauthorized whatever the URL, with the exact sentence and email", async () => {
     mockApi({ "GET /api/v1/session": noRoleSession });
     renderAt("/admin/users");

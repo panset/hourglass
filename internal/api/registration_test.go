@@ -3,10 +3,14 @@
 package api
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -93,5 +97,60 @@ func TestAUTH4_NoHandlerIsRegisteredOutsideTheRouteTable(t *testing.T) {
 	}
 	if scanned < 20 {
 		t.Errorf("scanned only %d files; the scan is not finding the sources", scanned)
+	}
+}
+
+// uiRouteLiterals are the UI's client-side routes. UI-7: nothing in the Go
+// code may depend on them (the OIDC callback redirects only to "/").
+var uiRouteLiterals = []string{"/login", "/unauthorized", "/setups", "/admin/users", "/admin/setups", "/admin/settings", "/admin/audit"}
+
+// TestUI7_NoGoCodeNamesAUIRoute is a source scan: a string literal in non-test
+// Go code under internal/, cmd/ or pkg/ that is, or starts with, a UI route
+// (outside comments) fails the suite. API paths such as /api/v1/setups do not
+// match because they do not start with the route.
+func TestUI7_NoGoCodeNamesAUIRoute(t *testing.T) {
+	root := filepath.Join("..", "..")
+	fset := token.NewFileSet()
+	scanned := 0
+	for _, dir := range []string{"internal", "cmd", "pkg"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) {
+					return nil
+				}
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+				return nil
+			}
+			f, err := parser.ParseFile(fset, p, nil, 0) // comments are dropped
+			if err != nil {
+				return err
+			}
+			scanned++
+			ast.Inspect(f, func(n ast.Node) bool {
+				lit, ok := n.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					return true
+				}
+				v, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					return true
+				}
+				for _, r := range uiRouteLiterals {
+					if v == r || strings.HasPrefix(v, r+"/") || strings.HasPrefix(v, r+"?") {
+						t.Errorf("UI-7: %s names the UI route %q in %q; the backend must not depend on UI routes", fset.Position(lit.Pos()), r, v)
+					}
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("scanned no files")
 	}
 }

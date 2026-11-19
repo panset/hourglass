@@ -173,10 +173,11 @@ func (s *Service) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
-// callbackError redirects to the sign-in page with only an error code.
+// callbackError redirects back to the UI root with only an error code; the
+// UI decides what to show (UI-7).
 func callbackError(w http.ResponseWriter, r *http.Request, code string) {
 	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, "/login?error="+url.QueryEscape(code), http.StatusFound)
+	http.Redirect(w, r, "/?auth_error="+url.QueryEscape(code), http.StatusFound)
 }
 
 // handleOIDCCallback is GET /auth/callback (AUTH-1, AUTH-2).
@@ -273,18 +274,10 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		callbackError(w, r, apierr.Internal)
 		return
 	}
-	u, err := s.loadUser(r.Context(), su.ID)
-	if err != nil {
-		s.log.Error("loading user failed", "err", err)
-		callbackError(w, r, apierr.Internal)
-		return
-	}
-	target := "/"
-	if !u.Authorized() {
-		target = "/unauthorized"
-	}
+	// UI-7: always back to the UI root; the shell reads GET /api/v1/session
+	// and shows the not-authorized page for a user without a role.
 	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, target, http.StatusFound)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // exchangeErr reduces a token endpoint error to its OAuth error code and

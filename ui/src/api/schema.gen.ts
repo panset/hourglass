@@ -32,10 +32,11 @@ export interface paths {
         /**
          * Finish the OIDC flow
          * @description Exchanges the code, creates or refreshes the user (AUTH-2), sets the
-         *     session cookie and redirects (302) to the UI: `/` for a user with a
-         *     role, `/unauthorized` for one without. On failure it redirects to
-         *     `/login?error=<code>` using an error code from `ErrorCode`; every
-         *     failure of the flow is such a redirect, never a JSON error.
+         *     session cookie and redirects (302) back to the UI at `/`, whatever the
+         *     user's roles; the UI decides what to show from `GET /api/v1/session`
+         *     (UI-7). On failure it redirects to `/?auth_error=<code>` using an error
+         *     code from `ErrorCode`; every failure of the flow is such a redirect,
+         *     never a JSON error.
          *
          */
         get: operations["oidcCallback"];

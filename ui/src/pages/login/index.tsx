@@ -20,7 +20,7 @@ export default function Login() {
   const methods = useApi(getAuthMethods);
   const { setSession } = useSessionState();
   const [params] = useSearchParams();
-  const urlError = params.get("error");
+  const urlError = params.get("auth_error");
 
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
