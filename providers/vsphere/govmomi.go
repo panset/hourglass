@@ -167,6 +167,9 @@ func (g *govmomiClient) clusters(ctx context.Context, vc *vim25.Client) ([]clust
 	if err != nil {
 		var nf *find.NotFoundError
 		if errors.As(err, &nf) {
+			if g.cfg.Datacenter != "" {
+				return nil, fmt.Errorf("datacenter %q not found", g.cfg.Datacenter)
+			}
 			return nil, nil
 		}
 		return nil, err

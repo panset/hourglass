@@ -159,8 +159,6 @@ func TestEXT3_SimulatorScope(t *testing.T) {
 	}{
 		{map[string]any{"datacenter": "DC0"}, 1},
 		{map[string]any{"datacenter": "DC0", "clusters": []string{"DC0_C0"}}, 1},
-		{map[string]any{"clusters": []string{"other"}}, 0},
-		{map[string]any{"datacenter": "nope"}, 0},
 	} {
 		raw := s.cfgJSON(tc.extra)
 		p, err := NewProvider(raw)
@@ -170,6 +168,40 @@ func TestEXT3_SimulatorScope(t *testing.T) {
 		if got := listNames(t, p); len(got) != tc.want {
 			t.Errorf("%v: got %+v want %d pools", tc.extra, got, tc.want)
 		}
+	}
+}
+
+// A configured datacenter or cluster that does not exist fails the poll for
+// both extensions (the provider no longer returns a silent empty list).
+func TestEXT3_SimulatorUnknownScopeIsError(t *testing.T) {
+	s := startSim(t, false)
+	for _, extra := range []map[string]any{
+		{"datacenter": "nope"},
+		{"clusters": []string{"other"}},
+		{"clusters": []string{"DC0_C0", "other"}},
+	} {
+		p, err := NewProvider(s.cfgJSON(extra))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.List(context.Background()); err == nil {
+			t.Errorf("provider %v: want an error", extra)
+		}
+		src, err := NewPressureSource(s.cfgJSON(extra))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := src.Pressure(context.Background(), hourglass.Snapshot{}); err == nil {
+			t.Errorf("pressure source %v: want an error", extra)
+		}
+	}
+	// An existing cluster with no pools besides its root is a valid empty result.
+	p, err := NewProvider(s.cfgJSON(map[string]any{"datacenter": "DC0", "clusters": []string{"DC0_C0"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := listNames(t, p); len(got) != 0 {
+		t.Errorf("empty cluster: %+v", got)
 	}
 }
 
@@ -255,7 +287,8 @@ func TestEXT3_SimulatorTLS(t *testing.T) {
 	if !strings.Contains(err.Error(), "certificate") && !strings.Contains(err.Error(), "x509") {
 		t.Fatalf("want a certificate error, got %v", err)
 	}
-	if strings.Contains(err.Error(), "pass") && strings.Contains(err.Error(), "user:pass") {
+	// startSim's config uses username "user" and password "pass".
+	if strings.Contains(err.Error(), "pass") || strings.Contains(err.Error(), "user:") {
 		t.Fatalf("credentials in error: %v", err)
 	}
 	pressure, err := NewPressureSource(s.cfgJSON(map[string]any{"insecure_skip_verify": false}))

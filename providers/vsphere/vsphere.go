@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"sync"
@@ -105,6 +106,15 @@ func (p *provider) List(ctx context.Context) ([]hourglass.Allocation, error) {
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	found := map[string]bool{}
+	for _, rp := range pools {
+		found[rp.Cluster] = true
+	}
+	for _, n := range p.cfg.Clusters {
+		if !found[n] {
+			return nil, fmt.Errorf("vsphere: cluster %q not found", n)
+		}
 	}
 	sort.SliceStable(pools, func(i, j int) bool { return pools[i].Path < pools[j].Path })
 	out := make([]hourglass.Allocation, 0, len(pools))
@@ -220,11 +230,20 @@ func storageRatio(ds []datastore) (float64, bool) {
 // String methods keep the config (and its password) out of any print of the
 // extensions: fmt cannot call secret.String on a field it reaches through an
 // unexported one.
-func (p *provider) String() string   { return "vsphere provider{" + p.cfg.String() + "}" }
-func (p *provider) GoString() string { return p.String() }
+//
+// The receivers are values so that printing the struct itself (%v, %+v of *p)
+// is covered as well as printing the pointer.
+func (p provider) String() string   { return "vsphere provider{" + p.cfg.String() + "}" }
+func (p provider) GoString() string { return p.String() }
+func (p provider) LogValue() slog.Value {
+	return slog.StringValue(p.String())
+}
 
-func (p *pressureSource) String() string   { return "vsphere pressure source{" + p.cfg.String() + "}" }
-func (p *pressureSource) GoString() string { return p.String() }
+func (p pressureSource) String() string   { return "vsphere pressure source{" + p.cfg.String() + "}" }
+func (p pressureSource) GoString() string { return p.String() }
+func (p pressureSource) LogValue() slog.Value {
+	return slog.StringValue(p.String())
+}
 
 func clamp(v float64) float64 {
 	switch {

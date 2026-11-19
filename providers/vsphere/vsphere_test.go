@@ -3,10 +3,12 @@
 package vsphere
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
 	"strings"
@@ -471,4 +473,57 @@ func contains(l []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// The pressure loop starts from 0, so the lower clamp is only observable on
+// the per-cluster helpers; test them directly.
+func TestMET1_LowerClampOnRatios(t *testing.T) {
+	if v, err := reservationRatio("C1", "cpu", resource{ReservationUsed: -5, MaxUsage: 1000}); err != nil || v != 0 {
+		t.Fatalf("negative reservation: got %v, %v", v, err)
+	}
+	if v, ok := storageRatio([]datastore{{Capacity: 100, FreeSpace: 150, Accessible: true}}); !ok || v != 0 {
+		t.Fatalf("free above capacity: got %v, %v", v, ok)
+	}
+	if v := clamp(math.NaN()); v != 0 {
+		t.Fatalf("NaN: got %v", v)
+	}
+	if v, err := clusterPressure(cluster("C1", -5, -5, 1.5)); err != nil || v != 0 {
+		t.Fatalf("cluster: got %v, %v", v, err)
+	}
+}
+
+func TestEXT3_ProviderUnknownClusterIsError(t *testing.T) {
+	f := &fakeClient{pools: seededPools()}
+	if _, err := newTestProvider(f, "C1", "ghost").List(context.Background()); err == nil || !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("want a cluster-not-found error, got %v", err)
+	}
+	if _, err := newTestProvider(f, "ghost").List(context.Background()); err == nil {
+		t.Fatal("only unknown cluster must error")
+	}
+	// An existing cluster with no pools besides its root is a valid empty result.
+	only := &fakeClient{pools: []pool{{Name: "Resources", Path: "/DC0/host/E/Resources", Cluster: "E", Root: true}}}
+	got, err := newTestProvider(only, "E").List(context.Background())
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty cluster: %v, %v", got, err)
+	}
+}
+
+func TestEXT3_PasswordNeverPrintedByValueOrLog(t *testing.T) {
+	c := testCfg("C1")
+	p := provider{cfg: c, cl: &fakeClient{}}
+	s := pressureSource{cfg: c, cl: &fakeClient{}}
+	var buf bytes.Buffer
+	lg := slog.New(slog.NewTextHandler(&buf, nil))
+	lg.Info("x", "cfg", c, "p", p, "s", s, "pp", &p, "ps", &s)
+	jb := bytes.Buffer{}
+	slog.New(slog.NewJSONHandler(&jb, nil)).Info("x", "cfg", c, "p", p, "s", s)
+	outs := []string{buf.String(), jb.String()}
+	for _, v := range []any{c, p, s, &p, &s} {
+		outs = append(outs, fmt.Sprintf("%v|%+v|%#v|%s", v, v, v, v))
+	}
+	for _, o := range outs {
+		if strings.Contains(o, pw) {
+			t.Errorf("password leaked: %q", o)
+		}
+	}
 }

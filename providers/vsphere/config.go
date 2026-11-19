@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -43,6 +44,12 @@ func (c config) String() string {
 	return fmt.Sprintf("vsphere config{url=%s username=%s password=%s insecure_skip_verify=%t datacenter=%q clusters=%q request_timeout=%s}",
 		redactURL(c.URL), c.Username, c.Password, c.InsecureSkipVerify, c.Datacenter, c.Clusters, c.RequestTimeout)
 }
+
+// GoString keeps the password out of %#v.
+func (c config) GoString() string { return c.String() }
+
+// LogValue keeps the password out of log/slog output.
+func (c config) LogValue() slog.Value { return slog.StringValue(c.String()) }
 
 // connKey identifies a vCenter session; equal keys share one client.
 type connKey struct {
