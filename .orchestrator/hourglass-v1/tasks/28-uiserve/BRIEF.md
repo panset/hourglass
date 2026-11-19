@@ -1,0 +1,18 @@
+# 28 internal/uiserve: optional static serving of the built UI
+Job intent: .orchestrator/hourglass-v1/INTENT.md (read it first). Rules: .orchestrator/hourglass-v1/CONTRACT.md.
+## Goal
+The Go binary can serve the built UI in bundled mode, behind a build tag, without any Go code depending on the UI's framework or layout. Spec: docs/SPEC.md UI-3, UI-4, UI-7, "Building without the UI", "Images" (the `hourglass` and `hourglass-api` binaries), AUTH-4 last sentence.
+## Context
+tasks/21a-app-wiring/RESULT.md (`Options.UI fs.FS`, the router's fallback handler, `ui.serve` config), tasks/25-ui-scaffold/RESULT.md (`//ui:dist`).
+## Requirements
+- `internal/uiserve`: `Handler(fsys fs.FS) http.Handler` serving static files from one directory with: `index.html` for `/` and as the fallback for any path that is not an existing file (client-side routes), but never for paths under `/api/`, `/auth/` or `/healthz` (those are the API's; unknown ones stay JSON 404); long-lived immutable caching for fingerprinted asset files (anything under the build's assets directory), `no-cache` for `index.html`; correct content types; no directory listings; path traversal impossible; `X-Content-Type-Options: nosniff`; and a Content-Security-Policy suitable for a same-origin SPA with no inline scripts (check the built `index.html` and relax only as far as the build needs, documenting why). It knows nothing about React or the UI's routes.
+- Build tag: `embed_ui.go` with `//go:build ui` embeds the built files (`//go:embed all:dist`) and exposes `Embedded() (fs.FS, bool)`; `embed_noui.go` with `//go:build !ui` returns `nil, false`. So plain `go build ./...` needs no Node, no Bazel and no built files, and yields an API-only binary. `cmd/hourglassd` passes the embedded FS to `hourglass.Run` when present and `ui.serve` is true; with `ui.serve: false` (split mode) or no embedded UI, nothing is served at `/` and the log says so once at start.
+- Bazel: `//cmd/hourglassd:hourglassd` builds WITH the UI (the `ui` tag set through `gotags` and the `//ui:dist` output wired into the embed, e.g. by copying the dist tree into the package's embedsrcs with a small rule), and `//cmd/hourglassd:hourglassd-api` builds WITHOUT it from the same sources. Gazelle must not undo the hand-written parts (use `# keep` / gazelle directives). If embedding a tree artifact through rules_go proves unworkable, the fallback is a tar/zip of the dist embedded as one file and read through an in-memory fs; say which you used and why.
+- Tests: handler behaviour with an in-memory `fstest.MapFS` (index, asset, fallback for `/setups/123`, no fallback for `/api/v1/nope` and `/auth/x`, traversal attempts, headers); a test under the `ui` tag, run by Bazel, that the embedded FS contains `index.html` and serves it; a Bazel test (or sh_test) that runs the API-only binary and confirms `/` is 404 while `/healthz` is 200, and runs the bundled binary and confirms `/` returns HTML and `/setups` falls back to it.
+- `ci.sh` gains a step proving the no-tag path: `CGO_ENABLED=0 go build -o /dev/null ./cmd/hourglassd`.
+## Scope
+May write: `internal/uiserve/`, `cmd/hourglassd/` (main wiring and BUILD), `internal/app/` (only the few lines that mount the fallback, if not already there), `ci.sh`, `ui/BUILD.bazel` (only to expose the dist target's visibility), this task folder. Other agents are writing UI pages under `ui/src/pages/` concurrently; do not touch `ui/src`.
+## Long-running steps
+Bazel building the UI and both binaries: allow 20 minutes.
+## Done when
+`./ci.sh` exits 0, both binaries run as described, and RESULT.md documents the build tag, the two Bazel targets, the CSP and the caching policy.

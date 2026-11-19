@@ -1,0 +1,24 @@
+# 22 permissions-table tests and the OpenAPI contract test
+Job intent: .orchestrator/hourglass-v1/INTENT.md (read it first). Rules: .orchestrator/hourglass-v1/CONTRACT.md.
+## Goal
+Two test suites in `internal/api` that the owner's "done" criteria name explicitly:
+(a) HTTP tests covering every cell of the permissions table in docs/SPEC.md "Roles and permissions", including that a user with no role gets no data from any route;
+(b) a contract test that fails when `api/openapi.yaml` and the Go handlers disagree (UI-2).
+## Context
+tasks/21a-app-wiring/RESULT.md (route table `Routes()`, test environment helpers), tasks/21b-api-user/RESULT.md, tasks/21c-api-admin/RESULT.md, tasks/20-auth/RESULT.md, `api/openapi.yaml`.
+## (a) Permissions
+- Actors: anonymous; unassigned (pending); rejected; a user whose roles were all removed; developer; admin (OIDC); the local admin; the local admin before the forced password change. The "Manager (future)" column is out of scope for v1: assert only that `manager` is not an assignable role.
+- One table-driven test whose rows are the capability rows of the spec's table (use the spec's wording as subtest names, e.g. `TestPermissions/Grant_tokens_to_a_user/Developer`), mapping each capability to the concrete route(s) that implement it, and asserting allow or deny for each actor column with real requests against the real router, store and services. A deny must be 401 (anonymous) or 403 with code `no_role` / `forbidden`, with a body that is exactly the error object.
+- A second, exhaustive test driven by `Routes()`: for EVERY registered route and EVERY actor, the status class matches the route's declared access level; and for the three role-less actors plus anonymous, the response body of every route except `/healthz`, `/auth/*`, `GET /api/v1/auth/methods` and `GET /api/v1/session` contains none of the seeded data: seed distinctive marker strings into setup names, labels, details, user names, emails, audit reasons and ledger reasons, and assert no marker appears in any response body or header. `GET /api/v1/session` for an unassigned user returns an empty role list and only that user's own identity.
+- Also: state-changing routes reject a missing or wrong CSRF token for every signed-in actor; the local admin cannot acquire, has no balance and cannot be demoted, disabled, renamed, rejected or deleted through any route (AUTH-8); an admin cannot remove their own admin role; "own" routes cannot be used on another user's hold (developer A releasing developer B's hold is 403); static/unknown paths under `/api/` return JSON 404 without data.
+- A meta-test that fails if a capability row of the spec's table or a route in `Routes()` is not covered, so the matrix cannot silently rot.
+## (b) Contract
+- Add `github.com/getkin/kin-openapi` (MIT) as a test dependency (you own go.mod/go.sum/MODULE.bazel `use_repo` for the Go side; another agent may be editing the rules_js part of MODULE.bazel: touch only the `use_repo(go_deps, ...)` list, re-reading the file immediately before editing).
+- Route parity: the set of (method, path) in the OpenAPI file equals the set in `Routes()`, and each route's declared access level equals the operation's `x-roles`, and `x-csrf` matches where CSRF is enforced.
+- Response validation: for every operation, at least one real success response from the running handlers validates against the operation's response schema, and at least one error response validates against the error schema; request bodies used in the tests validate against the request schemas. Unknown fields in responses are failures (treat schemas as closed unless they declare `additionalProperties`): if the OpenAPI file lacks a field the handler returns, or the reverse, fix whichever is wrong per the spec and docs/ui-notes.md and list every change in RESULT.md. You may edit `api/openapi.yaml` and handler code for such mismatches, keeping changes minimal.
+- Prove the test bites: temporarily rename one response field in a handler and remove one route from the YAML; show both make the test fail; restore.
+- The OpenAPI file reaches the test through Bazel `data`/embed so it works under `bazel test`.
+## Scope
+May write: `internal/api/` (tests; handler fixes for contract mismatches), `api/openapi.yaml` (mismatch fixes only), go.mod, go.sum, MODULE.bazel (`use_repo` list only), MODULE.bazel.lock, `api/BUILD.bazel` if needed, this task folder.
+## Done when
+`go test -race -count=1 ./internal/api/...` and `bazel test //internal/api/...` pass; `./ci.sh` exits 0 (allow 20 minutes; if a failure is in `ui/`, which another agent is building, report it and rely on the Go targets). RESULT.md contains the permissions matrix as a Markdown table with the route(s) behind each cell, the number of (route, actor) combinations exercised, and the list of contract mismatches fixed.
