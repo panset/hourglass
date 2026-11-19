@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"time"
 
 	"github.com/panset/hourglass/internal/app/runhook"
 )
@@ -32,6 +33,10 @@ type Options struct {
 	// UI is the static file tree served at / in bundled mode. Nil means the
 	// binary serves no UI (API-only).
 	UI fs.FS
+	// Clock supplies the current time to every component that needs one (the
+	// collector, the ledger, holds, sessions, event records). Nil means the
+	// wall clock.
+	Clock interface{ Now() time.Time }
 }
 
 // Run starts the server and blocks until ctx is cancelled, then shuts down
@@ -52,6 +57,7 @@ func Run(ctx context.Context, opts Options) error {
 		Stdout:                opts.Stdout,
 		Stderr:                opts.Stderr,
 		UI:                    opts.UI,
+		Clock:                 opts.Clock,
 	})
 	if errors.Is(err, runhook.ErrNoImpl) {
 		return fmt.Errorf("%w: add the import _ %q to your main package", err, serverImportPath)

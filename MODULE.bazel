@@ -31,6 +31,28 @@ npm.npm_translate_lock(
 )
 use_repo(npm, "npm")
 
+# Container images (task 33): rules_oci, with the base pinned by digest.
+bazel_dep(name = "rules_oci", version = "2.2.6")
+bazel_dep(name = "platforms", version = "0.0.10")
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "distroless_static",
+    # gcr.io/distroless/static-debian12:nonroot, the index digest (D8).
+    digest = "sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab",
+    image = "gcr.io/distroless/static-debian12",
+    platforms = [
+        "linux/amd64",
+        "linux/arm64/v8",
+    ],
+)
+use_repo(
+    oci,
+    "distroless_static",
+    "distroless_static_linux_amd64",
+    "distroless_static_linux_arm64_v8",
+)
+
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(version = "1.27.4")
 

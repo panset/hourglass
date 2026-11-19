@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: MIT
+load("@aspect_bazel_lib//lib:tar.bzl", "tar")
+load(":defs.bzl", "NONROOT", "hourglass_image")
+
+# Container images (SPEC "Build, packaging and test environment", Images).
+# Base: gcr.io/distroless/static-debian12:nonroot pinned by digest in
+# MODULE.bazel. Every image runs as uid/gid 65532 with WORKDIR /data.
+#
+#   bazel build //deploy/images:all           layers and manifests, no Docker needed
+#   bazel run //deploy/images:load_hourglass  docker load as hourglass:dev (host CPU)
+#   deploy/load-images.sh                     loads every image the stacks use
+#
+# /data is created here owned by 65532, so a Docker named volume mounted there
+# is writable by the nonroot user. A bind mount keeps the host directory's
+# owner: it must be writable by uid 65532 (chown 65532:65532 or equivalent).
+tar(
+    name = "data_layer",
+    srcs = [],
+    mtree = [
+        "data uid={uid} gid={uid} mode=0755 time=0 type=dir".format(uid = NONROOT),
+    ],
+)
+
+hourglass_image(
+    name = "hourglass",
+    binary = "hourglassd",
+    description = "Hourglass server with the web UI bundled (listens on 8080)",
+    gotags = ["ui"],
+    lib = "//cmd/hourglassd:hourglassd_lib",
+    ports = [8080],
+)
+
+hourglass_image(
+    name = "hourglass-api",
+    binary = "hourglassd",
+    description = "Hourglass server, API only, no UI (split mode, listens on 8080)",
+    lib = "//cmd/hourglassd:hourglassd_lib",
+    ports = [8080],
+)
+
+hourglass_image(
+    name = "hourglass-ui",
+    binary = "hourglass-ui",
+    description = "Hourglass UI file server and reverse proxy to the API (split mode, listens on 8080)",
+    gotags = ["ui"],
+    lib = "//cmd/hourglass-ui:hourglass-ui_lib",
+    ports = [8080],
+)
+
+# Test stacks only (docs/decisions.md D8, D29).
+hourglass_image(
+    name = "hourglass-e2e",
+    binary = "hourglassd-e2e",
+    description = "TEST ONLY: hourglass with an adjustable clock (control port 8091)",
+    gotags = ["ui"],
+    lib = "//e2e/hourglassd-e2e:hourglassd-e2e_lib",
+    ports = [
+        8080,
+        8091,
+    ],
+)
+
+hourglass_image(
+    name = "hourglass-api-e2e",
+    binary = "hourglassd-e2e",
+    description = "TEST ONLY: hourglass-api with an adjustable clock (control port 8091)",
+    lib = "//e2e/hourglassd-e2e:hourglassd-e2e_lib",
+    ports = [
+        8080,
+        8091,
+    ],
+)
+
+hourglass_image(
+    name = "hourglass-vcsim",
+    binary = "hourglass-vcsim",
+    description = "TEST ONLY: govmomi simulator with a control API (SOAP 8989, control 8990)",
+    lib = "//e2e/simulator:simulator_lib",
+    ports = [
+        8989,
+        8990,
+    ],
+)

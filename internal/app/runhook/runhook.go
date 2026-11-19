@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"time"
 )
 
 // Options mirrors hourglass.Options field for field.
@@ -21,6 +22,7 @@ type Options struct {
 	Args                  []string
 	Stdout, Stderr        io.Writer
 	UI                    fs.FS
+	Clock                 interface{ Now() time.Time }
 }
 
 // ErrNoImpl is returned by Call when internal/app was not linked in.

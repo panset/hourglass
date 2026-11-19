@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "hourglass-ui_lib",
+    srcs = [
+        "main.go",
+        "proxy.go",
+    ],
+    importpath = "github.com/panset/hourglass/cmd/hourglass-ui",
+    visibility = ["//deploy/images:__pkg__"],
+    deps = [
+        "//internal/api/apierr",
+        "//internal/uiserve",
+        "//internal/version",
+    ],
+)
+
+# With the UI embedded (the "ui" tag), like cmd/hourglassd.
+go_binary(
+    name = "hourglass-ui",
+    embed = [":hourglass-ui_lib"],
+    gotags = ["ui"],  # keep
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "hourglass-ui_test",
+    srcs = ["proxy_test.go"],
+    embed = [":hourglass-ui_lib"],
+)

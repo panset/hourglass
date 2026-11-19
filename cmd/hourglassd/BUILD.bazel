@@ -5,7 +5,7 @@ go_library(
     name = "hourglassd_lib",
     srcs = ["main.go"],
     importpath = "github.com/panset/hourglass/cmd/hourglassd",
-    visibility = ["//visibility:private"],
+    visibility = ["//deploy/images:__pkg__"],
     deps = [
         "//hooks/webhook",
         "//internal/app",

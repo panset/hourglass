@@ -117,13 +117,18 @@ func writeConfig(t *testing.T, extra string) (cfgPath, dbPath string) {
 
 func start(t *testing.T, cfgPath, dbPath string) *running {
 	t.Helper()
+	return startWithClock(t, cfgPath, dbPath, nil)
+}
+
+func startWithClock(t *testing.T, cfgPath, dbPath string, clock interface{ Now() time.Time }) *running {
+	t.Helper()
 	registerFakes()
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &running{t: t, out: &syncBuf{}, cancel: cancel, done: make(chan error, 1), dbPath: dbPath}
 	go func() {
 		err := Run(ctx, runhook.Options{
 			ConfigPath: cfgPath, DefaultPressureSource: testPressure, DefaultMeteringPolicy: testPolicy,
-			Stdout: r.out, Stderr: io.Discard,
+			Stdout: r.out, Stderr: io.Discard, Clock: clock,
 		})
 		if err != nil {
 			fmt.Fprintf(r.out, "run returned an error: %v\n", err)
@@ -448,5 +453,74 @@ func TestADM2_RuntimeCarriesOIDCIssuerAndNames(t *testing.T) {
 	}
 	if rt := x.runtime(""); rt.OIDCIssuer != "" {
 		t.Errorf("no OIDC: issuer %q", rt.OIDCIssuer)
+	}
+}
+
+// A clock supplied in the options is the one the collector and the ledger
+// service read: a poll run is stamped with it and the period rollover (which
+// reads the ledger's clock) opens the period it names.
+func TestOptionsClock_CollectorAndLedgerUseTheSuppliedClock(t *testing.T) {
+	cfg, db := writeConfig(t, "")
+	ctx := context.Background()
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _, err := st.UpsertOIDCLogin(ctx, "sub-1", "a@example.test", "A", time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserRoles(ctx, u.ID, []string{store.RoleDeveloper}); err != nil {
+		t.Fatal(err)
+	}
+	// An allowance in the previous period makes a rollover due at the fixed time.
+	if _, err := st.AppendLedger(ctx, store.LedgerEntry{UserID: u.ID, Period: "2031-02", Type: "allowance", AmountMT: 1000},
+		"2031-02", time.Date(2031, 2, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fixed := time.Date(2031, 3, 5, 12, 0, 0, 0, time.UTC)
+	r := startWithClock(t, cfg, db, hourglasstest.NewFakeClock(fixed))
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		_, body := get(t, r.base+"/healthz")
+		if !strings.Contains(body, `"last_poll_age_seconds":null`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no successful poll within 10s: %s", body)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := r.stop(); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err = store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	run, err := st.LatestRun(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !run.StartedAt.Equal(fixed) {
+		t.Errorf("collector run started at %v, want the supplied clock %v", run.StartedAt, fixed)
+	}
+	entries, err := st.ListLedger(ctx, u.ID, "2031-03")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("no ledger entry in the supplied clock's period 2031-03")
+	}
+	for _, e := range entries {
+		if !e.CreatedAt.Equal(fixed) {
+			t.Errorf("ledger entry %s at %v, want %v", e.Type, e.CreatedAt, fixed)
+		}
 	}
 }

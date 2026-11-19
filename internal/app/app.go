@@ -172,17 +172,20 @@ func Run(ctx context.Context, opts runhook.Options) error {
 		closeStore()
 		return err
 	}
-	if applied, err := ImportSeed(ctx, st, cfg.Seed, time.Now()); err != nil {
+	var clock interface{ Now() time.Time } = systemClock{}
+	if opts.Clock != nil {
+		clock = opts.Clock
+	}
+	if applied, err := ImportSeed(ctx, st, cfg.Seed, clock.Now()); err != nil {
 		closeStore()
 		return err
 	} else if applied {
 		log.Info("seed file imported", "seed", cfg.Seed)
 	}
 
-	m := newMetrics(time.Now())
-	clock := systemClock{}
+	m := newMetrics(clock.Now())
 	// The events dispatcher outlives ctx's cancellation until shutdown closes it.
-	disp := events.New(ext.hooks, st, events.WithLogger(log))
+	disp := events.New(ext.hooks, st, events.WithLogger(log), events.WithClock(clock))
 	disp.Start(context.WithoutCancel(ctx))
 	led := ledger.NewService(st, disp, clock, loc)
 	coll := collector.New(collector.Deps{
@@ -197,7 +200,7 @@ func Run(ctx context.Context, opts runhook.Options) error {
 		OIDC: auth.OIDCConfig{IssuerURL: cfg.OIDC.Issuer, ClientID: cfg.OIDC.ClientID,
 			ClientSecret: cfg.OIDC.ClientSecret, RedirectURL: cfg.OIDC.RedirectURL},
 		SessionKey: cfg.SessionKey, AllowedOrigins: cfg.CORS.AllowedOrigins,
-	}, st, disp, log)
+	}, st, disp, log, auth.WithClock(clock.Now))
 	if err != nil {
 		_ = disp.Close(ctx)
 		closeStore()

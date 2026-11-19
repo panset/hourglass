@@ -9,7 +9,7 @@ go_library(
         "sim.go",
     ],
     importpath = "github.com/panset/hourglass/e2e/simulator",
-    visibility = ["//visibility:private"],
+    visibility = ["//deploy/images:__pkg__"],
     deps = [
         "@com_github_vmware_govmomi//:govmomi",
         "@com_github_vmware_govmomi//find",
