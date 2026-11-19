@@ -1,0 +1,29 @@
+/* SPDX-License-Identifier: MIT */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.4);
+}
+.dialog {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+  padding: var(--card-pad);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-control);
+}

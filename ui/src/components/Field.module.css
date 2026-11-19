@@ -1,0 +1,31 @@
+/* SPDX-License-Identifier: MIT */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-label);
+}
+.label {
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+.hint {
+  font-size: var(--fs-13);
+  color: var(--color-muted);
+}
+.error {
+  font-size: var(--fs-13);
+  color: var(--color-red);
+}
+.control {
+  min-height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  width: 100%;
+}
+.control[aria-invalid="true"] {
+  border-color: var(--color-red);
+}

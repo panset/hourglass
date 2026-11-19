@@ -1,0 +1,116 @@
+# SPDX-License-Identifier: MIT
+load("@aspect_bazel_lib//lib:diff_test.bzl", "diff_test")
+load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
+load("@aspect_rules_js//js:defs.bzl", "js_binary", "js_run_binary")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@npm//ui:typescript/package_json.bzl", tsc_bin = "bin")
+load("@npm//ui:vite/package_json.bzl", vite_bin = "bin")
+load("@npm//ui:vitest/package_json.bzl", vitest_bin = "bin")
+
+npm_link_all_packages(name = "node_modules")
+
+# Everything the build, the tests and the type check read.
+filegroup(
+    name = "sources",
+    srcs = glob(
+        ["src/**"],
+        exclude = ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"],
+    ) + [
+        "index.html",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+    ],
+)
+
+filegroup(
+    name = "test_sources",
+    srcs = glob(["src/**"]) + [
+        "index.html",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+    ],
+)
+
+# The production build, as a directory artifact for a later task to embed.
+vite_bin.vite(
+    name = "dist",
+    srcs = [
+        ":node_modules",
+        ":sources",
+    ],
+    args = [
+        "build",
+        "--outDir",
+        "dist",
+        "--emptyOutDir",
+    ],
+    chdir = package_name(),
+    out_dirs = ["dist"],
+)
+
+# Unit tests: Vitest + Testing Library on jsdom. No network.
+vitest_bin.vitest_test(
+    name = "test",
+    args = [
+        "run",
+        "--config",
+        "vitest.config.ts",
+    ],
+    chdir = package_name(),
+    data = [
+        ":node_modules",
+        ":test_sources",
+    ],
+)
+
+tsc_bin.tsc_test(
+    name = "typecheck",
+    args = [
+        "--noEmit",
+        "-p",
+        "tsconfig.json",
+    ],
+    chdir = package_name(),
+    data = [
+        ":node_modules",
+        ":test_sources",
+    ],
+)
+
+# Generated API types: a fresh generation must equal the checked-in file.
+js_binary(
+    name = "gen_api_bin",
+    data = [
+        ":node_modules/openapi-typescript",
+        "scripts/gen-api.mjs",
+    ],
+    entry_point = "scripts/gen-api.mjs",
+)
+
+# The contract lives outside this package; copy it in so the tool can read it.
+copy_file(
+    name = "openapi_copy",
+    src = "//:api/openapi.yaml",
+    out = "openapi.contract.yaml",
+)
+
+js_run_binary(
+    name = "schema_fresh",
+    srcs = [":openapi_copy"],
+    outs = ["schema.fresh.ts"],
+    args = [
+        "$(location :openapi_copy)",
+        "$(location schema.fresh.ts)",
+    ],
+    tool = ":gen_api_bin",
+)
+
+diff_test(
+    name = "api_schema_drift_test",
+    failure_message = "ui/src/api/schema.gen.ts is stale: run npm run gen:api in ui/ and commit the result.",
+    file1 = "src/api/schema.gen.ts",
+    file2 = ":schema_fresh",
+)

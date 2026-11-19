@@ -2,4 +2,8 @@
 load("@gazelle//:def.bzl", "gazelle")
 
 # gazelle:prefix github.com/panset/hourglass
+# gazelle:exclude ui
 gazelle(name = "gazelle")
+
+# The UI-to-backend contract, read by //ui (generated-client drift test).
+exports_files(["api/openapi.yaml"])
