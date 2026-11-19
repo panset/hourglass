@@ -25,11 +25,11 @@ detail when the one before it is verified.
 | 13 | 4 | `providers/static` and `hooks/webhook` | build | sonnet | 11 | `providers/static/`, `hooks/` | verified |
 | 14 | 4 | Core-genericity check: script failing CI if a core package imports or mentions vCenter, sizes or a concrete extension | build | haiku | 10 | `tools/` | verified |
 | 15 | 4 | Verify 10-14 | verify | sonnet | 12,13,14 | (read-only) | done |
-| 16 | 5 | `internal/events`: in-order queue, veto path, 30 s timeout, delivery records (EXT-6,7) | build | sonnet | 09,15 | `internal/events/` | done |
-| 17 | 5 | `internal/collector`: snapshot, matching, orphans, outages, idempotent debits in one transaction, hold lifecycle events (MET-1..6, HOLD-3,4) | build | opus | 16 | `internal/collector/` | done |
-| 18 | 5 | Verify 16-17, including restart and failed-poll cases | verify | opus | 17 | (read-only) | running |
+| 16 | 5 | `internal/events`: in-order queue, veto path, 30 s timeout, delivery records (EXT-6,7) | build | sonnet | 09,15 | `internal/events/` | verified |
+| 17 | 5 | `internal/collector`: snapshot, matching, orphans, outages, idempotent debits in one transaction, hold lifecycle events (MET-1..6, HOLD-3,4) | build | opus | 16 | `internal/collector/` | verified |
+| 18 | 5 | Verify 16-17, including restart and failed-poll cases | verify | opus | 17 | (read-only) | done |
 | 19 | 6 | `api/openapi.yaml` for every route in the spec's HTTP API table | build | sonnet | 15 | `api/` | done |
-| 20 | 6 | `internal/auth`: local admin (argon2id, forced change, rate limit), OIDC code flow with PKCE, sessions, CSRF, role middleware (AUTH-1..8) | build | opus | 09 | `internal/auth/` | running |
+| 20 | 6 | `internal/auth`: local admin (argon2id, forced change, rate limit), OIDC code flow with PKCE, sessions, CSRF, role middleware (AUTH-1..8) | build | opus | 09 | `internal/auth/` | done |
 | 21 | 6 | `internal/api`: handlers for holds, setups, me, pressure, admin; settings, audit, seed import; `pkg/hourglass.Run`, config loading, `hourglassd` wiring | build | sonnet (split into 2-3 at re-plan) | 18,19,20 | `internal/api/`, `cmd/`, `pkg/hourglass/` | pending |
 | 22 | 6 | Permissions-table HTTP tests (every cell, unassigned gets no data) and the OpenAPI contract test | build | sonnet | 21 | `internal/api/` tests | pending |
 | 23 | 6 | Verify 19-22; security read of auth | verify | opus | 22 | (read-only) | pending |
@@ -39,7 +39,7 @@ detail when the one before it is verified.
 | 27 | 7 | UI pages: Users, Setup inventory, Settings, Audit log | build | sonnet | 25 | `ui/src/pages/admin/` | pending |
 | 28 | 7 | `internal/uiserve` behind a build tag, index.html fallback, bundled vs split, CORS (UI-3,4,7) | build | sonnet | 25 | `internal/uiserve/` | pending |
 | 29 | 7 | Verify 25-28 against wireframes and UI-1..7 | verify | sonnet | 26,27,28 | (read-only) | pending |
-| 30 | 8 | `providers/vsphere`: internal client interface, pool matching, nested pools, pressure formula, unit tests on a hand-written fake (layer 2) | build | sonnet | 01,15 | `providers/vsphere/` | pending |
+| 30 | 8 | `providers/vsphere`: internal client interface, pool matching, nested pools, pressure formula, unit tests on a hand-written fake (layer 2) | build | sonnet | 01,15 | `providers/vsphere/` | done |
 | 31 | 8 | govmomi client, in-process simulator integration tests (layer 3), `hourglassd check-provider` | build | sonnet | 30 | `providers/vsphere/`, `cmd/` | pending |
 | 32 | 8 | Verify 30-31; confirm govmomi is imported only by the vsphere package | verify | sonnet | 31 | (read-only) | pending |
 | 33 | 9 | rules_oci images: `hourglass`, `hourglass-api`, `hourglass-ui`, non-root | build | sonnet | 29 | `deploy/`, BUILD files | pending |
@@ -61,6 +61,10 @@ detail when the one before it is verified.
 | 17b | 5 | Ledger service: store-backed grant, reset, first allowance, rollover | sonnet | done |
 | 17c | 5 | `internal/holds`: acquire and release rules | sonnet | done |
 | 15b | 4 | Fix findings of 15 | sonnet | done |
+| 18b | 5 | Fix findings of 18 | sonnet | done |
+| 21a | 6 | Config, `Run`, router skeleton, `hourglassd` | sonnet | running |
+| 21b | 6 | User-facing API handlers | sonnet | pending |
+| 21c | 6 | Admin API handlers | sonnet | pending |
 
 ## Notes
 

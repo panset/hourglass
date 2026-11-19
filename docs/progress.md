@@ -16,10 +16,10 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 | 2 | Pure core logic: selectors and rate rules, bands and smoothing, debits, ledger and rollover | verified, pushed |
 | 3 | SQLite store and migrations | verified, pushed |
 | 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | verified, pushed |
-| 5 | Collector and event queue | built (events, settings, ledger service, collector, hold rules); adversarial verification running |
-| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | in progress: OpenAPI contract and auth |
+| 5 | Collector and event queue | verified, pushed |
+| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | in progress: OpenAPI contract and auth built; application wiring and handlers under way |
 | 7 | React + TypeScript UI | not started |
-| 8 | vSphere provider and pressure source | not started |
+| 8 | vSphere provider and pressure source | built on a branch (fake and simulator layers pass); merge, `check-provider` and verification pending |
 | 9 | Images, compose stacks, end-to-end acceptance path (bundled and split) | not started |
 | 10 | Docs and `examples/custom` | not started |
 
@@ -31,11 +31,12 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 - Milestone 2: `internal/rules`, `internal/metering`, `internal/ledger`. An independent check found no bugs against the spec and caught 29 of 33 seeded mutations (2 were equivalent); its findings are fixed. Decisions D11-D17.
 - Milestone 3: `internal/store` matches the data model column for column. Verification found three defects (ledger rows replaceable, a panic leaving the write lock held, stale balance cache on out-of-order writes); all fixed with tests. Decision D10.
 - Milestone 4: `pkg/hourglass`, `pkg/hourglasstest`, and the `inventory`, `default`, `static` and `webhook` extensions. Verification confirmed the interfaces match the spec's declarations and that a third-party module builds against the public packages alone; its 11 findings are fixed except two accepted ones (event JSON compacts `details`; the term check is a plain substring match).
+- Milestone 5: events, settings, ledger service, collector and hold rules. An adversarial check walked the acceptance path at service level with every ledger amount matching hand-computed values; no high-severity findings, and the medium ones (backwards clock, rollover ordering at midnight, false outage on interval change) are fixed with regression tests. Decisions D19-D25.
 - Wireframe notes for the UI work: `docs/ui-notes.md`.
 
 ## Not finished
 
-Milestones 5 to 10.
+Milestones 6 to 10.
 
 ## Waiting on the owner
 
@@ -43,4 +44,4 @@ Nothing.
 
 ## Decisions to review
 
-See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19.
+See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19, D22, D23, D27.
