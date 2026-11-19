@@ -4,17 +4,20 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/panset/hourglass/internal/app/runhook"
@@ -412,5 +415,23 @@ func TestRunhookWithoutImplFails(t *testing.T) {
 	defer func() { runhook.Impl = saved }()
 	if err := hourglass.Run(context.Background(), hourglass.Options{}); !errors.Is(err, runhook.ErrNoImpl) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestUI3_UIFallbackModes(t *testing.T) {
+	ui := fstest.MapFS{"index.html": {Data: []byte("<html>")}}
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	if uiFallback(ui, true, log) == nil {
+		t.Error("bundled mode with a UI should serve it")
+	}
+	if uiFallback(ui, false, log) != nil {
+		t.Error("ui.serve=false should serve nothing")
+	}
+	if uiFallback(nil, true, log) != nil {
+		t.Error("no embedded UI should serve nothing")
+	}
+	if n := strings.Count(buf.String(), "not serving the UI"); n != 2 {
+		t.Errorf("want one log line per no-UI case, got %d: %s", n, buf.String())
 	}
 }

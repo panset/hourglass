@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MIT
+load("@aspect_bazel_lib//lib:copy_directory.bzl", "copy_directory")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+# Hand-written: gazelle cannot see the tag-guarded embed or the Bazel-built
+# dist tree, so it must not rewrite this file.
+# gazelle:ignore
+
+# True when the binary being built sets the "ui" Go tag (go_binary gotags).
+config_setting(
+    name = "ui_tag",
+    flag_values = {"@rules_go//go/config:tags": "ui"},
+)
+
+# //ui:dist copied under this package as dist/, where //go:embed all:dist
+# expects it. Only built when a binary asks for the ui tag.
+copy_directory(
+    name = "dist",
+    src = "//ui:dist",
+    out = "dist",
+    tags = ["manual"],
+)
+
+go_library(
+    name = "uiserve",
+    srcs = [
+        "embed_noui.go",
+        "embed_ui.go",
+        "uiserve.go",
+    ],
+    embedsrcs = select({
+        ":ui_tag": [":dist"],
+        "//conditions:default": [],
+    }),
+    importpath = "github.com/panset/hourglass/internal/uiserve",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "uiserve_test",
+    srcs = [
+        "embed_noui_test.go",
+        "uiserve_test.go",
+    ],
+    embed = [":uiserve"],
+)
+
+# The same tests with the UI embedded: the embedded FS has index.html and
+# serves it (UI-3).
+go_test(
+    name = "uiserve_ui_test",
+    srcs = [
+        "embed_ui.go",
+        "embed_ui_test.go",
+        "uiserve.go",
+        "uiserve_test.go",
+    ],
+    embedsrcs = [":dist"],
+    gotags = ["ui"],
+    importpath = "github.com/panset/hourglass/internal/uiserve",
+)

@@ -13,12 +13,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/signal"
 	"syscall"
 
 	_ "github.com/panset/hourglass/hooks/webhook"
 	"github.com/panset/hourglass/internal/app"
+	"github.com/panset/hourglass/internal/uiserve"
 	"github.com/panset/hourglass/internal/version"
 	"github.com/panset/hourglass/pkg/hourglass"
 	_ "github.com/panset/hourglass/pkg/hourglass/server" // implements hourglass.Run (EXT-5)
@@ -60,6 +62,7 @@ func run(args []string) int {
 		Args:                  args,
 		Stdout:                os.Stdout,
 		Stderr:                os.Stderr,
+		UI:                    embeddedUI(),
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "hourglassd:", err)
@@ -83,4 +86,14 @@ func checkProvider(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// embeddedUI is the UI built into this binary (the "ui" build tag), or nil.
+// hourglass.Run serves it only when ui.serve is true and logs which case
+// applies.
+func embeddedUI() fs.FS {
+	if fsys, ok := uiserve.Embedded(); ok {
+		return fsys
+	}
+	return nil
 }

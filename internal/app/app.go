@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	iofs "io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/internal/uiserve"
 	"github.com/panset/hourglass/pkg/hourglass"
 )
 
@@ -204,7 +206,7 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	handler := api.New(api.Deps{
 		Store: st, Auth: authSvc, Holds: holdsSvc, Ledger: led, Events: disp, Collector: coll,
 		Clock: clock, Location: loc, Logger: log, Runtime: ext.runtime(),
-		// Fallback: the UI file server is a later task (UI-3); nil gives 404.
+		Fallback: uiFallback(opts.UI, cfg.UI.Serve, log),
 	})
 
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
@@ -304,4 +306,20 @@ func configPath(opts runhook.Options, stderr io.Writer) (string, error) {
 	default:
 		return os.Getenv("HOURGLASS_CONFIG"), nil
 	}
+}
+
+// uiFallback is the handler for non-API paths (UI-3). It serves the embedded
+// UI only in bundled mode (ui.serve true and a UI linked in); otherwise it
+// returns nil, nothing is served at /, and the log says why once.
+func uiFallback(ui iofs.FS, serve bool, log *slog.Logger) http.Handler {
+	switch {
+	case !serve:
+		log.Info("not serving the UI: ui.serve is false (split mode)")
+	case ui == nil:
+		log.Info("not serving the UI: this binary was built without it (API-only)")
+	default:
+		log.Info("serving the bundled UI at /")
+		return uiserve.Handler(ui)
+	}
+	return nil
 }

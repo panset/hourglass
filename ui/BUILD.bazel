@@ -49,6 +49,8 @@ vite_bin.vite(
     ],
     chdir = package_name(),
     out_dirs = ["dist"],
+    # Embedded into the Go binary by //internal/uiserve (UI-3).
+    visibility = ["//internal/uiserve:__pkg__"],
 )
 
 # Unit tests: Vitest + Testing Library on jsdom. No network.

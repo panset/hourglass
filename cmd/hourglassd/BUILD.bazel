@@ -9,6 +9,7 @@ go_library(
     deps = [
         "//hooks/webhook",
         "//internal/app",
+        "//internal/uiserve",
         "//internal/version",
         "//pkg/hourglass",
         "//pkg/hourglass/server",
@@ -19,8 +20,36 @@ go_library(
     ],
 )
 
+# The bundled binary: the "ui" tag turns on internal/uiserve's embed, and
+# //ui:dist is copied in as its embedsrcs (UI-3, "Images": hourglass).
 go_binary(
     name = "hourglassd",
     embed = [":hourglassd_lib"],
+    gotags = ["ui"],  # keep
     visibility = ["//visibility:public"],
+)
+
+# The same sources without the tag: API-only (UI-3 split mode,
+# "Images": hourglass-api). No Node, no built UI needed.
+go_binary(
+    name = "hourglassd-api",
+    embed = [":hourglassd_lib"],
+    visibility = ["//visibility:public"],
+)
+
+# Runs both binaries (UI-3): API-only has no UI at /, bundled serves it and
+# falls back to index.html for client routes.
+sh_test(
+    name = "ui_modes_test",
+    size = "medium",
+    srcs = ["ui_modes_test.sh"],
+    args = [
+        "$(rootpath :hourglassd-api)",
+        "$(rootpath :hourglassd)",
+    ],
+    data = [
+        ":hourglassd",
+        ":hourglassd-api",
+    ],
+    tags = ["local"],
 )

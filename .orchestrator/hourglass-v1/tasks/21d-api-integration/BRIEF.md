@@ -13,3 +13,6 @@ The router skeleton (21a), user handlers (21b), admin handlers (21c) and UI serv
 May write: `internal/api/`, `internal/collector/` (additive), `internal/holds/` (additive), `internal/uiserve/`, BUILD files of the packages listed, `ui/src` (only for item 6 breakage), this task folder. No new dependencies.
 ## Done when
 `./ci.sh` exits 0 on the whole tree and `go test -race -count=1 ./...` passes. RESULT.md lists what each item changed and the final Bazel test count.
+## Additional items
+7. `GET /api/v1/admin/settings` runtime block: pass the OIDC issuer (not a secret) and timezone from config through `internal/app` into the API deps so `runtime.oidc_issuer` is populated (null when OIDC is not configured). The extension interfaces have no "describe" method, so any `description` field for the provider, pressure source, policy or hooks in the responses is null (or removed from `api/openapi.yaml` together with the generated UI schema and any UI use of it, whichever is the smaller change): no extension-specific text in core code.
+8. You may edit `internal/app/app.go` and `internal/api/api.go` for item 7.

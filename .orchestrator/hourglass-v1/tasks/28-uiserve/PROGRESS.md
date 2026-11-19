@@ -1,0 +1,4 @@
+- 2026-11-19 internal/uiserve Handler + tests (fstest.MapFS) done.
+- 2026-11-19 embed_ui.go / embed_noui.go done; app.uiFallback wires Options.UI; cmd passes uiserve.Embedded().
+- 2026-11-19 Bazel: tree artifact //ui:dist embeds through copy_directory (no zip fallback needed); two go_binary targets.
+- 2026-11-19 ui_modes_test.sh passes (go-built and Bazel, verified in a scratch copy with fresh internal/api BUILD).
