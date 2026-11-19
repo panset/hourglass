@@ -1,0 +1,41 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:gazelle (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 0.604s, Critical Path: 0.00s
+INFO: 1 process: 1 internal.
+INFO: Build completed successfully, 1 total action
+INFO: Running command line: bazel-bin/gazelle update '-mode=diff' '-build_file_name=BUILD.bazel'
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 5 targets (2 packages loaded, 0 targets configured)
+Analyzing: 5 targets (2 packages loaded, 0 targets configured)
+
+INFO: Analyzed 5 targets (5 packages loaded, 30 targets configured).
+INFO: Found 5 targets...
+INFO: Elapsed time: 0.490s, Critical Path: 0.30s
+INFO: 21 processes: 10 internal, 11 darwin-sandbox.
+INFO: Build completed successfully, 21 total actions
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 5 targets (0 packages loaded, 0 targets configured)
+Analyzing: 5 targets (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed 5 targets (0 packages loaded, 0 targets configured).
+INFO: Found 4 targets and 1 test target...
+INFO: Elapsed time: 0.347s, Critical Path: 0.23s
+INFO: 2 processes: 1 internal, 1 darwin-sandbox.
+INFO: Build completed successfully, 2 total actions
+//internal/version:version_test                                          PASSED in 0.2s
+
+Executed 1 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

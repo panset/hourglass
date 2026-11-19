@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MIT
+load("@gazelle//:def.bzl", "gazelle")
+
+# gazelle:prefix github.com/panset/hourglass
+gazelle(name = "gazelle")
