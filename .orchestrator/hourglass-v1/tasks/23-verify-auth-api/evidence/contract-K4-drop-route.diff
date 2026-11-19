@@ -1,0 +1,30 @@
+diff --git a/api/openapi.yaml b/api/openapi.yaml
+index dbb6bb6..47797cc 100644
+--- a/api/openapi.yaml
++++ b/api/openapi.yaml
+@@ -355,25 +355,6 @@ paths:
+           $ref: '#/components/responses/Forbidden'
+         '500':
+           $ref: '#/components/responses/InternalError'
+-  /api/v1/pressure:
+-    get:
+-      operationId: getPressure
+-      tags: [Pressure]
+-      summary: Current lab pressure, multiplier, bands and 7-day history
+-      description: Feeds the top bar pill and the My usage pressure card.
+-      x-roles: role
+-      responses:
+-        '200':
+-          description: Pressure.
+-          content:
+-            application/json:
+-              schema: {$ref: '#/components/schemas/Pressure'}
+-        '401':
+-          $ref: '#/components/responses/Unauthenticated'
+-        '403':
+-          $ref: '#/components/responses/Forbidden'
+-        '500':
+-          $ref: '#/components/responses/InternalError'
+   /api/v1/setups:
+     get:
+       operationId: listSetups

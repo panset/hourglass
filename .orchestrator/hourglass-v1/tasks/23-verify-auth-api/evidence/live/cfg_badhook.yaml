@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+listen: "127.0.0.1:18930"
+database: /private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-23/live/tmp3.db
+hooks:
+  - type: webhook
+    config: {url: "ftp://SENTINEL-HOOKSECRET-55d1@x", secret: SENTINEL-HOOKSECRET-55d1, bogus: 1}

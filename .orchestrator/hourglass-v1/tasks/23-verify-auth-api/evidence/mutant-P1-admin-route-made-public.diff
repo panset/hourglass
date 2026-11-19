@@ -1,0 +1,26 @@
+diff --git a/api/openapi.yaml b/api/openapi.yaml
+index dbb6bb6..eeb81f5 100644
+--- a/api/openapi.yaml
++++ b/api/openapi.yaml
+@@ -795,7 +795,7 @@ paths:
+       tags: [Admin settings]
+       summary: Metering settings and read-only runtime names
+       description: ADM-2. `runtime` holds names only, never secrets.
+-      x-roles: admin
++      x-roles: public
+       responses:
+         '200':
+           description: Settings.
+diff --git a/internal/api/routes.go b/internal/api/routes.go
+index ea7fa96..398cd20 100644
+--- a/internal/api/routes.go
++++ b/internal/api/routes.go
+@@ -62,7 +62,7 @@ var routes = []Route{
+ 	{"DELETE", "/api/v1/admin/setups/{id}", AccessAdmin, "deleteSetup"},
+ 	{"GET", "/api/v1/admin/rules", AccessAdmin, "getRules"},
+ 	{"PUT", "/api/v1/admin/rules", AccessAdmin, "replaceRules"},
+-	{"GET", "/api/v1/admin/settings", AccessAdmin, "getSettings"},
++	{"GET", "/api/v1/admin/settings", AccessPublic, "getSettings"},
+ 	{"PUT", "/api/v1/admin/settings", AccessAdmin, "updateSettings"},
+ 	{"GET", "/api/v1/admin/collector", AccessAdmin, "getCollector"},
+ 	{"GET", "/api/v1/admin/audit", AccessAdmin, "listAudit"},

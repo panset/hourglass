@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MIT
+setups:
+  - name: seed-a
+    labels: {size: large}
+    details: {note: "seed details"}
+rate_rules:
+  - {selector: "size=large", weight: 2}

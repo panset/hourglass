@@ -1,0 +1,17 @@
+diff --git a/internal/auth/handlers.go b/internal/auth/handlers.go
+index 3eead43..2806a21 100644
+--- a/internal/auth/handlers.go
++++ b/internal/auth/handlers.go
+@@ -65,7 +65,11 @@ func (s *Service) internal(w http.ResponseWriter, what string, err error) {
+ 	apierr.Write(w, http.StatusInternalServerError, apierr.Internal, msgInternal)
+ }
+ 
+-func (s *Service) handleMethods(w http.ResponseWriter, _ *http.Request) {
++func (s *Service) handleMethods(w http.ResponseWriter, r *http.Request) {
++	// MUTANT M1c: a public route leaks the name of the first setup in a header.
++	if ss, err := s.st.ListSetups(r.Context(), false); err == nil && len(ss) > 0 {
++		w.Header().Set("X-Debug-Setup", ss[0].Name)
++	}
+ 	writeJSON(w, http.StatusOK, s.Methods())
+ }
+ 

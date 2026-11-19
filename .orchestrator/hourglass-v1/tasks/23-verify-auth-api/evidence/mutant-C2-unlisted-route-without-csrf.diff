@@ -1,0 +1,15 @@
+diff --git a/internal/api/api.go b/internal/api/api.go
+index 318b697..4952d6f 100644
+--- a/internal/api/api.go
++++ b/internal/api/api.go
+@@ -95,6 +95,10 @@ func New(d Deps) http.Handler {
+ 		}
+ 		mux.Handle(r.Method+" "+r.Pattern, a.guard(r.Access, h))
+ 	}
++	// MUTANT C2: a state-changing route outside the table, role-guarded but no CSRF.
++	mux.Handle("POST /api/v1/me/holds/release-all", d.Auth.RequireRole(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.WriteHeader(http.StatusNoContent)
++	})))
+ 	// Anything else under /api/ or /auth/ is a JSON not_found, never HTML.
+ 	mux.HandleFunc("/api/", notFound)
+ 	mux.HandleFunc("/auth/", notFound)

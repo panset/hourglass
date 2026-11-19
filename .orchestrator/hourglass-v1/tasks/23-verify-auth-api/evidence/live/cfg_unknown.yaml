@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+listen: "127.0.0.1:18930"
+database: /private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-23/live/tmp2.db
+provider:
+  type: vsphere-typo
+  config: {url: "https://x", password: SENTINEL-VSPHEREPW-aa11}
+hooks:
+  - type: webhook
+    config: {url: "not a url", secret: SENTINEL-HOOKSECRET-55d1}

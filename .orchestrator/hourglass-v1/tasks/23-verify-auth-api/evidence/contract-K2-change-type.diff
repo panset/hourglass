@@ -1,0 +1,13 @@
+diff --git a/internal/auth/session.go b/internal/auth/session.go
+index 7304d51..e700efb 100644
+--- a/internal/auth/session.go
++++ b/internal/auth/session.go
+@@ -154,7 +154,7 @@ func (s *Service) loadUser(ctx context.Context, id int64) (*User, error) {
+ // SessionView is the Session schema of api/openapi.yaml: for a user with no
+ // role it is exactly these fields and nothing else (AUTH-5).
+ type SessionView struct {
+-	UserID             int64    `json:"user_id"`
++	UserID             int64    `json:"user_id,string"`
+ 	Username           string   `json:"username"`
+ 	Email              string   `json:"email"`
+ 	Name               string   `json:"name"`

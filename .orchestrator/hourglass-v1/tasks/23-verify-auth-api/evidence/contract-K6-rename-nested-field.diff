@@ -1,0 +1,13 @@
+diff --git a/internal/api/admin_views.go b/internal/api/admin_views.go
+index b8f2712..473b8b6 100644
+--- a/internal/api/admin_views.go
++++ b/internal/api/admin_views.go
+@@ -144,7 +144,7 @@ func (s *adminState) balance(userID int64) (mt int64, ok bool) {
+ type activeHoldRef struct {
+ 	HoldID    int64  `json:"hold_id"`
+ 	SetupID   int64  `json:"setup_id"`
+-	SetupName string `json:"setup_name"`
++	SetupName string `json:"setup"`
+ }
+ 
+ type adminUserView struct {

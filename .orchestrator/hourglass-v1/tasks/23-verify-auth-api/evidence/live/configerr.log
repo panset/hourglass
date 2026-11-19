@@ -1,0 +1,50 @@
+### short session key
+{"time":"2026-11-19T08:47:25.978013-08:00","level":"INFO","msg":"OIDC is not configured; only the local admin can sign in"}
+{"time":"2026-11-19T08:47:25.978165-08:00","level":"INFO","msg":"no resource provider configured; time-based metering with inventory pressure (EXT-4)"}
+{"time":"2026-11-19T08:47:25.978353-08:00","level":"INFO","msg":"starting","config":{"admin_password":"","cors":{"allowed_origins":[]},"database":"/private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-23/live/tmp1.db","hooks":[],"listen":"127.0.0.1:18930","metering":{"type":""},"metrics":{"listen":""},"oidc":{"client_id":"","client_secret":"","issuer":"","redirect_url":""},"pressure":{"type":""},"seed":"","session_key":"[redacted]","timezone":"UTC","ui":{"serve":true}},"config_file":""}
+{"time":"2026-11-19T08:47:26.029142-08:00","level":"WARN","msg":"created the local admin account with a generated password; it must be changed at first sign-in","username":"admin","password":"[redacted-by-verifier]"}
+hourglassd: auth: session key must be at least 32 bytes
+exit 1
+### short admin password
+{"time":"2026-11-19T08:47:26.050407-08:00","level":"INFO","msg":"OIDC is not configured; only the local admin can sign in"}
+{"time":"2026-11-19T08:47:26.050484-08:00","level":"INFO","msg":"no resource provider configured; time-based metering with inventory pressure (EXT-4)"}
+{"time":"2026-11-19T08:47:26.050498-08:00","level":"INFO","msg":"starting","config":{"admin_password":"[redacted]","cors":{"allowed_origins":[]},"database":"/private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-23/live/tmp4.db","hooks":[],"listen":"127.0.0.1:18930","metering":{"type":""},"metrics":{"listen":""},"oidc":{"client_id":"","client_secret":"","issuer":"","redirect_url":""},"pressure":{"type":""},"seed":"","session_key":"","timezone":"UTC","ui":{"serve":true}},"config_file":""}
+hourglassd: auth: the initial admin password is invalid: password must be at least 12 characters
+exit 1
+### unknown provider
+hourglassd: provider: hourglass: unknown provider "vsphere-typo" (registered: static, vsphere)
+exit 1
+### bad hook config
+hourglassd: hooks[0]: webhook: invalid config: json: unknown field "bogus"
+exit 1
+### yaml syntax error
+hourglassd: config: cfg_yamlerr.yaml: yaml: line 2: did not find expected ',' or '}'
+exit 1
+### oidc issuer unreachable + secret
+{"time":"2026-11-19T08:47:26.123603-08:00","level":"INFO","msg":"no resource provider configured; time-based metering with inventory pressure (EXT-4)"}
+{"time":"2026-11-19T08:47:26.123688-08:00","level":"INFO","msg":"starting","config":{"admin_password":"","cors":{"allowed_origins":[]},"database":"/private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-23/live/tmp5.db","hooks":[],"listen":"127.0.0.1:18930","metering":{"type":""},"metrics":{"listen":""},"oidc":{"client_id":"c","client_secret":"[redacted]","issuer":"http://127.0.0.1:1","redirect_url":"http://x/auth/callback"},"pressure":{"type":""},"seed":"","session_key":"","timezone":"UTC","ui":{"serve":true}},"config_file":""}
+{"time":"2026-11-19T08:47:26.166217-08:00","level":"WARN","msg":"created the local admin account with a generated password; it must be changed at first sign-in","username":"admin","password":"[redacted-by-verifier]"}
+{"time":"2026-11-19T08:47:26.166284-08:00","level":"WARN","msg":"no session key configured; generated a random one, so sessions will not survive a restart"}
+{"time":"2026-11-19T08:47:26.212815-08:00","level":"INFO","msg":"not serving the UI: this binary was built without it (API-only)"}
+{"time":"2026-11-19T08:47:26.213066-08:00","level":"INFO","msg":"http listening","addr":"127.0.0.1:18930"}
+{"time":"2026-11-19T08:47:26.213657-08:00","level":"INFO","msg":"poll ok","component":"collector","time":"2026-11-19T16:47:26.213Z","holds":0,"debits":0,"raw_pressure":0,"smoothed":0,"multiplier":0}
+{"time":"2026-11-19T08:49:58.192923-08:00","level":"INFO","msg":"shutting down"}
+{"time":"2026-11-19T08:49:58.194661-08:00","level":"INFO","msg":"stopped"}
+exit 0
+### check-provider
+setups: 4 (database /private/tmp/claude-501/-Users-tejaspanse-projects/17dec24c-e7ec-455e-9b87-01d2217d5fc9/scratchpad/verify-23/live/hg.db)
+provider: static
+matched setups (0):
+expected but not reported (4):
+  bad� -> bad�
+  d256 -> d256
+  seed-a -> seed-a
+  x'); DROP TABLE users;-- -> x'); DROP TABLE users;--
+orphans (0):
+ignored allocations: 0
+pressure source: inventory
+raw pressure: 0.0000  multiplier: 0x (current bands, unsmoothed)
+exit 0
+### check-provider unknown
+hourglassd check-provider: provider: hourglass: unknown provider "vsphere-typo" (registered: static, vsphere)
+exit 1

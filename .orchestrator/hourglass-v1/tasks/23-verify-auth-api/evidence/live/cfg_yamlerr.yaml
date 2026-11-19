@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+listen: "127.0.0.1:18930"
+session_key: SENTINEL-SESSKEY-0123456789abcdef0123456789
+oidc: {client_secret: SENTINEL-OIDCSECRET-91c2, issuer: x

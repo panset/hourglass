@@ -1,0 +1,13 @@
+diff --git a/api/openapi.yaml b/api/openapi.yaml
+index dbb6bb6..bee366d 100644
+--- a/api/openapi.yaml
++++ b/api/openapi.yaml
+@@ -264,7 +264,7 @@ paths:
+       tags: [Me]
+       summary: Balance, burn rate, projection, hold count and limit
+       description: 'Feeds the top bar balance and the My usage stat cards. The local admin has `balance_tokens: null` and `hold_limit: 0`.'
+-      x-roles: role
++      x-roles: admin
+       responses:
+         '200':
+           description: Own summary.

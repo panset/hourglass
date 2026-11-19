@@ -1,0 +1,20 @@
+diff --git a/internal/api/api.go b/internal/api/api.go
+index 318b697..8034c5a 100644
+--- a/internal/api/api.go
++++ b/internal/api/api.go
+@@ -95,6 +95,15 @@ func New(d Deps) http.Handler {
+ 		}
+ 		mux.Handle(r.Method+" "+r.Pattern, a.guard(r.Access, h))
+ 	}
++	// MUTANT M1: a route registered on the mux outside the route table, no guard.
++	mux.HandleFunc("GET /api/v1/setup-names", func(w http.ResponseWriter, r *http.Request) {
++		ss, _ := a.d.Store.ListSetups(r.Context(), false)
++		names := []string{}
++		for _, x := range ss {
++			names = append(names, x.Name)
++		}
++		writeJSON(w, http.StatusOK, names)
++	})
+ 	// Anything else under /api/ or /auth/ is a JSON not_found, never HTML.
+ 	mux.HandleFunc("/api/", notFound)
+ 	mux.HandleFunc("/auth/", notFound)
