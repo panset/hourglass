@@ -30,25 +30,25 @@ detail when the one before it is verified.
 | 18 | 5 | Verify 16-17, including restart and failed-poll cases | verify | opus | 17 | (read-only) | done |
 | 19 | 6 | `api/openapi.yaml` for every route in the spec's HTTP API table | build | sonnet | 15 | `api/` | done |
 | 20 | 6 | `internal/auth`: local admin (argon2id, forced change, rate limit), OIDC code flow with PKCE, sessions, CSRF, role middleware (AUTH-1..8) | build | opus | 09 | `internal/auth/` | done |
-| 21 | 6 | `internal/api`: handlers for holds, setups, me, pressure, admin; settings, audit, seed import; `pkg/hourglass.Run`, config loading, `hourglassd` wiring | build | sonnet (split into 2-3 at re-plan) | 18,19,20 | `internal/api/`, `cmd/`, `pkg/hourglass/` | running |
-| 22 | 6 | Permissions-table HTTP tests (every cell, unassigned gets no data) and the OpenAPI contract test | build | sonnet | 21 | `internal/api/` tests | pending |
-| 23 | 6 | Verify 19-22; security read of auth | verify | opus | 22 | (read-only) | pending |
+| 21 | 6 | `internal/api`: handlers for holds, setups, me, pressure, admin; settings, audit, seed import; `pkg/hourglass.Run`, config loading, `hourglassd` wiring | build | sonnet (split into 2-3 at re-plan) | 18,19,20 | `internal/api/`, `cmd/`, `pkg/hourglass/` | done |
+| 22 | 6 | Permissions-table HTTP tests (every cell, unassigned gets no data) and the OpenAPI contract test | build | sonnet | 21 | `internal/api/` tests | done |
+| 23 | 6 | Verify 19-22; security read of auth | verify | opus | 22 | (read-only) | running |
 | 24 | 7 | Extract the seven wireframe artboards into `docs/ui-notes.md` (layout, columns, labels per page) | explore | sonnet | 00 | `docs/ui-notes.md` | done |
 | 25 | 7 | `//ui` scaffold: Vite, React, TypeScript, rules_js with pinned Node and lockfile, generated API client, app shell and top bar | build | sonnet | 19,24 | `ui/` | done |
-| 26 | 7 | UI pages: Sign in, Not authorized, My usage, Setups | build | sonnet | 25 | `ui/src/pages/` (user) | running |
-| 27 | 7 | UI pages: Users, Setup inventory, Settings, Audit log | build | sonnet | 25 | `ui/src/pages/admin/` | running |
-| 28 | 7 | `internal/uiserve` behind a build tag, index.html fallback, bundled vs split, CORS (UI-3,4,7) | build | sonnet | 25 | `internal/uiserve/` | running |
-| 29 | 7 | Verify 25-28 against wireframes and UI-1..7 | verify | sonnet | 26,27,28 | (read-only) | pending |
+| 26 | 7 | UI pages: Sign in, Not authorized, My usage, Setups | build | sonnet | 25 | `ui/src/pages/` (user) | done |
+| 27 | 7 | UI pages: Users, Setup inventory, Settings, Audit log | build | sonnet | 25 | `ui/src/pages/admin/` | done |
+| 28 | 7 | `internal/uiserve` behind a build tag, index.html fallback, bundled vs split, CORS (UI-3,4,7) | build | sonnet | 25 | `internal/uiserve/` | done |
+| 29 | 7 | Verify 25-28 against wireframes and UI-1..7 | verify | sonnet | 26,27,28 | (read-only) | running |
 | 30 | 8 | `providers/vsphere`: internal client interface, pool matching, nested pools, pressure formula, unit tests on a hand-written fake (layer 2) | build | sonnet | 01,15 | `providers/vsphere/` | verified |
 | 31 | 8 | govmomi client, in-process simulator integration tests (layer 3), `hourglassd check-provider` | build | sonnet | 30 | `providers/vsphere/`, `cmd/` | verified |
 | 32 | 8 | Verify 30-31; confirm govmomi is imported only by the vsphere package | verify | sonnet | 31 | (read-only) | done |
-| 33 | 9 | rules_oci images: `hourglass`, `hourglass-api`, `hourglass-ui`, non-root | build | sonnet | 29 | `deploy/`, BUILD files | pending |
-| 34 | 9 | Compose stacks (bundled, split), Keycloak realm with three test users, simulator container, sample config, seed file | build | sonnet | 33,32 | `deploy/` | pending |
-| 35 | 9 | End-to-end acceptance script in a headless browser, bundled and split | build | sonnet | 34 | `e2e/` | pending |
+| 33 | 9 | rules_oci images: `hourglass`, `hourglass-api`, `hourglass-ui`, non-root | build | sonnet | 29 | `deploy/`, BUILD files | done |
+| 34 | 9 | Compose stacks (bundled, split), Keycloak realm with three test users, simulator container, sample config, seed file | build | sonnet | 33,32 | `deploy/` | done |
+| 35 | 9 | End-to-end acceptance script in a headless browser, bundled and split | build | sonnet | 34 | `e2e/` | running |
 | 36 | 9 | Verify 33-35 by running both stacks from scratch | verify | sonnet | 35 | (read-only) | pending |
-| 37 | 10 | README quick start, `docs/extending.md`, `docs/deploying.md`, `CONTRIBUTING.md` | build | sonnet | 36 | `README.md`, `docs/` | pending |
-| 38 | 10 | `examples/custom` third-party main with its own extensions | build | sonnet | 15 | `examples/custom/` | pending |
-| 39 | 10 | Dependency license check in CI; Prometheus metrics listener and JSON logs if not already done | build | sonnet | 36 | `tools/`, `internal/` | pending |
+| 37 | 10 | README quick start, `docs/extending.md`, `docs/deploying.md`, `CONTRIBUTING.md` | build | sonnet | 36 | `README.md`, `docs/` | running |
+| 38 | 10 | `examples/custom` third-party main with its own extensions | build | sonnet | 15 | `examples/custom/` | done |
+| 39 | 10 | Dependency license check in CI; Prometheus metrics listener and JSON logs if not already done | build | sonnet | 36 | `tools/`, `internal/` | done |
 | 40 | 10 | Final verification against "Done means", from a clean clone, with a requirement-id coverage table | verify | opus | 37,38,39 | (read-only) | pending |
 
 ## Added during re-planning
@@ -62,9 +62,12 @@ detail when the one before it is verified.
 | 17c | 5 | `internal/holds`: acquire and release rules | sonnet | done |
 | 15b | 4 | Fix findings of 15 | sonnet | done |
 | 18b | 5 | Fix findings of 18 | sonnet | done |
-| 21a | 6 | Config, `Run`, router skeleton, `hourglassd` | sonnet | running |
-| 21b | 6 | User-facing API handlers | sonnet | pending |
-| 21c | 6 | Admin API handlers | sonnet | pending |
+| 21a | 6 | Config, `Run`, router skeleton, `hourglassd` | sonnet | done |
+| 21b | 6 | User-facing API handlers | sonnet | done |
+| 21c | 6 | Admin API handlers | sonnet | done |
+| 21d | 6 | API integration fixes | sonnet | done |
+| 32b | 8 | Fix findings of 32 | sonnet | done |
+| 33b | 9 | Test-only simulator with control endpoint | sonnet | done |
 
 ## Notes
 

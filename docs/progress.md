@@ -17,11 +17,11 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 | 3 | SQLite store and migrations | verified, pushed |
 | 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | verified, pushed |
 | 5 | Collector and event queue | verified, pushed |
-| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | in progress: OpenAPI contract and auth built; application wiring and handlers under way |
-| 7 | React + TypeScript UI | in progress: scaffold built; pages and embedded serving under way |
-| 8 | vSphere provider and pressure source | verified (committed; pushed with milestone 6) |
-| 9 | Images, compose stacks, end-to-end acceptance path (bundled and split) | not started |
-| 10 | Docs and `examples/custom` | not started |
+| 6 | Auth and JSON API, `api/openapi.yaml`, contract test | built and pushed; permissions-table and contract tests pass; security verification running |
+| 7 | React + TypeScript UI | built and pushed (all eight pages, embedded serving); verification against the wireframes running |
+| 8 | vSphere provider and pressure source | verified, pushed |
+| 9 | Images, compose stacks, end-to-end acceptance path (bundled and split) | images and both stacks built and smoke-tested; browser acceptance test running |
+| 10 | Docs and `examples/custom` | `examples/custom` and the license check built; documents being written; final verification pending |
 
 ## Finished and verified
 
@@ -37,7 +37,9 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 
 ## Not finished
 
-Milestones 6 to 10.
+- Milestone 6 and 7: independent verification (running).
+- Milestone 9: the end-to-end acceptance run in both modes (running).
+- Milestone 10: documents, final verification from a clean clone.
 
 ## Waiting on the owner
 
@@ -45,4 +47,4 @@ Nothing.
 
 ## Decisions to review
 
-See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19, D22, D23, D27, D28, D29.
+See the **REVIEW** entries in [decisions.md](decisions.md): D3, D6, D8, D10, D11, D12, D13, D19, D22, D23, D27, D28, D29, D30.
