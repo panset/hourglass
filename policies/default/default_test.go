@@ -5,6 +5,7 @@ package defaultpolicy
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,5 +139,54 @@ func TestMET7_Defaults(t *testing.T) {
 func TestEXT1_Registered(t *testing.T) {
 	if _, err := hourglass.NewMeteringPolicy("default", nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMET7_AllocationEitherSourceSuffices(t *testing.T) {
+	p := mk(t, "")
+	ctx := context.Background()
+	base := func(withAlloc bool) hourglass.Snapshot {
+		b := hourglasstest.NewSnapshot().At(t0.Add(time.Minute)).Setup("a").Hold("a", 1, hourglasstest.Acquired(t0))
+		if withAlloc {
+			b = b.Allocation("a")
+		}
+		return b.Build()
+	}
+	cases := []struct {
+		name      string
+		snapAlloc bool
+		holdAlloc bool
+		want      bool
+	}{
+		{"neither", false, false, false},
+		{"snapshot only", true, false, true},
+		{"hold state only", false, true, true},
+		{"both", true, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := base(c.snapAlloc)
+			hs := hourglasstest.NewHoldState(base(false), 0, hourglass.User{ID: 1})
+			if c.snapAlloc {
+				hs = hourglasstest.NewHoldState(s, 0, hourglass.User{ID: 1})
+			}
+			hs.Allocation = nil
+			if c.holdAlloc {
+				hs.Allocation = &hourglass.Allocation{ResourceName: "a"}
+			}
+			d, err := p.Decide(ctx, hs, s)
+			if err != nil || d.Meter != c.want {
+				t.Fatalf("%+v %v want meter=%v", d, err, c.want)
+			}
+		})
+	}
+}
+
+func TestMET7_ClockSkewReasonIsSensible(t *testing.T) {
+	p := mk(t, `{"start_after":"0"}`)
+	s := hourglasstest.NewSnapshot().At(t0.Add(-time.Minute)).ProviderConfigured(false).Setup("a").Hold("a", 1, hourglasstest.Acquired(t0)).Build()
+	d, err := p.Decide(context.Background(), hourglasstest.NewHoldState(s, 0, hourglass.User{ID: 1}), s)
+	if err != nil || d.Meter || strings.Contains(d.Reason, "0s") {
+		t.Fatalf("%+v %v", d, err)
 	}
 }

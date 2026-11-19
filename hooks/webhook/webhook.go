@@ -11,14 +11,16 @@
 //	 "types": ["hold.acquired", "hold.released"]}
 //
 // url is required (http or https). secret is optional. types is optional and
-// defaults to every event; unknown types are rejected at construction.
+// defaults to every event (an explicit empty list sends nothing); unknown types are rejected at construction.
 //
 // Each request is a POST of the Event JSON (see hourglass.Event.MarshalJSON)
 // with Content-Type application/json and an X-Hourglass-Event header holding
 // the event type. When a secret is set, X-Hourglass-Signature holds
 // "sha256=" plus the hex HMAC-SHA256 of the body keyed with the secret. Any
 // non-2xx status or transport error is returned as an error carrying the
-// status code and at most the first 200 bytes of the response body, so a
+// status code and at most the first 200 bytes of the response body (secret
+// redacted before the cut); transport errors are a generic class such as
+// "connection failed" or "timeout" that never includes the URL or host, so a
 // vetoing endpoint's message can be shown for hold.acquiring. Redirects are
 // not followed. The secret never appears in errors.
 package webhook
@@ -28,11 +30,13 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -71,6 +75,9 @@ type hook struct {
 // New is the factory registered under "webhook".
 func New(raw json.RawMessage) (hourglass.Hook, error) {
 	var c config
+	if t := bytes.TrimSpace(raw); len(t) == 0 || string(t) == "null" {
+		return nil, errors.New(`webhook: config "url" is required`)
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
@@ -138,15 +145,13 @@ func (h *hook) Handle(ctx context.Context, e hourglass.Event) error {
 	}
 	resp, err := h.client.Do(req)
 	if err != nil {
-		// Drop the *url.Error wrapper: it repeats the URL, which may hold credentials.
-		var ue *url.Error
-		if errors.As(err, &ue) {
-			err = ue.Err
-		}
-		return fmt.Errorf("webhook: POST failed: %w", err)
+		// Transport error text can hold the URL or host:port, so only a generic class is returned.
+		return fmt.Errorf("webhook: POST failed: %s", transportClass(ctx, err))
 	}
 	defer resp.Body.Close()
-	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	// Read past the cut by len(secret) so a secret straddling byte maxBody is
+	// seen whole and redacted before the excerpt is truncated.
+	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, int64(maxBody+len(h.secret))))
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
@@ -154,9 +159,34 @@ func (h *hook) Handle(ctx context.Context, e hourglass.Event) error {
 	if len(h.secret) > 0 {
 		msg = strings.ReplaceAll(msg, string(h.secret), "[redacted]")
 	}
+	if len(msg) > maxBody {
+		msg = msg[:maxBody]
+	}
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
 		return fmt.Errorf("webhook: endpoint returned status %d", resp.StatusCode)
 	}
 	return fmt.Errorf("webhook: endpoint returned status %d: %s", resp.StatusCode, msg)
+}
+
+// transportClass names a transport failure without echoing its text.
+func transportClass(ctx context.Context, err error) string {
+	var ne net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()):
+		return "timeout"
+	case errors.Is(err, context.Canceled) || ctx.Err() != nil:
+		return "canceled"
+	}
+	var cie x509.CertificateInvalidError
+	var uae x509.UnknownAuthorityError
+	var he x509.HostnameError
+	if errors.As(err, &cie) || errors.As(err, &uae) || errors.As(err, &he) {
+		return "TLS certificate error"
+	}
+	var op *net.OpError
+	if errors.As(err, &op) {
+		return "connection failed"
+	}
+	return "request failed"
 }

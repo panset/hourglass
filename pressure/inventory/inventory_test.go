@@ -99,3 +99,30 @@ func TestEXT1_Registered(t *testing.T) {
 		t.Fatalf("not registered: %v", err)
 	}
 }
+
+func TestEXT3_InvalidWeightIsError(t *testing.T) {
+	cases := map[string]float64{
+		"NaN":      math.NaN(),
+		"+Inf":     math.Inf(1),
+		"-Inf":     math.Inf(-1),
+		"negative": -1,
+	}
+	for name, w := range cases {
+		for _, held := range []bool{true, false} {
+			b := hourglasstest.NewSnapshot().Setup("a", hourglasstest.Weight(w)).Setup("b")
+			if held {
+				b = b.Hold("a", 1)
+			}
+			got, err := newSource().Pressure(context.Background(), b.Build())
+			if err == nil {
+				t.Fatalf("%s (held=%v): want error, got %v", name, held, got)
+			}
+		}
+	}
+	// Finite weights whose sum overflows are an error, not a silent 0.
+	snap := hourglasstest.NewSnapshot().Setup("a", hourglasstest.Weight(math.MaxFloat64)).
+		Setup("b", hourglasstest.Weight(math.MaxFloat64)).Hold("a", 1).Build()
+	if got, err := newSource().Pressure(context.Background(), snap); err == nil {
+		t.Fatalf("overflowing total: want error, got %v", got)
+	}
+}

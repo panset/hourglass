@@ -42,22 +42,31 @@ for d in $CORE_DIRS; do
 done
 core_files=$(printf '%s' "$core_files" | sed '/^$/d')
 
-# Import extraction: "file<TAB>line<TAB>importpath" for every import spec (import blocks and single imports).
+# Import extraction via the go tool (handles every import form: blank, dot, aliased, one-line, grouped).
+# "file<TAB>line<TAB>importpath": the package's Imports, TestImports and XTestImports come from
+# `go list`; file:line is then located by searching the package's Go files for the quoted path.
 imports=""
 if [ -n "$go_files" ]; then
-  imports=$(printf '%s\n' "$go_files" | tr '\n' '\0' | xargs -0 awk '
-    FNR == 1 { inblock = 0 }
-    /^[[:space:]]*import[[:space:]]*\(/ { inblock = 1; next }
-    inblock && /^[[:space:]]*\)/ { inblock = 0; next }
-    inblock && /^[[:space:]]*\/\// { next }
-    inblock {
-      if (match($0, /"[^"]*"/)) printf "%s\t%d\t%s\n", FILENAME, FNR, substr($0, RSTART + 1, RLENGTH - 2)
-      next
-    }
-    /^import[[:space:]]+"/ {
-      if (match($0, /"[^"]*"/)) printf "%s\t%d\t%s\n", FILENAME, FNR, substr($0, RSTART + 1, RLENGTH - 2)
-    }
-  ')
+  pkgs=$(go list -e -f '{{.Dir}}{{"\t"}}{{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./... 2>/dev/null || true)
+  root=$(pwd -P)
+  while IFS=$'\t' read -r dir plist; do
+    [ -n "$dir" ] || continue
+    rel=${dir#"$root"}; rel=${rel#/}; [ -n "$rel" ] || rel="."
+    for ip in $plist; do
+      [[ $ip == *.* ]] || continue # stdlib has no dot in first element
+      if [[ $ip =~ $EXT_IMPORT_RE ]] || [[ $ip == *"$GOVMOMI"* ]]; then
+        found=$(grep -H -n -F "\"$ip\"" "$rel"/*.go 2>/dev/null | grep -v -E '^[^:]*:[0-9]+:[[:space:]]*//' || true)
+        if [ -n "$found" ]; then
+          while IFS= read -r g; do
+            f=${g%%:*}; r=${g#*:}
+            imports="$imports$f"$'\t'"${r%%:*}"$'\t'"$ip"$'\n'
+          done <<< "$found"
+        else
+          imports="$imports$rel"$'\t'"0"$'\t'"$ip"$'\n'
+        fi
+      fi
+    done
+  done <<< "$pkgs"
 fi
 
 while IFS=$'\t' read -r file line path; do

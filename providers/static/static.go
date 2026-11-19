@@ -47,6 +47,9 @@ type provider struct {
 // New is the factory registered under "static".
 func New(raw json.RawMessage) (hourglass.ResourceProvider, error) {
 	var c config
+	if t := bytes.TrimSpace(raw); len(t) == 0 || string(t) == "null" {
+		return nil, errors.New(`static: config "path" is required`)
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
@@ -79,6 +82,9 @@ func (p *provider) List(ctx context.Context) ([]hourglass.Allocation, error) {
 	var entries []entry
 	if err := json.Unmarshal(data, &entries); err != nil {
 		return nil, fmt.Errorf("static: parse %s: %w", p.path, err)
+	}
+	if entries == nil {
+		return nil, fmt.Errorf("static: parse %s: want a JSON array, got null", p.path)
 	}
 	out := make([]hourglass.Allocation, 0, len(entries))
 	for i, e := range entries {

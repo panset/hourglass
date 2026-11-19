@@ -80,7 +80,9 @@ func (p *policy) Decide(_ context.Context, h hourglass.HoldState, s hourglass.Sn
 		return hourglass.Decision{Meter: true, Reason: "metering already started"}, nil
 	}
 	if p.onAllocation {
-		if _, ok := s.AllocationFor(h.Hold.SetupName); ok {
+		// Either source is sufficient: the collector fills both.
+		_, inSnapshot := s.AllocationFor(h.Hold.SetupName)
+		if h.Allocation != nil || inSnapshot {
 			return hourglass.Decision{Meter: true, Reason: "resource reported by provider"}, nil
 		}
 	}
@@ -95,7 +97,11 @@ func (p *policy) Decide(_ context.Context, h hourglass.HoldState, s hourglass.Sn
 		waits = append(waits, "the provider to report the resource")
 	}
 	if p.timeTrigger {
-		waits = append(waits, compact(p.startAfter)+" since acquire")
+		if p.startAfter == 0 {
+			waits = append(waits, "the acquire time")
+		} else {
+			waits = append(waits, compact(p.startAfter)+" since acquire")
+		}
 	}
 	reason := "not metering: no trigger is enabled"
 	if len(waits) > 0 {

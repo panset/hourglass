@@ -256,3 +256,58 @@ func TestEXT6_SecretNotInErrors(t *testing.T) {
 		t.Errorf("config error leaks: %v", err)
 	}
 }
+
+func TestEXT6_SecretStraddlingCutIsRedacted(t *testing.T) {
+	const secret = "s3cr3t-straddle-value"
+	ev := hourglass.Event{Type: hourglass.EventHoldAcquired, Time: ts}
+	// Place the secret so it starts before byte 200 and ends after it, at every offset.
+	for off := 200 - len(secret) + 1; off < 200; off++ {
+		body := strings.Repeat("x", off) + secret + strings.Repeat("y", 50)
+		srv := httptest.NewServer((&recorder{}).handler(500, body))
+		err := newHook(t, map[string]any{"url": srv.URL, "secret": secret}).Handle(context.Background(), ev)
+		srv.Close()
+		if err == nil {
+			t.Fatal("want error")
+		}
+		msg := err.Error()
+		for n := 3; n <= len(secret); n++ { // no prefix of 3+ bytes of the secret may appear
+			if strings.Contains(msg, secret[:n]) {
+				t.Fatalf("offset %d: leak of %q in %q", off, secret[:n], msg)
+			}
+		}
+	}
+}
+
+func TestEXT6_TransportErrorsAreGeneric(t *testing.T) {
+	ev := hourglass.Event{Type: hourglass.EventHoldAcquired, Time: ts}
+	// Connection refused: start and close a server to get a dead port.
+	srv := httptest.NewServer(http.NotFoundHandler())
+	hostport := strings.TrimPrefix(srv.URL, "http://")
+	srv.Close()
+	err := newHook(t, map[string]any{"url": srv.URL + "/private/path?token=abc"}).Handle(context.Background(), ev)
+	if err == nil {
+		t.Fatal("want error")
+	}
+	if strings.Contains(err.Error(), hostport) || strings.Contains(err.Error(), "127.0.0.1") ||
+		strings.Contains(err.Error(), "private") || !strings.Contains(err.Error(), "connection failed") {
+		t.Errorf("refused: %v", err)
+	}
+	// Timeout via context deadline.
+	release := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
+	defer slow.Close()
+	defer close(release)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err = newHook(t, map[string]any{"url": slow.URL}).Handle(ctx, ev)
+	if err == nil || !strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "127.0.0.1") {
+		t.Errorf("timeout: %v", err)
+	}
+	// Status path unchanged.
+	bad := httptest.NewServer((&recorder{}).handler(422, "nope"))
+	defer bad.Close()
+	err = newHook(t, map[string]any{"url": bad.URL}).Handle(context.Background(), ev)
+	if err == nil || !strings.Contains(err.Error(), "status 422: nope") {
+		t.Errorf("status: %v", err)
+	}
+}

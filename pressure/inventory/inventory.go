@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/panset/hourglass/pkg/hourglass"
 )
@@ -41,7 +43,7 @@ func New(config json.RawMessage) (hourglass.PressureSource, error) {
 func (source) Name() string { return Name }
 
 // Pressure returns held weight over total weight, clamped to [0,1]. A total
-// weight of 0 gives 0. Allocations are ignored.
+// weight of 0 gives 0. A NaN, infinite or negative weight is an error. Allocations are ignored.
 func (source) Pressure(_ context.Context, s hourglass.Snapshot) (float64, error) {
 	held := map[string]bool{}
 	for _, h := range s.Holds {
@@ -51,13 +53,19 @@ func (source) Pressure(_ context.Context, s hourglass.Snapshot) (float64, error)
 	}
 	var total, heldW float64
 	for _, st := range s.Setups {
-		if st.Weight <= 0 || st.Weight != st.Weight {
+		if math.IsNaN(st.Weight) || math.IsInf(st.Weight, 0) || st.Weight < 0 {
+			return 0, fmt.Errorf("inventory: setup %q has an invalid weight %v (want a finite number >= 0)", st.Name, st.Weight)
+		}
+		if st.Weight == 0 {
 			continue
 		}
 		total += st.Weight
 		if held[st.Name] {
 			heldW += st.Weight
 		}
+	}
+	if math.IsInf(total, 0) {
+		return 0, errors.New("inventory: total weight overflows")
 	}
 	if total <= 0 {
 		return 0, nil

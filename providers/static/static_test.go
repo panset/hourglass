@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/panset/hourglass/pkg/hourglass"
@@ -114,5 +115,17 @@ func TestEXT3_CancelledContext(t *testing.T) {
 	cancel()
 	if _, err := build(t, writeFile(t, `[]`)).List(ctx); err == nil {
 		t.Fatal("want context error")
+	}
+}
+
+func TestEXT3_NullAndEmptyConfigAndFile(t *testing.T) {
+	for _, raw := range []string{"", "null", " null "} {
+		_, err := New(json.RawMessage(raw))
+		if err == nil || !strings.Contains(err.Error(), `"path" is required`) {
+			t.Errorf("config %q: %v", raw, err)
+		}
+	}
+	if _, err := build(t, writeFile(t, "null")).List(context.Background()); err == nil {
+		t.Error("file containing null: want error")
 	}
 }
