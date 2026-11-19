@@ -1,0 +1,3 @@
+- 2026-11-19 Cloned, ran bazel test/build //ui/... (135 tests pass), read all ui/ source against ui-notes.md and SPEC.
+- 2026-11-19 Built hourglassd, ran on 18080/18081, drove it with Playwright (system Chrome), screenshots in screens/.
+- 2026-11-19 Drift test, server-down, 401, empty DB, 106 setups/209 users, keyboard, contrast, label audit done. RESULT.md written.
