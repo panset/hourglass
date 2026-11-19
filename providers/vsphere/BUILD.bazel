@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "vsphere",
+    srcs = [
+        "client.go",
+        "config.go",
+        "govmomi.go",
+        "vsphere.go",
+    ],
+    importpath = "github.com/panset/hourglass/providers/vsphere",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/hourglass",
+        "@com_github_vmware_govmomi//find",
+        "@com_github_vmware_govmomi//object",
+        "@com_github_vmware_govmomi//property",
+        "@com_github_vmware_govmomi//session",
+        "@com_github_vmware_govmomi//vim25",
+        "@com_github_vmware_govmomi//vim25/mo",
+        "@com_github_vmware_govmomi//vim25/soap",
+        "@com_github_vmware_govmomi//vim25/types",
+    ],
+)
+
+go_test(
+    name = "vsphere_test",
+    srcs = [
+        "fake_test.go",
+        "readonly_test.go",
+        "simulator_test.go",
+        "vsphere_test.go",
+    ],
+    embed = [":vsphere"],
+    embedsrcs = [
+        "govmomi.go",
+        "vsphere.go",
+    ],
+    deps = [
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+        "@com_github_vmware_govmomi//:govmomi",
+        "@com_github_vmware_govmomi//find",
+        "@com_github_vmware_govmomi//object",
+        "@com_github_vmware_govmomi//simulator",
+        "@com_github_vmware_govmomi//vim25/mo",
+        "@com_github_vmware_govmomi//vim25/types",
+    ],
+)
