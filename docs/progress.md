@@ -15,8 +15,8 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 | 1 | Build skeleton (Go module, Bazel bzlmod, rules_go, Gazelle, CI script) | verified from a fresh clone, pushed |
 | 2 | Pure core logic: selectors and rate rules, bands and smoothing, debits, ledger and rollover | verified, pushed |
 | 3 | SQLite store and migrations | verified, pushed |
-| 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | built; independent verification running |
-| 5 | Collector and event queue | in progress: event dispatcher and settings built; ledger service, collector and hold rules next |
+| 4 | Extension API, fakes, conformance suites, bundled non-vSphere extensions | verified, pushed |
+| 5 | Collector and event queue | built (events, settings, ledger service, collector, hold rules); adversarial verification running |
 | 6 | Auth and JSON API, `api/openapi.yaml`, contract test | in progress: OpenAPI contract and auth |
 | 7 | React + TypeScript UI | not started |
 | 8 | vSphere provider and pressure source | not started |
@@ -30,11 +30,12 @@ task table lives in `.orchestrator/hourglass-v1/PLAN.md`; decisions are in
 - Milestone 1: `bazel build //...`, `bazel test //...`, `go build ./...` and `./ci.sh` pass from a fresh clone; a deliberately broken test and a file without an SPDX header were both caught.
 - Milestone 2: `internal/rules`, `internal/metering`, `internal/ledger`. An independent check found no bugs against the spec and caught 29 of 33 seeded mutations (2 were equivalent); its findings are fixed. Decisions D11-D17.
 - Milestone 3: `internal/store` matches the data model column for column. Verification found three defects (ledger rows replaceable, a panic leaving the write lock held, stale balance cache on out-of-order writes); all fixed with tests. Decision D10.
+- Milestone 4: `pkg/hourglass`, `pkg/hourglasstest`, and the `inventory`, `default`, `static` and `webhook` extensions. Verification confirmed the interfaces match the spec's declarations and that a third-party module builds against the public packages alone; its 11 findings are fixed except two accepted ones (event JSON compacts `details`; the term check is a plain substring match).
 - Wireframe notes for the UI work: `docs/ui-notes.md`.
 
 ## Not finished
 
-Milestones 4 to 10.
+Milestones 5 to 10.
 
 ## Waiting on the owner
 
