@@ -1,0 +1,37 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+go.work
+go.work.sum
+
+# Bazel
+/bazel-*
+/.bazelrc.user
+MODULE.bazel.lock.bak
+
+# Node
+node_modules/
+/ui/dist/
+*.tsbuildinfo
+npm-debug.log*
+.pnpm-store/
+playwright-report/
+test-results/
+
+# Local runtime data and secrets
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+/data/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
