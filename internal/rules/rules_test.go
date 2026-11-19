@@ -260,6 +260,23 @@ func TestRULE1_Evaluate(t *testing.T) {
 	})
 }
 
+func TestRULE1_EqualPositionsKeepInputOrder(t *testing.T) {
+	// One rule at Position 9 comes first, then 20 rules share Position 5 and
+	// all match. Sorting the 20 ties with sort.Slice (not stable) moves ID 10
+	// to the front; only a stable sort gives ID 1, the first of them in input.
+	rs := []Rule{{ID: 100, Kind: KindRate, Position: 9, Selector: "", Value: "9"}}
+	for i := int64(1); i <= 20; i++ {
+		rs = append(rs, Rule{ID: i, Kind: KindRate, Position: 5, Selector: "", Value: "1"})
+	}
+	got, err := Evaluate(rs, KindRate, L{"tier": "a"})
+	if err != nil || got == nil {
+		t.Fatalf("Evaluate: got %v, %v", got, err)
+	}
+	if got.ID != 1 {
+		t.Fatalf("first match among equal positions = rule %d, want 1 (input order)", got.ID)
+	}
+}
+
 func TestRULE1_ParseWeight(t *testing.T) {
 	ok := []struct {
 		in   string

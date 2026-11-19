@@ -219,7 +219,7 @@ func TestMET3_HourlyCostMT(t *testing.T) {
 	}
 }
 
-func TestDash_ProjectedRunOut(t *testing.T) {
+func TestUI_ProjectedRunOut(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name   string
@@ -230,7 +230,8 @@ func TestDash_ProjectedRunOut(t *testing.T) {
 	}{
 		{"no burn", 1000, 0, time.Time{}, false},
 		{"negative burn", 1000, -5, time.Time{}, false},
-		{"no burn and no balance", 0, 0, time.Time{}, false},
+		{"no burn and no balance", 0, 0, now, true},
+		{"no burn and negative balance", -10, 0, now, true},
 		{"zero balance", 0, 24000, now, true},
 		{"negative balance", -10, 24000, now, true},
 		{"10 hours at 1000 mt/h", 10000, 24000, now.Add(10 * time.Hour), true},

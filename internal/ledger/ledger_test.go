@@ -209,7 +209,7 @@ func TestLED3_PeriodsToClose(t *testing.T) {
 	}
 }
 
-func TestRULE_FirstAllowanceOncePerPeriod(t *testing.T) {
+func TestROLE_FirstAllowanceOncePerPeriod(t *testing.T) {
 	at := time.Date(2026, 11, 19, 0, 0, 0, 0, time.UTC)
 	existing := []Entry{
 		{UserID: 1, Period: "2026-11", Type: TypeAllowance},
@@ -320,7 +320,7 @@ func TestLED6_Debit(t *testing.T) {
 	}
 }
 
-func TestLED_Crossings(t *testing.T) {
+func TestEVT_BalanceCrossings(t *testing.T) {
 	const a = 300 * tok // 10% = 30000
 	for _, c := range []struct {
 		name           string
@@ -342,6 +342,28 @@ func TestLED_Crossings(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			low, over := Crossings(c.before, c.after, a)
+			if low != c.low || over != c.overdrawn {
+				t.Errorf("got low=%v over=%v want %v %v", low, over, c.low, c.overdrawn)
+			}
+		})
+	}
+	// No 10% threshold when the allowance is zero or less: low is never set.
+	for _, c := range []struct {
+		name           string
+		before, after  int64
+		allow          int64
+		low, overdrawn bool
+	}{
+		{"zero allowance, falls to negative", 5 * tok, -1 * tok, 0, false, true},
+		{"zero allowance, falls to zero", 1, 0, 0, false, true},
+		{"zero allowance, falls but stays positive", 100 * tok, 20 * tok, 0, false, false},
+		{"zero allowance, already negative", -5 * tok, -10 * tok, 0, false, false},
+		{"zero allowance, from zero to negative", 0, -1, 0, false, false},
+		{"negative allowance, falls", 100 * tok, 20 * tok, -300 * tok, false, false},
+		{"negative allowance, overdrawn", 100 * tok, -5 * tok, -300 * tok, false, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			low, over := Crossings(c.before, c.after, c.allow)
 			if low != c.low || over != c.overdrawn {
 				t.Errorf("got low=%v over=%v want %v %v", low, over, c.low, c.overdrawn)
 			}

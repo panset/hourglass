@@ -1,0 +1,1 @@
+- 2026-11-19: cloned, ran ci.sh (exit 0), wrote throwaway tests per package, ran 33 mutations, grep checks, reviewed decisions; wrote RESULT.md and decisions-rows.md. Done.

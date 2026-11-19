@@ -173,11 +173,12 @@ func Debit(userID, holdID, amountMT int64, period string, at time.Time) Entry {
 }
 
 // Crossings reports threshold crossings caused by a balance change: low when
-// the balance falls from at-or-above 10% of the allowance to below it, and
+// the balance falls from at-or-above 10% of the allowance to below it (never
+// when the allowance is zero or less, as there is no 10% threshold), and
 // overdrawn when it falls from positive to zero or below.
 func Crossings(beforeMT, afterMT, allowanceMT int64) (low, overdrawn bool) {
 	// 10% compared without integer division: x*10 vs allowance.
-	low = beforeMT*10 >= allowanceMT && afterMT*10 < allowanceMT
+	low = allowanceMT > 0 && beforeMT*10 >= allowanceMT && afterMT*10 < allowanceMT
 	overdrawn = beforeMT > 0 && afterMT <= 0
 	return
 }

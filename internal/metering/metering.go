@@ -150,14 +150,15 @@ func HourlyCostMT(weight, multiplier float64) int64 {
 }
 
 // ProjectedRunOut projects when the balance reaches zero at the average hourly
-// burn of the last 24 hours. No burn means no projection (false); a balance
-// at or below zero runs out now. Projections beyond 100 years give false.
+// burn of the last 24 hours. A balance at or below zero runs out now, even with
+// no burn. Otherwise no burn means no projection (false). Projections beyond
+// 100 years give false.
 func ProjectedRunOut(balanceMT int64, burnLast24hMT int64, now time.Time) (time.Time, bool) {
-	if burnLast24hMT <= 0 {
-		return time.Time{}, false
-	}
 	if balanceMT <= 0 {
 		return now, true
+	}
+	if burnLast24hMT <= 0 {
+		return time.Time{}, false
 	}
 	hours := float64(balanceMT) * 24 / float64(burnLast24hMT)
 	if hours > maxProjectionHours {
