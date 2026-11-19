@@ -1,0 +1,103 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-19T01:50:00Z"
+ },
+ "title": "Hourglass dashboard wireframes",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 900,
+   "title": "Developer \u00b7 My usage",
+   "expand": "fill"
+  },
+  "Setups.dc.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 980,
+   "title": "Developer \u00b7 Setups",
+   "expand": "fill"
+  },
+  "Login.dc.html": {
+   "x": 0,
+   "y": 3100,
+   "w": 1280,
+   "h": 760,
+   "title": "Sign in",
+   "expand": "fill"
+  },
+  "Unauthorized.dc.html": {
+   "x": 1360,
+   "y": 3100,
+   "w": 1280,
+   "h": 760,
+   "title": "Not authorized \u00b7 unassigned users",
+   "expand": "fill"
+  },
+  "AdminUsers.dc.html": {
+   "x": 0,
+   "y": 1400,
+   "w": 1280,
+   "h": 1240,
+   "title": "Admin \u00b7 Users and grants",
+   "expand": "fill"
+  },
+  "AdminSetups.dc.html": {
+   "x": 1360,
+   "y": 1400,
+   "w": 1280,
+   "h": 1000,
+   "title": "Admin \u00b7 Setup inventory",
+   "expand": "fill"
+  },
+  "AdminSettings.dc.html": {
+   "x": 2720,
+   "y": 1400,
+   "w": 1280,
+   "h": 1280,
+   "title": "Admin \u00b7 Settings",
+   "expand": "fill"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Setups.dc.html",
+  "AdminUsers.dc.html",
+  "AdminSetups.dc.html",
+  "AdminSettings.dc.html",
+  "Login.dc.html",
+  "Unauthorized.dc.html"
+ ],
+ "notes": {
+  "t-acc": {
+   "x": 0,
+   "y": 2800,
+   "text": "Sign-in and access",
+   "kind": "title1",
+   "maxW": 2640
+  },
+  "t-dev": {
+   "x": 0,
+   "y": -300,
+   "text": "Developer pages",
+   "kind": "title1",
+   "maxW": 2640
+  },
+  "t-adm": {
+   "x": 0,
+   "y": 1100,
+   "text": "Admin pages",
+   "kind": "title1",
+   "maxW": 4000
+  }
+ },
+ "designSystems": []
+}

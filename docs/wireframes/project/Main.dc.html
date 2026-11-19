@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My usage</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;padding:10px 12px;font-size:12px;font-weight:600;color:#5C5C5C;border-bottom:1px solid #BDBDBD;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #E6E6E6;vertical-align:middle}
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1A1A; background: #FFFFFF; min-height: 900px">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 12px 32px; border-bottom: 1px solid #BDBDBD">
+<strong style="font-size: 18px">Hourglass</strong>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; font-size: 14px; flex: 1 1 320px">
+<a href="Main.dc.html" aria-current="page" style="color: #1A1A1A; font-weight: 600; text-decoration: none; border-bottom: 2px solid #1A1A1A; padding: 10px 0">My usage</a>
+<a href="Setups.dc.html" style="text-decoration: none; padding: 10px 0">Setups</a>
+</nav>
+<span style="padding: 6px 12px; border: 1px solid #B45309; border-radius: 999px; font-size: 13px; color: #92400E">Lab 82% · 2×</span>
+<span style="font-size: 14px; font-weight: 600">142 tokens</span>
+<span style="font-size: 14px">Dana Dev</span>
+<a href="#signout" style="font-size: 14px">Sign out</a>
+</header>
+<main style="max-width: 1216px; margin: 0 auto; padding: 32px; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px"><h1 style="margin: 0; font-size: 26px; font-weight: 600">My usage</h1><div style="display: flex; align-items: center; gap: 8px"><label for="period" style="font-size: 13px">Month</label><select id="period" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: auto"><option>November 2026</option><option>October 2026</option></select></div></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px"><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Tokens left</span><span style="font-size: 28px; font-weight: 600">142</span><span style="font-size: 13px; color: #5C5C5C">of 300 allowance + 40 granted</span></div><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Burning now</span><span style="font-size: 28px; font-weight: 600">2.0 / hour</span><span style="font-size: 13px; color: #5C5C5C">setup-04 · weight 1 × 2×</span></div><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Projected run-out</span><span style="font-size: 28px; font-weight: 600">Nov 21</span><span style="font-size: 13px; color: #5C5C5C">at the last 24 hours' rate</span></div><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Lab pressure</span><span style="font-size: 28px; font-weight: 600">82% · 2×</span><div role="img" aria-label="Pressure bands: free below 50 percent, 1x to 75, 2x to 90, 3x above; currently 82 percent" style="position: relative; display: flex; height: 12px; border: 1px solid #8A8A8A; border-radius: 6px; overflow: hidden"><div style="width: 50%; background: #FFFFFF"></div><div style="width: 25%; background: #E5E7EB"></div><div style="width: 15%; background: #9CA3AF"></div><div style="width: 10%; background: #4B5563"></div><div style="position: absolute; left: 82%; top: 0; bottom: 0; width: 3px; background: #B45309"></div></div><span style="font-size: 13px; color: #5C5C5C">9 of 11 setups deployed</span></div></div>
+<section style="display: flex; flex-direction: column; gap: 12px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Current holds · 1 of 2 allowed</h2>
+<div style="overflow-x: auto"><table aria-label="Current holds"><thead><tr><th>Setup</th><th>Labels</th><th>State</th><th>Weight</th><th>Cost now</th><th>Held for</th><th></th></tr></thead><tbody>
+<tr><td><strong>setup-04</strong></td><td><span style="display: inline-flex; flex-wrap: wrap; gap: 4px"><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">size=medium</code><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">site=sjc</code></span></td><td><span style="padding: 2px 10px; border: 1px solid #1D4ED8; border-radius: 999px; font-size: 12px; color: #1D4ED8; white-space: nowrap">Deployed</span></td><td>1</td><td>2.0 tokens / hour</td><td>2 d 4 h</td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Release</button></td></tr>
+</tbody></table></div>
+<p style="margin: 0; font-size: 13px; color: #5C5C5C">Charging continues until you release. Tear the setup down first: release is refused while it is still deployed. Holding setup-04 overnight (15 h) at the current multiplier costs 30 tokens.</p></section>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px"><section style="display: flex; flex-direction: column; gap: 12px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Tokens per day</h2>
+<div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px"><div role="img" aria-label="Bar chart placeholder: tokens debited per day this month, today highlighted" style="display: flex; align-items: flex-end; gap: 6px; height: 150px; border-bottom: 1px solid #8A8A8A"><div style="flex: 1; height: 26px; background: #9CA3AF"></div><div style="flex: 1; height: 38px; background: #9CA3AF"></div><div style="flex: 1; height: 56px; background: #9CA3AF"></div><div style="flex: 1; height: 74px; background: #9CA3AF"></div><div style="flex: 1; height: 20px; background: #9CA3AF"></div><div style="flex: 1; height: 2px; background: #9CA3AF"></div><div style="flex: 1; height: 2px; background: #9CA3AF"></div><div style="flex: 1; height: 50px; background: #9CA3AF"></div><div style="flex: 1; height: 86px; background: #9CA3AF"></div><div style="flex: 1; height: 110px; background: #9CA3AF"></div><div style="flex: 1; height: 68px; background: #9CA3AF"></div><div style="flex: 1; height: 44px; background: #9CA3AF"></div><div style="flex: 1; height: 2px; background: #9CA3AF"></div><div style="flex: 1; height: 2px; background: #9CA3AF"></div><div style="flex: 1; height: 62px; background: #9CA3AF"></div><div style="flex: 1; height: 98px; background: #9CA3AF"></div><div style="flex: 1; height: 134px; background: #9CA3AF"></div><div style="flex: 1; height: 86px; background: #1D4ED8"></div></div><div style="display: flex; justify-content: space-between; font-size: 12px; color: #5C5C5C; padding-top: 6px"><span>Nov 1</span><span>Nov 18</span></div></div></section><section style="display: flex; flex-direction: column; gap: 12px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Ledger</h2>
+<div style="overflow-x: auto"><table aria-label="Ledger"><thead><tr><th>When</th><th>Type</th><th>Detail</th><th>Amount</th><th>Balance</th></tr></thead><tbody>
+<tr><td>Nov 18, 17:30</td><td>Debit · 2×</td><td>setup-04</td><td>−0.17</td><td>142.0</td></tr>
+<tr><td>Nov 18, 17:25</td><td>Debit · 2×</td><td>setup-04</td><td>−0.17</td><td>142.2</td></tr>
+<tr><td>Nov 12, 10:02</td><td>Grant</td><td>Riley Admin: release week</td><td>+40.00</td><td>213.5</td></tr>
+<tr><td>Nov 1, 00:00</td><td>Allowance</td><td></td><td>+300.00</td><td>300.0</td></tr>
+</tbody></table></div>
+<a href="#ledger" style="font-size: 13px">Show all entries, grouped by day</a></section></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return { tpl: '{' + '{.SetupName}}_RP' };
+}
+}
+</script>
+</body>
+</html>

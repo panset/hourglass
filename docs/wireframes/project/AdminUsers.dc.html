@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin: users</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;padding:10px 12px;font-size:12px;font-weight:600;color:#5C5C5C;border-bottom:1px solid #BDBDBD;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #E6E6E6;vertical-align:middle}
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1A1A; background: #FFFFFF; min-height: 1240px">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 12px 32px; border-bottom: 1px solid #BDBDBD">
+<strong style="font-size: 18px">Hourglass</strong>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; font-size: 14px; flex: 1 1 320px">
+<a href="Main.dc.html" style="text-decoration: none; padding: 10px 0">My usage</a>
+<a href="Setups.dc.html" style="text-decoration: none; padding: 10px 0">Setups</a>
+<span style="font-size: 12px; color: #5C5C5C; padding-left: 12px; border-left: 1px solid #BDBDBD">Admin</span>
+<a href="AdminUsers.dc.html" aria-current="page" style="color: #1A1A1A; font-weight: 600; text-decoration: none; border-bottom: 2px solid #1A1A1A; padding: 10px 0">Users · 2 pending</a>
+<a href="AdminSetups.dc.html" style="text-decoration: none; padding: 10px 0">Setup inventory</a>
+<a href="AdminSettings.dc.html" style="text-decoration: none; padding: 10px 0">Settings</a>
+<a href="#audit" style="text-decoration: none; padding: 10px 0">Audit log</a>
+</nav>
+<span style="padding: 6px 12px; border: 1px solid #B45309; border-radius: 999px; font-size: 13px; color: #92400E">Lab 82% · 2×</span>
+<span style="font-size: 14px; font-weight: 600">300 tokens</span>
+<span style="font-size: 14px">Riley Admin</span>
+<a href="#signout" style="font-size: 14px">Sign out</a>
+</header>
+<main style="max-width: 1216px; margin: 0 auto; padding: 32px; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px"><h1 style="margin: 0; font-size: 26px; font-weight: 600">Users</h1><input type="search" aria-label="Search users" placeholder="Search name or email" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 260px"></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px"><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Users</span><span style="font-size: 28px; font-weight: 600">24</span><span style="font-size: 13px; color: #5C5C5C">3 admins incl. local</span></div><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Overdrawn</span><span style="font-size: 28px; font-weight: 600">1</span><span style="font-size: 13px; color: #5C5C5C">blocked from acquiring</span></div><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Debited this month</span><span style="font-size: 28px; font-weight: 600">3,410</span><span style="font-size: 13px; color: #5C5C5C">tokens, all users</span></div><div style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 6px"><span style="font-size: 12px; color: #5C5C5C">Granted this month</span><span style="font-size: 28px; font-weight: 600">240</span><span style="font-size: 13px; color: #5C5C5C">3 grants</span></div></div>
+<section style="display: flex; flex-direction: column; gap: 12px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Pending access requests · 2</h2>
+<div style="overflow-x: auto"><table aria-label="Pending access requests"><thead><tr><th>User</th><th>First signed in</th><th>Assign role</th><th></th><th></th></tr></thead><tbody>
+<tr><td><strong>Morgan Q.</strong><br><span style='font-size: 12px; color: #5C5C5C'>morgan@example.com</span></td><td>Nov 18, 09:14</td><td><select aria-label="Role for request 1" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 150px"><option>Choose role</option><option>Developer</option><option>Admin</option></select></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #1D4ED8; color: #FFFFFF; border: 1px solid #1D4ED8">Approve</button></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Reject</button></td></tr>
+<tr><td><strong>Alex R.</strong><br><span style='font-size: 12px; color: #5C5C5C'>alex@other-team.example.com</span></td><td>Nov 17, 16:40</td><td><select aria-label="Role for request 2" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 150px"><option>Choose role</option><option>Developer</option><option>Admin</option></select></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #1D4ED8; color: #FFFFFF; border: 1px solid #1D4ED8">Approve</button></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Reject</button></td></tr>
+</tbody></table></div>
+<p style="margin: 0; font-size: 13px; color: #5C5C5C">New sign-ins have no role and see only the not-authorized page until approved here. Approving credits the monthly allowance. Rejected users drop off this list.</p></section>
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start"><div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 28px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">All users</h2><div style="overflow-x: auto"><table aria-label="Users"><thead><tr><th>User</th><th>Role</th><th>Tokens left</th><th>Burned this month</th><th>Holding</th><th></th></tr></thead><tbody>
+<tr><td><strong>Priya N.</strong><br><span style='font-size: 12px; color: #5C5C5C'>priya@example.com</span></td><td><select aria-label="Role for user 1" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 130px"><option>Unassigned</option><option selected>Developer</option><option>Admin</option></select></td><td><span style="color: #92400E; font-weight: 600">−12</span></td><td>312</td><td>setup-02</td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Grant</button></td></tr>
+<tr><td><strong>Sam Lee</strong><br><span style='font-size: 12px; color: #5C5C5C'>sam@example.com</span></td><td><select aria-label="Role for user 2" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 130px"><option>Unassigned</option><option selected>Developer</option><option>Admin</option></select></td><td>61</td><td>239</td><td>setup-01</td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Grant</button></td></tr>
+<tr><td><strong>Dana Dev</strong><br><span style='font-size: 12px; color: #5C5C5C'>dana@example.com</span></td><td><select aria-label="Role for user 3" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 130px"><option>Unassigned</option><option selected>Developer</option><option>Admin</option></select></td><td>142</td><td>198</td><td>setup-04</td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Grant</button></td></tr>
+<tr><td><strong>Tom K.</strong><br><span style='font-size: 12px; color: #5C5C5C'>tom@example.com</span></td><td><select aria-label="Role for user 4" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 130px"><option>Unassigned</option><option selected>Developer</option><option>Admin</option></select></td><td>230</td><td>70</td><td>setup-03</td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Grant</button></td></tr>
+<tr><td><strong>Riley Admin</strong><br><span style='font-size: 12px; color: #5C5C5C'>riley@example.com</span></td><td><select aria-label="Role for user 5" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 130px"><option>Unassigned</option><option>Developer</option><option selected>Admin</option></select></td><td>300</td><td>0</td><td></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Grant</button></td></tr>
+<tr><td><strong>admin</strong><br><span style='font-size: 12px; color: #5C5C5C'>Local account · first user</span></td><td><span style="padding: 2px 10px; border: 1px solid #5C5C5C; border-radius: 999px; font-size: 12px; color: #5C5C5C; white-space: nowrap">Admin · fixed</span></td><td>No balance</td><td></td><td>Cannot hold setups</td><td></td></tr>
+</tbody></table></div><p style="margin: 0; font-size: 13px; color: #5C5C5C">Overdrawn users sort first. An admin cannot remove their own admin role.</p></div><aside aria-label="Grant tokens" style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; background: #F4F4F4; display: flex; flex-direction: column; gap: 14px; flex: 1 1 300px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Grant tokens to Priya N.</h2>
+<p style="margin: 0; font-size: 13px; color: #5C5C5C">Balance −12 · burning 4.0 / hour on setup-02</p>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="g-amt" style="font-size: 13px; font-weight: 600">Amount</label><input id="g-amt" type="text" value="100" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="g-why" style="font-size: 13px; font-weight: 600">Reason (required)</label><input id="g-why" type="text" value="Release week, needs a large setup for soak test" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"></div>
+<p style="margin: 0; font-size: 13px">New balance: 88. Unused tokens expire Nov 30; debt carries into December.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #1D4ED8; color: #FFFFFF; border: 1px solid #1D4ED8">Grant 100 tokens</button><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Reset to 300</button><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Cancel</button></div>
+<p style="margin: 0; font-size: 12px; color: #5C5C5C">Opens when Grant is clicked. Negative amounts correct mistakes. Reset sets the balance to the full allowance and clears carried debt; it needs a reason too. Both are written to the audit log.</p></aside></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1240}}'>
+class Component extends DCLogic {
+renderVals() {
+return { tpl: '{' + '{.SetupName}}_RP' };
+}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin: setup inventory</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;padding:10px 12px;font-size:12px;font-weight:600;color:#5C5C5C;border-bottom:1px solid #BDBDBD;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #E6E6E6;vertical-align:middle}
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1A1A1A; background: #FFFFFF; min-height: 1000px">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 12px 32px; border-bottom: 1px solid #BDBDBD">
+<strong style="font-size: 18px">Hourglass</strong>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; font-size: 14px; flex: 1 1 320px">
+<a href="Main.dc.html" style="text-decoration: none; padding: 10px 0">My usage</a>
+<a href="Setups.dc.html" style="text-decoration: none; padding: 10px 0">Setups</a>
+<span style="font-size: 12px; color: #5C5C5C; padding-left: 12px; border-left: 1px solid #BDBDBD">Admin</span>
+<a href="AdminUsers.dc.html" style="text-decoration: none; padding: 10px 0">Users · 2 pending</a>
+<a href="AdminSetups.dc.html" aria-current="page" style="color: #1A1A1A; font-weight: 600; text-decoration: none; border-bottom: 2px solid #1A1A1A; padding: 10px 0">Setup inventory</a>
+<a href="AdminSettings.dc.html" style="text-decoration: none; padding: 10px 0">Settings</a>
+<a href="#audit" style="text-decoration: none; padding: 10px 0">Audit log</a>
+</nav>
+<span style="padding: 6px 12px; border: 1px solid #B45309; border-radius: 999px; font-size: 13px; color: #92400E">Lab 82% · 2×</span>
+<span style="font-size: 14px; font-weight: 600">300 tokens</span>
+<span style="font-size: 14px">Riley Admin</span>
+<a href="#signout" style="font-size: 14px">Sign out</a>
+</header>
+<main style="max-width: 1216px; margin: 0 auto; padding: 32px; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px"><h1 style="margin: 0; font-size: 26px; font-weight: 600">Setup inventory</h1><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #1D4ED8; color: #FFFFFF; border: 1px solid #1D4ED8">Add setup</button></div>
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start"><div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 28px"><div style="overflow-x: auto"><table aria-label="Setups"><thead><tr><th>Setup</th><th>Labels</th><th>Weight</th><th>Resource name</th><th>Last seen by provider</th><th>Held by</th><th>Status</th><th></th></tr></thead><tbody>
+<tr><td><strong>setup-01</strong></td><td><span style="display: inline-flex; flex-wrap: wrap; gap: 4px"><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">size=extralarge</code><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">site=sjc</code></span></td><td>4</td><td>setup-01_RP</td><td>2 min ago</td><td>Sam Lee</td><td><span style="padding: 2px 10px; border: 1px solid #166534; border-radius: 999px; font-size: 12px; color: #166534; white-space: nowrap">Enabled</span></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Edit</button></td></tr>
+<tr><td><strong>setup-04</strong></td><td><span style="display: inline-flex; flex-wrap: wrap; gap: 4px"><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">size=medium</code><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">site=sjc</code></span></td><td>1</td><td>setup-04_RP</td><td>2 min ago</td><td>Dana Dev</td><td><span style="padding: 2px 10px; border: 1px solid #166534; border-radius: 999px; font-size: 12px; color: #166534; white-space: nowrap">Enabled</span></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Edit</button></td></tr>
+<tr><td><strong>setup-05</strong></td><td><span style="display: inline-flex; flex-wrap: wrap; gap: 4px"><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">size=medium</code><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">site=sjc</code></span></td><td>1</td><td>setup-05_RP</td><td>Not deployed</td><td></td><td><span style="padding: 2px 10px; border: 1px solid #166534; border-radius: 999px; font-size: 12px; color: #166534; white-space: nowrap">Enabled</span></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Edit</button></td></tr>
+<tr><td><strong>setup-07</strong></td><td><span style="display: inline-flex; flex-wrap: wrap; gap: 4px"><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">size=large</code><code style="padding: 2px 6px; background: #F4F4F4; border: 1px solid #D0D0D0; border-radius: 4px; font-size: 12px; white-space: nowrap">site=rtp</code></span></td><td>2</td><td>lab7-pool (override)</td><td>Not deployed</td><td></td><td><span style="padding: 2px 10px; border: 1px solid #5C5C5C; border-radius: 999px; font-size: 12px; color: #5C5C5C; white-space: nowrap">Disabled</span></td><td><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Edit</button></td></tr>
+</tbody></table></div><section style="display: flex; flex-direction: column; gap: 12px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Orphans</h2>
+<div style="overflow-x: auto"><table aria-label="Orphans"><thead><tr><th>Resource name reported</th><th>First seen</th><th>Matches</th></tr></thead><tbody>
+<tr><td>setup-09_RP</td><td>Nov 16, 08:10</td><td>setup-09 exists but nobody holds it</td></tr>
+</tbody></table></div>
+<p style="margin: 0; font-size: 13px; color: #5C5C5C">Something is deployed that nobody holds. Orphans are charged to nobody.</p></section></div><aside aria-label="Edit setup" style="border: 1px solid #BDBDBD; border-radius: 8px; padding: 20px; background: #F4F4F4; display: flex; flex-direction: column; gap: 14px; flex: 1 1 340px"><h2 style="margin: 0; font-size: 16px; font-weight: 600">Edit setup-04</h2>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="s-name" style="font-size: 13px; font-weight: 600">Name</label><input id="s-name" type="text" value="setup-04" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"></div>
+<fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px"><legend style="font-size: 13px; font-weight: 600; padding: 0 0 6px 0">Labels</legend><div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px"><input aria-label="Label key 1" type="text" value="size" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"><input aria-label="Label value 1" type="text" value="medium" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Remove</button></div><div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px"><input aria-label="Label key 2" type="text" value="site" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"><input aria-label="Label value 2" type="text" value="sjc" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Remove</button></div><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A; align-self: flex-start">Add label</button><span style="font-size: 12px; color: #5C5C5C">Free-form key and value. Weight 1: no rate rule matches, so the default applies.</span></fieldset>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="s-pool" style="font-size: 13px; font-weight: 600">Resource name override</label><input id="s-pool" type="text" value="" style="min-height: 44px; padding: 0 12px; border: 1px solid #8A8A8A; border-radius: 6px; font: inherit; font-size: 14px; box-sizing: border-box; width: 100%"><span style="font-size: 12px; color: #5C5C5C">Blank uses the template: setup-04_RP</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="s-json" style="font-size: 13px; font-weight: 600">Details (JSON, stored as-is, passed to hooks)</label><textarea id="s-json" rows="7" style="font-family: ui-monospace, Menlo, monospace; font-size: 13px; padding: 12px; border: 1px solid #8A8A8A; border-radius: 6px; box-sizing: border-box; width: 100%">{
+  "rack": "[YOUR FIELD]",
+  "mgmt_ip": "[YOUR FIELD]",
+  "notes": "opaque to Hourglass"
+}</textarea><span style="font-size: 12px; color: #5C5C5C">Valid JSON</span></div>
+<div style="display: flex; align-items: center; gap: 8px; min-height: 44px"><input id="s-en" type="checkbox" checked style="width: 20px; height: 20px"><label for="s-en" style="font-size: 14px">Enabled (counts toward lab pressure, can be acquired)</label></div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center"><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #1D4ED8; color: #FFFFFF; border: 1px solid #1D4ED8">Save</button><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A">Force-release</button><button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; background: #FFFFFF; color: #1A1A1A; border: 1px solid #8A8A8A; color: #991B1B; border-color: #991B1B">Delete</button></div>
+<p style="margin: 0; font-size: 12px; color: #5C5C5C">Delete is blocked while the setup is held.</p></aside></div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+renderVals() {
+return { tpl: '{' + '{.SetupName}}_RP' };
+}
+}
+</script>
+</body>
+</html>
