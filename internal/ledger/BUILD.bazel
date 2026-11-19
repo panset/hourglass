@@ -3,13 +3,30 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "ledger",
-    srcs = ["ledger.go"],
+    srcs = [
+        "ledger.go",
+        "service.go",
+    ],
     importpath = "github.com/panset/hourglass/internal/ledger",
     visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/settings",
+        "//internal/store",
+        "//pkg/hourglass",
+    ],
 )
 
 go_test(
     name = "ledger_test",
-    srcs = ["ledger_test.go"],
+    srcs = [
+        "ledger_test.go",
+        "service_test.go",
+    ],
     embed = [":ledger"],
+    deps = [
+        "//internal/settings",
+        "//internal/store",
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
 )
