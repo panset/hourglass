@@ -9,9 +9,9 @@ detail when the one before it is verified.
 
 | # | M | Task | Kind | Model | Depends on | Writes to | Status |
 |---|---|---|---|---|---|---|---|
-| 00 | 0 | Repo, license, README stub, .gitignore, SPEC.md, first push | build | orchestrator | - | repo root, `docs/` | done locally; push blocked on remote URL |
-| 01 | - | Spike: govmomi simulator creates resource pools; which cluster CPU/memory/storage figures it reports | research | sonnet | 00 | task folder, scratch module outside the repo | pending |
-| 02 | 1 | Build skeleton: go.mod, MODULE.bazel (bzlmod, rules_go, Gazelle), .bazelversion, `ci.sh`, SPDX header check, stub `cmd/hourglassd` | build | sonnet | 00 | repo root, `cmd/`, `tools/` | pending |
+| 00 | 0 | Repo, license, README stub, .gitignore, SPEC.md, first push | build | orchestrator | - | repo root, `docs/` | verified (pushed 1b36a72) |
+| 01 | - | Spike: govmomi simulator creates resource pools; which cluster CPU/memory/storage figures it reports | research | sonnet | 00 | task folder, scratch module outside the repo | running |
+| 02 | 1 | Build skeleton: go.mod, MODULE.bazel (bzlmod, rules_go, Gazelle), .bazelversion, `ci.sh`, SPDX header check, stub `cmd/hourglassd` | build | sonnet | 00 | repo root, `cmd/`, `tools/` | running |
 | 03 | 1 | Verify 02 from a fresh clone: `bazel build //...`, `bazel test //...`, `go build ./...` | verify | haiku | 02 | (read-only) | pending |
 | 04 | 2 | `internal/rules`: selector parser, `Match`, ordered rule evaluation by kind (RULE-1,2,5) | build | sonnet | 03 | `internal/rules/` | pending |
 | 05 | 2 | `internal/metering`: bands, 15-minute smoothing, debit in milli-tokens with gap cap (MET-3,4) | build | sonnet | 03 | `internal/metering/` | pending |
@@ -33,7 +33,7 @@ detail when the one before it is verified.
 | 21 | 6 | `internal/api`: handlers for holds, setups, me, pressure, admin; settings, audit, seed import; `pkg/hourglass.Run`, config loading, `hourglassd` wiring | build | sonnet (split into 2-3 at re-plan) | 18,19,20 | `internal/api/`, `cmd/`, `pkg/hourglass/` | pending |
 | 22 | 6 | Permissions-table HTTP tests (every cell, unassigned gets no data) and the OpenAPI contract test | build | sonnet | 21 | `internal/api/` tests | pending |
 | 23 | 6 | Verify 19-22; security read of auth | verify | opus | 22 | (read-only) | pending |
-| 24 | 7 | Extract the seven wireframe artboards into `docs/ui-notes.md` (layout, columns, labels per page) | explore | sonnet | 00 | `docs/ui-notes.md` | pending |
+| 24 | 7 | Extract the seven wireframe artboards into `docs/ui-notes.md` (layout, columns, labels per page) | explore | sonnet | 00 | `docs/ui-notes.md` | running |
 | 25 | 7 | `//ui` scaffold: Vite, React, TypeScript, rules_js with pinned Node and lockfile, generated API client, app shell and top bar | build | sonnet | 19,24 | `ui/` | pending |
 | 26 | 7 | UI pages: Sign in, Not authorized, My usage, Setups | build | sonnet | 25 | `ui/src/pages/` (user) | pending |
 | 27 | 7 | UI pages: Users, Setup inventory, Settings, Audit log | build | sonnet | 25 | `ui/src/pages/admin/` | pending |
