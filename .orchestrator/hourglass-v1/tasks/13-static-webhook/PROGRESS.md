@@ -1,0 +1,3 @@
+- 2026-11-19: Part A event_json.go + test done.
+- 2026-11-19: Part B static provider and Part C webhook hook done, with tests.
+- 2026-11-19: gazelle, SPDX lines, go test -race, bazel test, check_spdx, check_core_generic all pass. RESULT.md written.

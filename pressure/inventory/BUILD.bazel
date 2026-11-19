@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "inventory",
+    srcs = ["inventory.go"],
+    importpath = "github.com/panset/hourglass/pressure/inventory",
+    visibility = ["//visibility:public"],
+    deps = ["//pkg/hourglass"],
+)
+
+go_test(
+    name = "inventory_test",
+    srcs = ["inventory_test.go"],
+    embed = [":inventory"],
+    deps = [
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)

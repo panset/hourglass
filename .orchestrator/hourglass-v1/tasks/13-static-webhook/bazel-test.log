@@ -1,0 +1,18 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 6 targets (3 packages loaded, 0 targets configured)
+Analyzing: 6 targets (3 packages loaded, 0 targets configured)
+
+INFO: Analyzed 6 targets (3 packages loaded, 18 targets configured).
+[31 / 32] 3 / 3 tests; Testing //hooks/webhook:webhook_test; 0s darwin-sandbox
+INFO: Found 3 targets and 3 test targets...
+INFO: Elapsed time: 1.273s, Critical Path: 1.17s
+INFO: 30 processes: 8 internal, 22 darwin-sandbox.
+INFO: Build completed successfully, 30 total actions
+//hooks/webhook:webhook_test                                             PASSED in 0.4s
+//pkg/hourglass:hourglass_test                                           PASSED in 0.2s
+//providers/static:static_test                                           PASSED in 0.2s
+
+Executed 3 out of 3 tests: 3 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "webhook",
+    srcs = ["webhook.go"],
+    importpath = "github.com/panset/hourglass/hooks/webhook",
+    visibility = ["//visibility:public"],
+    deps = ["//pkg/hourglass"],
+)
+
+go_test(
+    name = "webhook_test",
+    srcs = ["webhook_test.go"],
+    embed = [":webhook"],
+    deps = [
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+    ],
+)

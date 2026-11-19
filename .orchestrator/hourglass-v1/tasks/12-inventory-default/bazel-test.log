@@ -1,0 +1,16 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 4 targets (2 packages loaded, 0 targets configured)
+Analyzing: 4 targets (2 packages loaded, 0 targets configured)
+
+INFO: Analyzed 4 targets (2 packages loaded, 8 targets configured).
+INFO: Found 2 targets and 2 test targets...
+INFO: Elapsed time: 1.038s, Critical Path: 0.91s
+INFO: 21 processes: 7 internal, 14 darwin-sandbox.
+INFO: Build completed successfully, 21 total actions
+//policies/default:default_test                                          PASSED in 0.2s
+//pressure/inventory:inventory_test                                      PASSED in 0.2s
+
+Executed 2 out of 2 tests: 2 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

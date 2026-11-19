@@ -5,6 +5,7 @@ go_library(
     name = "hourglass",
     srcs = [
         "doc.go",
+        "event_json.go",
         "events.go",
         "registry.go",
         "types.go",
@@ -15,6 +16,9 @@ go_library(
 
 go_test(
     name = "hourglass_test",
-    srcs = ["hourglass_test.go"],
+    srcs = [
+        "event_json_test.go",
+        "hourglass_test.go",
+    ],
     embed = [":hourglass"],
 )
