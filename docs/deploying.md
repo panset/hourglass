@@ -136,7 +136,7 @@ An admin edits these in the UI (Admin, Settings), or with `GET` and `PUT /api/v1
 | `bands` | base `0`; from 0.50 give 1, from 0.75 give 2, from 0.90 give 3 | Pressure bands and multipliers. Lower bounds are inclusive |
 | `default_allowance` | `300` | Tokens credited at the start of each month and when a user is first given a role |
 | `max_holds_per_user` | `2` | Lowering it never releases existing holds |
-| `release_requires_teardown` | `true` | Refuse release while the provider still reports the setup's resource. No effect without a provider |
+| `release_requires_teardown` | `true` | A user's release of a setup the provider still reports is accepted but pending (the hold shows Releasing and keeps charging); it completes at the first poll where the setup is no longer reported. No effect without a provider |
 | `poll_interval` | `5m` | Minimum `1m` |
 | `enforcement` | `false` | `false` is shadow mode: balances fall but nobody is blocked |
 
@@ -259,6 +259,48 @@ Mocks cannot confirm these. Work through them before enforcement is turned on, w
 
 `check-provider` opens an existing database read-only. That can leave empty `-wal` and `-shm` files beside it, and fails if the database directory is read-only. If the schema is older or newer than the binary, it fails and asks you to start the server once.
 
+## Connecting your infrastructure with the integration API
+
+If your lab is not vCenter, or you would rather not give Hourglass credentials to it, your own service can tell Hourglass what is deployed and how contended the lab is. Hourglass never reads your infrastructure; the service calls Hourglass over HTTP. [Integrating your infrastructure with Hourglass](integrating.md) is the guide to give the engineer who builds that service. This section is what you, the operator, set up.
+
+### Config
+
+Select the `reported` provider and pressure source. They take one key, `max_age`:
+
+```yaml
+provider:
+  type: reported
+  config:
+    max_age: 10m
+pressure:
+  type: reported
+  config:
+    max_age: 10m
+```
+
+`max_age` is a Go duration, default `10m`, minimum `1m`. A report is stale once it is older than `max_age`, counted from the `observed_at` the service sent. While either selected report is missing or stale, every poll fails with an error that names `max_age`, nobody is charged for that time, and the gap is recorded as an outage (see [Roll out in shadow mode](#roll-out-in-shadow-mode) for how outages are shown). You can select just one of the two; `provider` and `pressure` are independent. A report sent to the integration API while its extension is not selected is refused with 409 `not_configured`.
+
+Match `max_age` to the poll interval and to how often the service reports. The service should report every 60 seconds, the poll runs every `poll_interval` (5 minutes by default, 1 minute at the least), and each poll needs a report younger than `max_age`. So `max_age` should be at least twice the poll interval and well above the reporting period, or one late report fails a poll. The default 10 minutes suits the default 5-minute poll if the service reports every minute. If you lower `poll_interval`, `max_age` can stay at 10 minutes; if you raise it above 5 minutes, raise `max_age` with it. A shorter `max_age` finds a dead reporter sooner but fails polls on short hiccups; a longer one lets old data stand in for longer. Check the result before relying on it with `hourglassd check-provider`, which prints the age of each report.
+
+### Service accounts
+
+A service account is the identity of your service. It is a separate kind of principal, never a user and never an admin or developer, and its token works only under `/api/v1/integration/`.
+
+1. In Admin, Service accounts, create an account. The name is 1 to 64 letters, digits, `.`, `_` or `-`, and cannot be changed. Give it only the scopes the service needs: `deployments:write`, `pressure:write`, `state:read`, `holds:release`. (`GET` and `PUT /api/v1/admin/service-accounts` do the same from a script.)
+2. Issue a token. It looks like `hgsa_<id>_<64 hex characters>` and is shown once. Only its hash is stored. Put it in the service's secret store.
+3. To rotate: issue a second token for the same account, switch the service to it, check that the first token's last-used time in the UI stops moving, then revoke the first. An account can have several live tokens at once, so there is no gap. Tokens can have an expiry; give them one if your secret manager can rotate them.
+4. To cut a service off at once, disable the account (every token stops working) or revoke the one token.
+
+Every create, change, token issue and revoke is audited, and so is each hold a service releases, under the account's name. A token that is revoked, expired or belongs to a disabled or deleted account answers 401.
+
+### Behind a reverse proxy
+
+Failed token attempts are rate-limited per client address: 5 failures in 15 minutes, then 429 `rate_limited` with `Retry-After` for further bad tokens from that address. Hourglass uses the address of the TCP connection and does not read `X-Forwarded-For`. Behind a reverse proxy, which this document requires, every caller therefore shares the proxy's address and one failure budget. Nobody who presents a valid token is ever refused by the limit, so the service keeps working while someone else's bad requests use up the budget; they just see 429 instead of 401. Do not try to restore client addresses with a forwarding header: Hourglass would trust whatever the client sends. If you want the service to bypass the proxy, let it reach Hourglass directly on a private address.
+
+### Releasing and the teardown setting
+
+See [Upgrade](#upgrade) for what changed. With `release_requires_teardown` on (the default) and a provider selected, a user's release of a setup the last poll still reported as deployed is accepted and pending. With it off, or with no provider, release is immediate.
+
 ## Seed file
 
 A seed file creates the first setups and rate rules, once. Name it in `seed:`. It is imported only on the first start of a database, which is recorded in a marker (the `seed_state` row of the settings table, written in the same transaction); once the marker exists it is never applied again, even if every setup is later deleted, and Hourglass does not read the file, so edit setups and rules in the UI. A database that already has setups, rules or users other than the local admin and no marker is treated as initialised.
@@ -335,7 +377,13 @@ Schema changes ship as numbered SQL migrations embedded in the binary and applie
 
 ### Upgrading from a build with the resource name template
 
-Earlier builds had a resource name template setting and a per-setup resource name override. Migration 0004 removes both. A setup now matches the provider's allocation with exactly its own name. Before upgrading, set `pool_name_prefix` / `pool_name_suffix` in the `vsphere` provider block (or the equivalent in your own provider) so that what the provider reports equals your setup names. For example, a template of `{{.SetupName}}_RP` becomes `pool_name_suffix: _RP`. Otherwise setups stop matching what the provider reports: nothing deploys and release is no longer blocked. When the migration removes a non-default template or any override, the server logs one warning at start with the number of setups that had overrides (a template is shown at most 100 characters).
+Earlier builds had a resource name template setting and a per-setup resource name override. Migration 0004 removes both. A setup now matches the provider's allocation with exactly its own name. Before upgrading, set `pool_name_prefix` / `pool_name_suffix` in the `vsphere` provider block (or the equivalent in your own provider) so that what the provider reports equals your setup names. For example, a template of `{{.SetupName}}_RP` becomes `pool_name_suffix: _RP`. Otherwise setups stop matching what the provider reports: nothing deploys and a release is never pending. When the migration removes a non-default template or any override, the server logs one warning at start with the number of setups that had overrides (a template is shown at most 100 characters).
+
+### Upgrading to the integration API (migration 0005)
+
+Migration 0005 adds the service account, token and report tables and three columns (`holds.release_requested_at`, `holds.released_by_service`, `audit_log.actor_service`). It has no down migration. As with every upgrade, take a backup first and keep it: once 0005 has run, an older binary refuses the database (`database schema version N is newer than this binary`), and going back means restoring that backup. No configuration change is needed. Nothing changes for an installation that does not create a service account or select `reported`, except the release behaviour below.
+
+**Release behaviour changed.** A user's release of a setup that the provider still reports (with `release_requires_teardown` on) used to be refused with 409 `still_deployed`; the user had to tear the setup down, wait a poll and click again. Now the first click is accepted (202): the hold is marked Releasing, keeps metering, fires the new `hold.releasing` event, and ends at the first successful poll in which the setup is no longer reported. That poll's interval is still charged. A pending release cannot be cancelled, and clicking again changes nothing. This applies to every provider, `vsphere` included. The `still_deployed` error code no longer exists, so scripts that matched it must stop. If no poll has succeeded since the process started, the release is immediate, as before. Hooks that treated `hold.released` as the only end-of-hold signal keep working; `hold.releasing` is new and optional.
 
 ## Data retention
 

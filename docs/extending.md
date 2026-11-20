@@ -2,6 +2,8 @@
 
 Hourglass meters how long people hold shared setups. It does not know what a setup is, how it gets deployed, how busy the lab is, or when charging should start. You supply those four things as Go packages, build your own binary, and leave the core untouched.
 
+If you only need to tell Hourglass what is deployed and how busy the lab is, and to react to acquire and release, you do not need any of this: the [integration guide](integrating.md) does it over HTTP with the stock container and no Go. Use this page when you need behaviour the integration API cannot give.
+
 This page covers the four extension interfaces, the event list, how to build a binary with your own extensions, and the bundled extensions. A complete third-party build lives in [`examples/custom`](../examples/custom/README.md).
 
 ## What the core knows
@@ -98,7 +100,10 @@ type Hold struct {
 	AcquiredAt        time.Time
 	MeteringStartedAt *time.Time
 	DeployedAt        *time.Time
-	ReleasedAt        *time.Time
+	// ReleaseRequestedAt is set when a user asked to release the hold while its
+	// setup was still deployed; the hold is released once the setup is gone.
+	ReleaseRequestedAt *time.Time
+	ReleasedAt         *time.Time
 }
 ```
 
@@ -456,7 +461,8 @@ Hooks receive every event. `hourglass.EventTypes()` returns the list in this ord
 | `hold.acquired` | The hold is created | No | the user | yes | yes | `{}` |
 | `hold.metering_started` | The policy first says to charge | No | the holder | yes | yes, `metering_started_at` set | `{}` |
 | `hold.deployed` | The provider first reports the setup | No | the holder | yes | yes, `deployed_at` set | `{}` |
-| `hold.released` | The hold ends, by the user or an admin | No | the holder, not the admin who released it | yes | yes, `released_at` set | `{"forced": bool, "reason": string}` |
+| `hold.releasing` | A user asked to release a setup that the last poll still reported as deployed. The hold stays active and metered until the setup is gone | No | the holder | yes | yes, `release_requested_at` set | `{}` |
+| `hold.released` | The hold ends: by the user, by an admin, by a service account, or by the poll that completes a pending release | No | the holder, not the admin who released it | yes | yes, `released_at` set | `{"forced": bool, "reason": string}`, plus `service_account` (its name) when a service account released it |
 | `balance.low` | A balance first drops below 10% of the allowance | No | the user | null | null | `{"balance_tokens": number, "allowance_tokens": number}` |
 | `balance.overdrawn` | A balance first reaches zero or below | No | the user | null | null | `{"balance_tokens": number, "allowance_tokens": number}` |
 | `user.pending` | A new user signs in for the first time | No | the new user, `roles` empty | null | null | `{}` |
@@ -467,7 +473,9 @@ Hooks receive every event. `hourglass.EventTypes()` returns the list in this ord
 Notes on the table:
 
 - `balance.low` and `balance.overdrawn` can both fire on the same debit. `balance.low` never fires when the allowance is zero.
-- `hold.released` carries `reason` as an empty string when a user releases their own hold.
+- `hold.released` carries `reason` as an empty string when a user releases their own hold, and also when the poll completes a pending release.
+- `hold.releasing` fires once per hold, when `release_requested_at` is first set; a repeat click changes nothing and fires nothing. A pending release cannot be cancelled. If no poll has succeeded since the process started, or the last successful poll did not report the setup, a user's release is immediate and only `hold.released` fires.
+- The `release_requires_teardown` setting no longer refuses a release (the `still_deployed` error is gone). It decides whether a release of a still-deployed setup is pending (the default) or immediate. See [Deploying](deploying.md#settings-stored-in-the-database).
 - `hold.metering_started`, `hold.deployed` and the balance events come from the poll, and their `time` is the poll time. If the same poll produces several, they are queued in that order: metering started, deployed, then balance events.
 - A hook may filter by event type. The core delivers every event to every hook and records each delivery; filtering is the hook's job (the bundled `webhook` hook has a `types` list).
 
@@ -484,7 +492,7 @@ Notes on the table:
   "hold": {
     "id": 7, "setup": "lab-03", "user_id": 2,
     "acquired_at": "2026-11-19T16:30:00Z",
-    "metering_started_at": null, "deployed_at": null, "released_at": null
+    "metering_started_at": null, "deployed_at": null, "release_requested_at": null, "released_at": null
   },
   "data": {}
 }
@@ -644,6 +652,8 @@ All are linked into `hourglassd`. Setting a name in the config is what enables o
 | `vsphere` | pressure source | the same block as the `vsphere` provider |
 | `default` | metering policy | `start_after`, `start_on_allocation` |
 | `webhook` | hook | `url`, `secret`, `types` |
+| `reported` | provider | `max_age` |
+| `reported` | pressure source | `max_age` |
 
 **`static`.** `path` is a JSON file: an array of `{"resource_name": "...", "labels": {"k": "v"}}`. It is re-read on every poll, so you can edit it while Hourglass runs. A missing or malformed file, or an entry with an empty `resource_name`, is an error and fails the poll. Use it for demos and tests.
 
@@ -674,5 +684,9 @@ With both triggers off, nothing is ever metered. It always returns `Weight: 0`, 
 | `pool_name_suffix` | empty | Provider only (the pressure source accepts and ignores it). See below. |
 
 The provider lists every resource pool except each cluster's hidden root pool, nested pools included. With `pool_name_prefix` and `pool_name_suffix` both empty, each pool is reported under its own name. When either is set, only pools whose name has that prefix and suffix are reported, with both stripped (suffix `_RP` reports pool `lab-06_RP` as `lab-06`); other pools, and a pool named exactly prefix plus suffix, are not reported. The pool's own name is in the allocation's `pool` label, beside `cluster`, `datacenter`, `parent` and `path`. The pressure source returns, for each cluster, the highest of: CPU reservation used over capacity of the root pool, memory reservation used over capacity of the root pool, and one minus free over total space of the accessible datastores. It then takes the highest across clusters. The provider and pressure source only read. See [Deploying](deploying.md#the-vsphere-provider) for privileges and the first-run checklist.
+
+**`reported`** (provider and pressure source). Instead of looking at your infrastructure, both read the last report that your own service sent to the integration API (`PUT /api/v1/integration/deployments` and `/pressure`). The provider reports each setup named in the deployment report as an allocation whose `resource_name` is the setup name and whose labels are the report's labels. The pressure source returns the last pressure value. `max_age` (a Go duration, default `10m`, minimum `1m`) is how old a report may be: once a report is older, measured from its `observed_at`, the poll fails with an error that names `max_age`, nobody is charged for that time, and it is recorded as an outage. Before the first report the poll fails with `no deployment report received yet` or `no pressure report received yet`. Set the poll interval and `max_age` together: `max_age` should be several poll intervals long, and your service should report at least once every minute. Select one, both or neither: the two are independent. `hourglassd check-provider` prints the age of each selected report. The `reported` extensions are how you connect a stack **without writing Go**: the whole contract, with every example, is in [Integrating your infrastructure with Hourglass](integrating.md).
+
+An extension of your own can read the stored reports through `pkg/storedreports`, a small public package that imports nothing from the core. It defines a read-only `Reader` with `Deployments(ctx)` and `Pressure(ctx)` (each result carries `ObservedAt` and an `Age` already computed with the server's clock, and both return `ErrNoReport` before the first report), and `Current()` returns the `Reader` that the server published when it opened its database (nil outside a running server or `check-provider`). Factories receive only their config block, so call `storedreports.Current()` on every call rather than keeping the result. There is one process-wide reader; two servers in one process (tests) share the last one published. A third-party `main` gets the bundled extension by `import _ "github.com/panset/hourglass/providers/reported"`.
 
 For the `webhook` hook, see [The webhook hook](#the-webhook-hook).

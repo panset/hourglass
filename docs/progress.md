@@ -40,6 +40,30 @@ bundled and split mode.
 `docs/SPEC.md` is a copy of the source document and still shows the old
 text for both; the source needs the same edits.
 
+## The integration API (owner-directed, 2026-11-20)
+
+Built to [design/integration-api.md](design/integration-api.md) (D42 to D63). The task record is under `.orchestrator/integration-api/`. `docs/SPEC.md` is not edited; D42 lists the edits the spec's source needs.
+
+**Finished**
+
+- Service accounts: admin routes and UI page, scoped bearer tokens (`hgsa_<id>_<secret>`, hash stored, shown once), expiry, revoke, audit, a failed-attempt rate limit per client address (SVC-1 to SVC-8).
+- `PUT /api/v1/integration/deployments` and `/pressure`, `GET /api/v1/integration/state`, `POST /api/v1/integration/holds/{id}/release`, in `api/openapi.yaml` (INT-1 to INT-4, INT-8, HOLD-8).
+- The `reported` provider and pressure source, with `max_age`, and the public `pkg/storedreports` they read through (INT-5 to INT-7). `check-provider` prints report ages.
+- Pending release: a user's release of a still-reported setup is accepted, marked Releasing, fires `hold.releasing`, and completes at the first poll where the setup is gone (HOLD-6, HOLD-7, HOLD-9, CMP-1, CMP-2). `still_deployed` is gone (D43, D59).
+- UI: Service accounts page, Releasing state, last report times on Settings.
+- An end-to-end scenario with a scripted reporter and webhook receiver (`e2e/run.sh integration`, 10 of 10 steps, about 13 minutes) and the acceptance path updated for the new release.
+- Documentation: `docs/integrating.md` was run example by example against a live `reported` stack and corrected; `extending.md`, `deploying.md` (config, `max_age`, service accounts, proxy note, upgrade entry for migration 0005), the README and `ui-notes.md` describe what was built. Three verification tasks (after service accounts, after the release changes, after the end-to-end scenario) each found issues that were fixed and re-checked.
+
+**Not finished, not verified, or left as is**
+
+- Nothing in this work has been run against a real vCenter, and the `reported` extensions have only been driven by scripted reporters.
+- The rate limit counts failures per connection address and does not read `X-Forwarded-For`, so behind a proxy all callers share one failure budget; valid tokens are never refused (D47).
+- Events stay at most once and in memory: a receiver that is down misses `hold.acquired` and `hold.releasing` for good. The state route is how a service catches up (documented in the guide).
+- If no poll has succeeded since the process started, a user's release is immediate even when the setup is deployed (D61).
+- OIDC users have an empty `username` in event JSON and in the state response; the email is the stable key.
+- The integration end-to-end scenario is not part of `bazel test //...` (D63).
+- `docs/SPEC.md` and the spec's source still describe the old HOLD-2 and lack the integration requirements (D42).
+
 ## Milestones
 
 | # | Milestone | Status |
@@ -156,8 +180,14 @@ All decisions are in [decisions.md](decisions.md). The ones marked
 | D39 | The stray binary stays in history unless you ask for a rewrite. |
 | D40 | Owner-directed: resource naming moved out of the core into the provider. |
 | D41 | Owner-directed: admins land on Setups; My usage is at `/usage`. |
+| D43 | Owner-directed: a user's release of a still-deployed setup is accepted and pending, not refused (`still_deployed` is gone). |
+| D61 | A release made with no successful poll since start-up is immediate even if the setup is deployed; release is decided from the last poll, not the stored report. |
 
 Also worth a look, though not marked: D33 (reference-scenario settings are
 not seedable), D34 and D38 (what the end-to-end test does outside the UI),
 D35 (the OIDC callback always redirects to `/`), D36 (how the balance
-cache is kept).
+cache is kept), D42 (the integration API and the spec-source edits it needs), D47 (the rate limit behind a proxy), D44 to D46 (the stored-report rules), D48 (service-account
+naming and token format), D50 (a deleted account's name can be reused), D51
+to D55 (how the core learns about `reported` and how the extension reads the
+reports), D57 and D58 (repeat release clicks; the completing poll is still
+charged), D60 (`hold.releasing` is queued inside the transaction).

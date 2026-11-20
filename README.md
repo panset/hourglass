@@ -27,7 +27,7 @@ This starts Hourglass, Keycloak as the login provider, and a simulator standing 
 5. Open Admin, Settings and set the one thing the seed file cannot set: the display label keys to `size`.
 6. Sign in as a realm user. Open a private window at <http://localhost:8080>, choose Sign in with SSO and use `alice` with password `dev-only-alice` (`bob` and `carol` work too). Alice sees "You are not authorized to use Hourglass." That is correct: new users have no role. Use a private window because signing out of Hourglass does not end the Keycloak session.
 7. Approve her. In the admin window open Admin, Users. Alice is listed under pending requests. Give her the `developer` role.
-8. Acquire a setup. In Alice's window reload, open Setups and acquire `lab-03`. Metering starts when the provider reports the setup's resource pool, or after 2 hours. To start it now, create the pool in the simulator and wait for the next poll (polls run every 5 minutes). Release is refused while the pool exists, so delete it and wait for another poll before Alice releases:
+8. Acquire a setup. In Alice's window reload, open Setups and acquire `lab-03`. Metering starts when the provider reports the setup's resource pool, or after 2 hours. To start it now, create the pool in the simulator and wait for the next poll (polls run every 5 minutes). If Alice releases while the pool exists, the hold is marked Releasing and stays metered until the pool is gone, so delete the pool and wait for another poll to finish the release:
 
    ```sh
    curl -X POST localhost:8990/pools -H 'Content-Type: application/json' -d '{"name":"lab-03_RP"}'
@@ -146,6 +146,7 @@ The prerequisites and what CI enforces are in [CONTRIBUTING.md](CONTRIBUTING.md)
 ## Documentation
 
 - [docs/deploying.md](docs/deploying.md): bundled and split mode, images, configuration reference, OIDC, vSphere, backup, metrics, upgrade.
+- [docs/integrating.md](docs/integrating.md): connect an existing lab stack without writing Go. Your service reports what is deployed and how contended the lab is over a token-authenticated HTTP API, and receives webhooks for acquire and release.
 - [docs/extending.md](docs/extending.md): the four interfaces, events, hooks, building your own binary.
 - [CONTRIBUTING.md](CONTRIBUTING.md): building, testing and the rules CI enforces.
 - [docs/SPEC.md](docs/SPEC.md): the functional specification. [docs/decisions.md](docs/decisions.md) records choices where the spec is silent, and [docs/progress.md](docs/progress.md) records what is finished.

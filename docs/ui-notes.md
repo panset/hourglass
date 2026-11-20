@@ -42,7 +42,7 @@ Top bar (see Shared), "My usage" active. Content: max width 1216 px, 32 px paddi
    - "Lab pressure": `82% · 2×`, then a segmented bar (12 px high, grey border, 6 px radius) with widths 50% white (free), 25% `#E5E7EB` (1x), 15% `#9CA3AF` (2x), 10% `#4B5563` (3x), and a 3 px amber marker (`#B45309`) at 82%. The bar has an accessible label: "Pressure bands: free below 50 percent, 1x to 75, 2x to 90, 3x above; currently 82 percent". Sub-line "9 of 11 setups deployed".
 3. Section "Current holds · 1 of 2 allowed" (h2, 16 px). Table "Current holds", columns: Setup, Labels, State, Weight, Cost now, Held for, (blank action column).
    - Sample row: **setup-04**; label chips `size=medium` `site=sjc`; state badge "Deployed"; weight 1; "2.0 tokens / hour"; "2 d 4 h"; button "Release".
-   - Note (13 px, muted): "Charging continues until you release. Tear the setup down first: release is refused while it is still deployed. Holding setup-04 overnight (15 h) at the current multiplier costs 30 tokens."
+   - Note (13 px, muted): "Charging continues until you release. If the setup is still deployed, release is accepted but pending: the hold shows Releasing, keeps charging, and ends at the first poll where the setup is no longer reported. Holding setup-04 overnight (15 h) at the current multiplier costs 30 tokens."
 4. Two columns (auto-fit, min 360 px, 24 px gap):
    - "Tokens per day": bordered card with a placeholder bar chart (18 grey `#9CA3AF` bars, 150 px tall, baseline rule; the last bar, today, is blue `#1D4ED8`; zero days are 2 px stubs). Axis labels "Nov 1" and "Nov 18". Accessible label: bar chart of tokens debited per day this month, today highlighted.
    - "Ledger": table "Ledger", columns When, Type, Detail, Amount, Balance. Sample rows:
@@ -146,7 +146,7 @@ Top bar (admin), "Settings" active.
    - Read-only line below: "Provider: vsphere · Pressure source: vsphere · Metering policy: default (deployed or 2 h after acquire) · Hooks: none · OIDC issuer: [YOUR ISSUER URL]. Extensions, connection settings and secrets come from the config file and are read-only here."
 3. Two columns (each min about 320 to 380 px).
    - Left:
-     - "Enforcement and release": checkbox "Block acquiring at zero tokens" (unchecked), note "Off is shadow mode: usage is metered and balances fall, nobody is blocked."; checkbox "Require teardown before release" (checked), note "Release is refused while the provider still reports the setup. No effect without a provider."
+     - "Enforcement and release": checkbox "Block acquiring at zero tokens" (unchecked), note "Off is shadow mode: usage is metered and balances fall, nobody is blocked."; checkbox "Require teardown before release" (checked), note "A release of a setup the provider still reports is accepted but pending: the hold keeps charging and is released at the first poll where the setup is gone. No effect without a provider."
      - "Allowance and timing": three inputs: "Monthly allowance (tokens)" `300`; "Max setups per developer" `2`; "Poll interval (minutes)" `5`.
      - "Resource name template": label "Template", value `{{.SetupName}}_RP`, hint "Preview: setup-04 becomes setup-04_RP".
    - Right:
@@ -217,7 +217,7 @@ Wireframe shows, spec does not ask for (or says differently):
 
 Spec asks for, wireframe does not show:
 1. Audit log page (`/admin/audit`), including actor and action filters. Build from the spec.
-2. Release refusal message "This setup is still deployed. Tear it down, then release." and any error or empty states.
+2. The Releasing state (a release requested while the setup is still deployed: a "Releasing" badge, no Release button, and a message such as "Release requested for lab-03.") and any error or empty states.
 3. Projected run-out "not this month" variant.
 4. Setups page: the "weight" column and a details JSON view.
 5. Setup inventory: a distinct "disable" action (only an Enabled checkbox in the Edit panel); Add setup form (the panel is shown as edit only).

@@ -7,7 +7,8 @@
 // Steps: I1 service account and token through the UI, I2 first reports and a successful poll, I3 acquire and the
 // hold.acquired webhook, I4 reported deployed starts metering, I5 release of a deployed setup is pending
 // (Releasing, 202, one hold.releasing, still charged), I6 teardown reported completes the release, I7 the reporter
-// goes silent past max_age, I8 service release, I9 negative checks from the reporter's side.
+// goes silent past max_age, I8 service release, I9 negative checks from the reporter's side, I10 the service
+// accounts page end to end for a throwaway account (disable, enable, revoke, delete).
 //
 // Driven outside the UI, as the outside world: the reporter and receiver (the customer's service), the e2e clock
 // control (to move past max_age without waiting), one Keycloak admin call (token lifetimes, as in the acceptance
@@ -210,6 +211,13 @@ test("integration: service account, reported deployments and pressure, webhooks,
   const admin = await adminCtx.newPage();
   const A = () => alice;
   const D = () => admin;
+  // Every request the admin's browser makes; the dashboard must never call the integration routes (SVC-2, SVC-6).
+  const adminRequests: string[] = [];
+  admin.on("request", (r) => adminRequests.push(r.url()));
+  const assertNoIntegrationRequests = () => {
+    expect(adminRequests.length, "the admin browser made requests").toBeGreaterThan(20);
+    expect(adminRequests.filter((u) => new URL(u).pathname.startsWith("/api/v1/integration/"))).toEqual([]);
+  };
 
   try {
     // ---- set-up (the admin's first run and alice's approval; proven in detail by the acceptance run)
@@ -268,12 +276,26 @@ test("integration: service account, reported deployments and pressure, webhooks,
       token = await shown.getByRole("textbox", { name: "Token" }).inputValue();
       expect(token).toMatch(/^hgsa_\d+_[0-9a-f]{64}$/);
       await shown.getByRole("button", { name: "Close" }).click();
+      await expect(shown).toHaveCount(0);
       const acct = ((await json(await admin.request.get("/api/v1/admin/service-accounts"), 200)).service_accounts as J[]).find((a) => a.name === ACCOUNT)!;
       expect([...acct.scopes].sort()).toEqual(["deployments:write", "holds:release", "pressure:write", "state:read"]);
       expect(acct.tokens).toHaveLength(1);
-      expect(JSON.stringify(acct)).not.toContain(token.split("_")[2]!); // the secret is never shown again (SVC-4)
+      const secret = token.split("_")[2]!;
+      expect(JSON.stringify(acct)).not.toContain(secret); // the secret is never shown again (SVC-4)
+      // Nor is it kept anywhere in the browser: storage, URL, or the page after a reload (SVC-4).
+      const stored = () => admin.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+      const gone = async (where: string) => {
+        const text = `${await stored()}\n${admin.url()}\n${await admin.content()}\n${await admin.locator("body").innerText()}`;
+        expect(text, `the token is absent from ${where}`).not.toContain(secret);
+      };
+      await gone("storage, URL and page after Close");
+      await admin.reload();
+      await expect(admin.getByRole("listitem", { name: `Service account ${ACCOUNT}` })).toBeVisible();
+      await gone("storage, URL and page after a reload");
+      expect(await admin.evaluate(() => document.cookie)).not.toContain(secret);
       asserted("account created with the four scopes; a token of the form hgsa_<id>_<64 hex> shown once in the UI");
       asserted("the account list holds one token and never contains the secret");
+      asserted("after Close and after a reload the secret is in neither localStorage, sessionStorage, the URL, a cookie nor the page");
       observe("token_prefix", token.slice(0, 10) + "...");
       reporter = new Reporter(BASE, token);
     });
@@ -300,6 +322,14 @@ test("integration: service account, reported deployments and pressure, webhooks,
       expect(c.last_deployments_report.service_account).toBe(ACCOUNT);
       asserted("both report routes answered 200; the next poll succeeded; the state route shows both reports and no hold");
       asserted(`the admin collector shows the last reports as sent by ${ACCOUNT}`);
+      // And the admin UI shows them in the collector health (Settings).
+      await nav(admin, "Settings");
+      for (const title of ["Last pressure report", "Last deployment report"]) {
+        const tile = admin.getByText(title, { exact: true }).locator("..");
+        await expect(tile, title).toContainText(`received from ${ACCOUNT}; observed`);
+        await expect(tile, title).not.toContainText("None received");
+      }
+      asserted(`the Settings page's collector health shows both last report times, received from ${ACCOUNT}`);
       observe("poll", run);
     });
 
@@ -365,9 +395,14 @@ test("integration: service account, reported deployments and pressure, webhooks,
       const holdId = ev[0]!.body.hold!.id;
       const again = await api(alice, "POST", `/api/v1/holds/${holdId}/release`);
       expect(again.status()).toBe(202);
-      await new Promise((r) => setTimeout(r, 5_000));
       expect(receiver.of("hold.releasing", (e) => e.body.setup?.name === SETUP_A)).toHaveLength(1);
-      asserted("the receiver got exactly one hold.releasing; a repeated request answered 202 and sent no second event");
+      asserted("a repeated request answered 202; the receiver has one hold.releasing (the count is re-checked in I6, after a later event)");
+      // The Setups page shows the same: Releasing in place of the Release button.
+      await nav(alice, "Setups");
+      const setupRow = alice.getByRole("table", { name: "All setups" }).getByRole("row", { name: new RegExp(SETUP_A) });
+      await expect(setupRow.getByText("Releasing")).toBeVisible();
+      await expect(setupRow.getByRole("button", { name: /^Release/ })).toHaveCount(0);
+      asserted("the Setups page also shows Releasing and no Release button on the held setup");
       // Still active and still charged until the teardown is reported.
       const h0 = (await myHolds(alice, "active")).find((x) => x.id === holdId)!;
       expect(h0.release_requested_at).not.toBeNull();
@@ -386,6 +421,9 @@ test("integration: service account, reported deployments and pressure, webhooks,
       await nextOkPoll(admin);
       const ev = await receiver.waitFor("hold.released", (e) => e.body.setup?.name === SETUP_A);
       expect(ev).toHaveLength(1);
+      // The queue delivers in order, so with hold.released received, a late duplicate hold.releasing would already be here.
+      expect(receiver.of("hold.releasing", (e) => e.body.setup?.name === SETUP_A)).toHaveLength(1);
+      asserted("with hold.released received (a later event, delivered in order), still exactly one hold.releasing for lab-03");
       expect(ev[0]!.body.data.forced).toBe(false);
       expect(ev[0]!.body.hold?.released_at).not.toBeNull();
       expect((await myHolds(alice, "active")).filter((x) => x.setup_name === SETUP_A)).toHaveLength(0);
@@ -457,15 +495,17 @@ test("integration: service account, reported deployments and pressure, webhooks,
       expect(ev).toHaveLength(1);
       expect(ev[0]!.body.data).toMatchObject({ forced: false, reason, service_account: ACCOUNT });
       const audit = await json(await admin.request.get("/api/v1/admin/audit?action=hold.service_release"), 200);
-      expect(audit.entries.length).toBeGreaterThanOrEqual(1);
-      expect(audit.entries[0].actor.name).toBe(ACCOUNT);
+      const entry = (audit.entries as J[]).find((e) => e.target === `hold:${holdId}`);
+      expect(entry, `an audit entry for hold:${holdId} among ${JSON.stringify(audit.entries)}`).toBeDefined();
+      expect(entry!.actor.name).toBe(ACCOUNT);
+      expect(entry!.after).toMatchObject({ hold_id: holdId, setup: SETUP_B, reason });
       expect((await myHolds(alice, "active")).filter((x) => x.setup_name === SETUP_B)).toHaveLength(0);
       const again = await svc(token, "POST", `/api/v1/integration/holds/${holdId}/release`, { reason });
       expect(again.status).toBe(409);
       asserted("POST integration/holds/{id}/release with a reason answered 200; the hold ended without a teardown check");
-      asserted(`hold.released arrived with service_account ${ACCOUNT} and the reason; the audit log shows hold.service_release by ${ACCOUNT}`);
+      asserted(`hold.released arrived with service_account ${ACCOUNT} and the reason; the audit log shows hold.service_release by ${ACCOUNT} for hold:${holdId}, with the hold id, the setup and the reason`);
       asserted("a second release of the same hold answers 409");
-      observe("audit_entry", audit.entries[0]);
+      observe("audit_entry", entry);
       await rep.report([]); // the service has torn it down
     });
 
@@ -499,6 +539,64 @@ test("integration: service account, reported deployments and pressure, webhooks,
       await json(await api(admin, "PUT", `/api/v1/admin/service-accounts/${acct.id}`, { description: "scope check", scopes: ["state:read"], enabled: false }), 200);
       expect((await svc(t, "GET", "/api/v1/integration/state")).status).toBe(401);
       asserted("disabling the account makes its token fail with 401 on the next request");
+      assertNoIntegrationRequests();
+      asserted("none of the admin browser's requests so far went to /api/v1/integration/");
+    });
+
+    // ---- j
+    await step("I10", "the admin UI disables, enables, revokes and deletes a throwaway account; its token follows", D, async () => {
+      const NAME = "throwaway";
+      await admin.goto("/admin/service-accounts");
+      await admin.getByRole("button", { name: "Create service account" }).first().click();
+      const dlg = admin.getByRole("dialog", { name: "Create service account" });
+      await dlg.getByRole("textbox", { name: "Name" }).fill(NAME);
+      await dlg.getByRole("checkbox", { name: /^state:read/ }).check();
+      await dlg.getByRole("button", { name: "Create account" }).click();
+      await expect(admin.getByText(`Created ${NAME}.`)).toBeVisible();
+      const item = admin.getByRole("listitem", { name: `Service account ${NAME}` });
+      await item.getByRole("button", { name: `Issue token for ${NAME}` }).click();
+      await admin.getByRole("dialog", { name: `Issue token for ${NAME}` }).getByRole("button", { name: "Issue token" }).click();
+      const shown = admin.getByRole("dialog", { name: `Token for ${NAME}` });
+      const t = await shown.getByRole("textbox", { name: "Token" }).inputValue();
+      await shown.getByRole("button", { name: "Close" }).click();
+      const state = () => svc(t, "GET", "/api/v1/integration/state");
+      expect((await state()).status).toBe(200);
+
+      // Edit: disable, then enable again.
+      const setEnabled = async (on: boolean) => {
+        await item.getByRole("button", { name: `Edit ${NAME}` }).click();
+        const ed = admin.getByRole("dialog", { name: `Edit ${NAME}` });
+        const box = ed.getByRole("checkbox", { name: "Enabled", exact: true });
+        if (on) await box.check();
+        else await box.uncheck();
+        await ed.getByRole("button", { name: "Save changes" }).click();
+        await expect(admin.getByText(`Saved ${NAME}.`)).toBeVisible();
+        await expect(item.getByText(on ? "Enabled" : "Disabled", { exact: true })).toBeVisible();
+      };
+      await setEnabled(false);
+      expect((await state()).status).toBe(401);
+      await setEnabled(true);
+      expect((await state()).status).toBe(200);
+      asserted("a token works (200); after the UI disables the account it gets 401; after the UI enables it again it gets 200");
+
+      // Revoke the token.
+      await item.getByRole("button", { name: new RegExp(`^Revoke token \\d+ of ${NAME}$`) }).click();
+      await admin.getByRole("dialog").getByRole("button", { name: "Revoke token", exact: true }).click();
+      await expect(admin.getByText(new RegExp(`^Revoked token \\d+ of ${NAME}\\.`))).toBeVisible();
+      expect((await state()).status).toBe(401);
+      asserted("after the UI revokes the token it gets 401, though the account is enabled");
+
+      // Delete the account.
+      await item.getByRole("button", { name: `Delete ${NAME}` }).click();
+      await admin.getByRole("dialog").getByRole("button", { name: "Delete account", exact: true }).click();
+      await expect(admin.getByText(`Deleted ${NAME}.`)).toBeVisible();
+      await expect(item).toHaveCount(0);
+      const left = ((await json(await admin.request.get("/api/v1/admin/service-accounts"), 200)).service_accounts as J[]).map((a) => a.name);
+      expect(left).not.toContain(NAME);
+      expect(left).toContain(ACCOUNT);
+      asserted("the UI deletes the throwaway account; it is gone from the list and the main account remains");
+      assertNoIntegrationRequests();
+      asserted("through the whole scenario the admin browser made no request to /api/v1/integration/");
     });
   } finally {
     reporter?.stop();

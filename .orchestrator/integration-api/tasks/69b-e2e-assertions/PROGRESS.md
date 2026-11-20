@@ -1,0 +1,1 @@
+- 2026-11-20 edited e2e/browser/tests/integration.spec.ts (items 1-6, new step I10); typecheck ok; next: e2e/run.sh integration
