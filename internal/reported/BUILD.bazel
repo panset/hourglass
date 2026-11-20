@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "reported",
+    srcs = ["reported.go"],
+    importpath = "github.com/panset/hourglass/internal/reported",
+    visibility = ["//:__subpackages__"],
+    deps = ["//internal/store"],
+)
+
+go_test(
+    name = "reported_test",
+    srcs = ["reported_test.go"],
+    embed = [":reported"],
+    deps = ["//internal/store"],
+)

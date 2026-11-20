@@ -329,13 +329,14 @@ func (q *queries) AllSettings(ctx context.Context) ([]Setting, error) {
 
 // AuditEntry is a row of audit_log. ActorID is nil for the system.
 type AuditEntry struct {
-	ID         int64
-	ActorID    *int64
-	Action     string
-	Target     string
-	BeforeJSON string // empty when null
-	AfterJSON  string // empty when null
-	CreatedAt  time.Time
+	ID           int64
+	ActorID      *int64
+	ActorService string // service account name; ActorID is then nil
+	Action       string
+	Target       string
+	BeforeJSON   string // empty when null
+	AfterJSON    string // empty when null
+	CreatedAt    time.Time
 }
 
 // AuditFilter narrows ListAudit. Zero values mean no filter; a zero Limit
@@ -349,8 +350,8 @@ type AuditFilter struct {
 
 // AppendAudit appends an audit entry and returns its id.
 func (q *queries) AppendAudit(ctx context.Context, e AuditEntry, now time.Time) (int64, error) {
-	res, err := q.db.ExecContext(ctx, `INSERT INTO audit_log (actor_id, action, target, before_json, after_json, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)`, nullInt(e.ActorID), e.Action, e.Target,
+	res, err := q.db.ExecContext(ctx, `INSERT INTO audit_log (actor_id, actor_service, action, target, before_json, after_json, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, nullInt(e.ActorID), nullStr(e.ActorService), e.Action, e.Target,
 		nullStr(e.BeforeJSON), nullStr(e.AfterJSON), FormatTime(now))
 	if err != nil {
 		return 0, mapErr(err)
@@ -360,7 +361,7 @@ func (q *queries) AppendAudit(ctx context.Context, e AuditEntry, now time.Time) 
 
 // ListAudit returns audit entries newest first.
 func (q *queries) ListAudit(ctx context.Context, f AuditFilter) ([]AuditEntry, error) {
-	query := `SELECT id, actor_id, action, target, before_json, after_json, created_at FROM audit_log WHERE 1 = 1`
+	query := `SELECT id, actor_id, actor_service, action, target, before_json, after_json, created_at FROM audit_log WHERE 1 = 1`
 	var args []any
 	if f.ActorID != nil {
 		query += ` AND actor_id = ?`
@@ -379,14 +380,15 @@ func (q *queries) ListAudit(ctx context.Context, f AuditFilter) ([]AuditEntry, e
 		var (
 			e        AuditEntry
 			actor    sql.NullInt64
+			svc      sql.NullString
 			bef, aft sql.NullString
 			at       string
 			err      error
 		)
-		if err = r.Scan(&e.ID, &actor, &e.Action, &e.Target, &bef, &aft, &at); err != nil {
+		if err = r.Scan(&e.ID, &actor, &svc, &e.Action, &e.Target, &bef, &aft, &at); err != nil {
 			return e, err
 		}
-		e.ActorID, e.BeforeJSON, e.AfterJSON = nullInt64Ptr(actor), bef.String, aft.String
+		e.ActorID, e.ActorService, e.BeforeJSON, e.AfterJSON = nullInt64Ptr(actor), svc.String, bef.String, aft.String
 		e.CreatedAt, err = ParseTime(at)
 		return e, err
 	}, query, args...)

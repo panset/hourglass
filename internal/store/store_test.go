@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 4 {
+	if n != 5 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -96,17 +96,23 @@ func TestSchemaColumnsMatchSpec(t *testing.T) {
 		"setups":           {"id", "name", "details_json", "enabled"},
 		"setup_labels":     {"setup_id", "key", "value"},
 		"rules":            {"id", "kind", "position", "selector", "value", "updated_by", "updated_at"},
-		"holds":            {"id", "setup_id", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at", "released_by", "release_reason"},
+		"holds":            {"id", "setup_id", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at", "released_by", "release_reason", "release_requested_at", "released_by_service"},
 		"usage_samples":    {"id", "hold_id", "polled_at", "weight", "rule_selector", "pressure", "multiplier", "debit_mt", "reason"},
 		"ledger":           {"id", "user_id", "period", "type", "amount_mt", "hold_id", "actor_id", "reason", "created_at"},
 		"pressure_samples": {"polled_at", "source", "raw", "smoothed", "multiplier"},
 		"orphans":          {"resource_name", "first_seen_at", "last_seen_at", "labels_json"},
 		"event_deliveries": {"id", "event_type", "hook", "payload_json", "ok", "error", "started_at", "finished_at"},
 		"settings":         {"key", "value_json", "updated_by", "updated_at"},
-		"audit_log":        {"id", "actor_id", "action", "target", "before_json", "after_json", "created_at"},
+		"audit_log":        {"id", "actor_id", "actor_service", "action", "target", "before_json", "after_json", "created_at"},
 		"sessions":         {"id", "user_id", "created_at", "last_seen_at", "expires_at"},
 		"collector_runs":   {"id", "started_at", "finished_at", "ok", "error"},
 		"outages":          {"id", "started_at", "ended_at", "reason"},
+
+		"service_accounts":          {"id", "name", "description", "scopes_json", "enabled", "created_by", "created_at"},
+		"service_tokens":            {"id", "account_id", "token_hash", "created_at", "expires_at", "last_used_at"},
+		"reported_pressure":         {"value", "observed_at", "received_at", "service_account"},
+		"reported_deployments_meta": {"observed_at", "received_at", "service_account"},
+		"reported_deployments":      {"setup_name", "labels_json"},
 	}
 	s := openTemp(t)
 	for table, cols := range spec {
@@ -918,7 +924,12 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "h.db")
 	s := openAtVersion(t, path, 2)
 	a, b := newUser(t, s, "a"), newUser(t, s, "b")
-	h := must(s.CreateHold(ctx, newSetup(t, s, "lab-01"), a.ID, t0))
+	// Raw insert: at schema version 2 the holds table lacks the later columns
+	// that CreateHold reads back.
+	setupID := newSetup(t, s, "lab-01")
+	hr := must(s.sqldb.Exec(`INSERT INTO holds (setup_id, user_id, acquired_at) VALUES (?, ?, ?)`, setupID, a.ID, FormatTime(t0)))
+	holdID := must(hr.LastInsertId())
+	h := Hold{ID: holdID}
 	for _, u := range []int64{a.ID, b.ID} {
 		must(s.AppendLedger(ctx, LedgerEntry{UserID: u, Period: "2026-10", Type: "allowance", AmountMT: 300000}, "2026-10", t0))
 		must(s.AppendLedger(ctx, LedgerEntry{UserID: u, Period: "2026-11", Type: "allowance", AmountMT: 300000}, "2026-11", t0))
@@ -935,7 +946,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&rows)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 4 || rows != 14 || ic != "ok" {
+	if v != 5 || rows != 14 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d, ledger rows %d, integrity %q", v, rows, ic)
 	}
 	var idx []string
@@ -966,7 +977,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s = must(Open(path)) // reopen: nothing to run
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 4 {
+	if n != 5 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
 	}
 }

@@ -20,10 +20,16 @@ type Hold struct {
 	ReleasedAt        *time.Time
 	ReleasedBy        *int64
 	ReleaseReason     string
+	// ReleaseRequestedAt marks a pending release: the user asked to release a
+	// setup that is still deployed. Set once.
+	ReleaseRequestedAt *time.Time
+	// ReleasedByService is the name of the service account that released the
+	// hold, empty otherwise. ReleasedBy is then nil.
+	ReleasedByService string
 }
 
 const holdCols = `id, setup_id, user_id, acquired_at, metering_started_at, deployed_at,
-	released_at, released_by, release_reason`
+	released_at, released_by, release_reason, release_requested_at, released_by_service`
 
 func scanHold(r rowScanner) (Hold, error) {
 	var (
@@ -31,10 +37,11 @@ func scanHold(r rowScanner) (Hold, error) {
 		acq                       string
 		metering, deployed, relAt sql.NullString
 		by                        sql.NullInt64
-		reason                    sql.NullString
+		reason, svc               sql.NullString
+		relReq                    sql.NullString
 		err                       error
 	)
-	if err = r.Scan(&h.ID, &h.SetupID, &h.UserID, &acq, &metering, &deployed, &relAt, &by, &reason); err != nil {
+	if err = r.Scan(&h.ID, &h.SetupID, &h.UserID, &acq, &metering, &deployed, &relAt, &by, &reason, &relReq, &svc); err != nil {
 		return h, err
 	}
 	if h.AcquiredAt, err = ParseTime(acq); err != nil {
@@ -49,7 +56,10 @@ func scanHold(r rowScanner) (Hold, error) {
 	if h.ReleasedAt, err = parseNullTime(relAt); err != nil {
 		return h, err
 	}
-	h.ReleasedBy, h.ReleaseReason = nullInt64Ptr(by), reason.String
+	if h.ReleaseRequestedAt, err = parseNullTime(relReq); err != nil {
+		return h, err
+	}
+	h.ReleasedBy, h.ReleaseReason, h.ReleasedByService = nullInt64Ptr(by), reason.String, svc.String
 	return h, nil
 }
 
@@ -106,6 +116,30 @@ func (q *queries) SetMeteringStarted(ctx context.Context, id int64, t time.Time)
 // SetDeployed records deployed_at once; it reports whether it was set by this call.
 func (q *queries) SetDeployed(ctx context.Context, id int64, t time.Time) (bool, error) {
 	return q.setOnce(ctx, "deployed_at", id, t)
+}
+
+// SetReleaseRequested records release_requested_at once; it reports whether it
+// was set by this call (false if the release was already requested).
+func (q *queries) SetReleaseRequested(ctx context.Context, id int64, t time.Time) (bool, error) {
+	return q.setOnce(ctx, "release_requested_at", id, t)
+}
+
+// ReleaseHoldByService marks an active hold released by a service account:
+// released_by stays null and the account name is recorded as text. Releasing
+// an already released hold returns ErrConflict.
+func (q *queries) ReleaseHoldByService(ctx context.Context, id int64, service, reason string, now time.Time) error {
+	res, err := q.db.ExecContext(ctx, `UPDATE holds SET released_at = ?, released_by = NULL, released_by_service = ?, release_reason = ?
+		WHERE id = ? AND released_at IS NULL`, FormatTime(now), nullStr(service), nullStr(reason), id)
+	if err != nil {
+		return mapErr(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, err := q.GetHold(ctx, id); err != nil {
+			return err
+		}
+		return ErrConflict
+	}
+	return nil
 }
 
 // ReleaseHold marks an active hold released. releasedBy is nil for a release
