@@ -19,6 +19,7 @@ go_test(
         ":reported",
         "//internal/app",
         "//internal/collector",
+        "//internal/holds",
         "//internal/ledger",
         "//internal/reported",
         "//internal/store",
@@ -26,5 +27,7 @@ go_test(
         "//pkg/hourglasstest",
         "//pkg/storedreports",
         "//policies/default",
+        "//pressure/inventory",
+        "//providers/static",
     ],
 )

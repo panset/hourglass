@@ -50,13 +50,14 @@ type setupJSON struct {
 }
 
 type holdJSON struct {
-	ID                int64      `json:"id"`
-	Setup             string     `json:"setup"`
-	UserID            int64      `json:"user_id"`
-	AcquiredAt        time.Time  `json:"acquired_at"`
-	MeteringStartedAt *time.Time `json:"metering_started_at"`
-	DeployedAt        *time.Time `json:"deployed_at"`
-	ReleasedAt        *time.Time `json:"released_at"`
+	ID                 int64      `json:"id"`
+	Setup              string     `json:"setup"`
+	UserID             int64      `json:"user_id"`
+	AcquiredAt         time.Time  `json:"acquired_at"`
+	MeteringStartedAt  *time.Time `json:"metering_started_at"`
+	DeployedAt         *time.Time `json:"deployed_at"`
+	ReleaseRequestedAt *time.Time `json:"release_requested_at"`
+	ReleasedAt         *time.Time `json:"released_at"`
 }
 
 func utcPtr(t *time.Time) *time.Time {
@@ -85,9 +86,10 @@ func (e Event) MarshalJSON() ([]byte, error) {
 	if h := e.Hold; h != nil {
 		j.Hold = &holdJSON{
 			ID: h.ID, Setup: h.SetupName, UserID: h.UserID, AcquiredAt: h.AcquiredAt.UTC(),
-			MeteringStartedAt: utcPtr(h.MeteringStartedAt),
-			DeployedAt:        utcPtr(h.DeployedAt),
-			ReleasedAt:        utcPtr(h.ReleasedAt),
+			MeteringStartedAt:  utcPtr(h.MeteringStartedAt),
+			DeployedAt:         utcPtr(h.DeployedAt),
+			ReleaseRequestedAt: utcPtr(h.ReleaseRequestedAt),
+			ReleasedAt:         utcPtr(h.ReleasedAt),
 		}
 	}
 	return json.Marshal(j)
@@ -116,7 +118,8 @@ func (e *Event) UnmarshalJSON(b []byte) error {
 	if h := j.Hold; h != nil {
 		out.Hold = &Hold{
 			ID: h.ID, SetupName: h.Setup, UserID: h.UserID, AcquiredAt: h.AcquiredAt,
-			MeteringStartedAt: h.MeteringStartedAt, DeployedAt: h.DeployedAt, ReleasedAt: h.ReleasedAt,
+			MeteringStartedAt: h.MeteringStartedAt, DeployedAt: h.DeployedAt,
+			ReleaseRequestedAt: h.ReleaseRequestedAt, ReleasedAt: h.ReleasedAt,
 		}
 	}
 	*e = out

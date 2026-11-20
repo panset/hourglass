@@ -8,7 +8,8 @@ const (
 	EventHoldAcquired        = "hold.acquired"         // the hold is created
 	EventHoldMeteringStarted = "hold.metering_started" // the policy first says to charge
 	EventHoldDeployed        = "hold.deployed"         // the provider first reports the setup
-	EventHoldReleased        = "hold.released"         // the hold ends, by the user or an admin
+	EventHoldReleasing       = "hold.releasing"        // a user asked to release a setup that is still deployed
+	EventHoldReleased        = "hold.released"         // the hold ends, by the user, an admin, a service or the collector
 	EventBalanceLow          = "balance.low"           // a balance first drops below 10% of the allowance
 	EventBalanceOverdrawn    = "balance.overdrawn"     // a balance first reaches zero or below
 	EventUserPending         = "user.pending"          // a new user signs in for the first time
@@ -25,6 +26,7 @@ func EventTypes() []string {
 		EventHoldAcquired,
 		EventHoldMeteringStarted,
 		EventHoldDeployed,
+		EventHoldReleasing,
 		EventHoldReleased,
 		EventBalanceLow,
 		EventBalanceOverdrawn,

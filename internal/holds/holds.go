@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/panset/hourglass/internal/events"
 	"github.com/panset/hourglass/internal/settings"
@@ -31,15 +32,19 @@ const (
 	CodeInsufficientTokens = "insufficient_tokens"
 	CodeHoldLimit          = "hold_limit"
 	CodeHookVeto           = "hook_veto"
-	CodeStillDeployed      = "still_deployed"
 	CodeConflict           = "conflict" // releasing a hold that is already released
 )
 
-// MessageStillDeployed is the refusal shown when a release needs teardown first.
-const MessageStillDeployed = "This setup is still deployed. Tear it down, then release."
-
 // AuditForceRelease is the audit_log action written by a forced release.
 const AuditForceRelease = "hold.force_release"
+
+// AuditServiceRelease is the audit_log action written when a service account
+// releases a hold (HOLD-8).
+const AuditServiceRelease = "hold.service_release"
+
+// MaxServiceReleaseReason is the longest service-release reason, in characters
+// after trimming.
+const MaxServiceReleaseReason = 500
 
 // Error is a refusal with a stable code. Message is safe to show the user.
 type Error struct {
@@ -136,7 +141,8 @@ func hgSetup(s store.Setup) *hourglass.Setup {
 
 func hgHold(h store.Hold, setupName string) *hourglass.Hold {
 	return &hourglass.Hold{ID: h.ID, SetupName: setupName, UserID: h.UserID, AcquiredAt: h.AcquiredAt,
-		MeteringStartedAt: h.MeteringStartedAt, DeployedAt: h.DeployedAt, ReleasedAt: h.ReleasedAt}
+		MeteringStartedAt: h.MeteringStartedAt, DeployedAt: h.DeployedAt,
+		ReleaseRequestedAt: h.ReleaseRequestedAt, ReleasedAt: h.ReleasedAt}
 }
 
 func hasRole(roles []string, r string) bool {
@@ -271,9 +277,20 @@ func limitErr(max int) error {
 	return refuse(CodeHoldLimit, fmt.Sprintf("You already hold the maximum of %d setups.", max))
 }
 
-// Release ends a hold (HOLD-2). The owner may release their own hold; an
-// admin may do the same and may force-release any hold with a reason.
+// Pending reports whether h is a pending release: the user asked to release
+// while the setup was still deployed and the collector has not completed it.
+func Pending(h Hold) bool { return h.ReleasedAt == nil && h.ReleaseRequestedAt != nil }
+
+// Release ends a hold (HOLD-2, HOLD-6). The owner may release their own hold;
+// an admin may do the same and may force-release any hold with a reason.
 // A forced release is audited in the same transaction.
+//
+// When release_requires_teardown is on and the latest successful poll still
+// reports the setup, the hold is not released: release_requested_at is set
+// once, hold.releasing fires once, and the returned hold is still active
+// (Pending reports true). The collector completes it (HOLD-7). A repeat
+// request on a pending hold changes nothing and fires nothing. A forced
+// release completes a pending one at once.
 func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts ReleaseOpts) (Hold, error) {
 	st := s.d.Store
 	_, err := st.GetUser(ctx, actorID)
@@ -316,6 +333,9 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 		return Hold{}, err
 	}
 	if !opts.Force {
+		if h.ReleaseRequestedAt != nil {
+			return h, nil // already pending: the same answer, no second event
+		}
 		cfg, err := settings.Load(ctx, st)
 		if err != nil {
 			return Hold{}, err
@@ -324,7 +344,7 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 			if pv := s.d.Poll(); pv != nil && pv.OK() {
 				// D40: the provider reports a setup under its exact name.
 				if pv.Reported(setup.Name) {
-					return Hold{}, refuse(CodeStillDeployed, MessageStillDeployed)
+					return s.requestRelease(ctx, h, setup)
 				}
 			}
 		}
@@ -371,5 +391,115 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 	oroles, _ := st.GetUserRoles(ctx, h.UserID)
 	s.emit(hourglass.Event{Type: hourglass.EventHoldReleased, Time: now, User: hgUser(owneru, oroles), Setup: hgSetup(setup),
 		Hold: hgHold(out, setup.Name), Data: map[string]any{"forced": opts.Force, "reason": opts.Reason}})
+	return out, nil
+}
+
+// requestRelease marks h as releasing and fires hold.releasing (HOLD-6). The
+// marker is written once: a request that finds it already set (a race with
+// another request) fires nothing. A hold released meanwhile is a conflict.
+//
+// The event is queued inside the transaction, after the marker is written and
+// before the commit. Write transactions are serialized, and every
+// hold.released is queued only after its own commit, so a release that races
+// with this request cannot queue hold.released before hold.releasing (EXT-6).
+// Emit only appends to a queue and never blocks. If the commit then fails, the
+// request returns the error and one hold.releasing has been queued that the
+// state does not show; a retry fires it again.
+func (s *Service) requestRelease(ctx context.Context, h Hold, setup store.Setup) (Hold, error) {
+	now := s.d.Clock.Now()
+	owner, ownerErr := s.d.Store.GetUser(ctx, h.UserID)
+	var roles []string
+	if ownerErr == nil {
+		roles, _ = s.d.Store.GetUserRoles(ctx, h.UserID)
+	} else {
+		s.log.Warn("holds: load hold owner for event", "hold", h.ID, "err", ownerErr)
+	}
+	var out Hold
+	err := s.d.Store.Tx(ctx, func(tx *store.Tx) error {
+		cur, err := tx.GetHold(ctx, h.ID)
+		if err != nil {
+			return err
+		}
+		if cur.ReleasedAt != nil {
+			return store.ErrConflict
+		}
+		first, err := tx.SetReleaseRequested(ctx, h.ID, now)
+		if err != nil {
+			return err
+		}
+		out, err = tx.GetHold(ctx, h.ID)
+		if err != nil {
+			return err
+		}
+		if first && ownerErr == nil {
+			s.emit(hourglass.Event{Type: hourglass.EventHoldReleasing, Time: now, User: hgUser(owner, roles), Setup: hgSetup(setup),
+				Hold: hgHold(out, setup.Name), Data: map[string]any{}})
+		}
+		return nil
+	})
+	if errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) {
+		return Hold{}, refuse(CodeConflict, "This hold is already released.")
+	}
+	if err != nil {
+		return Hold{}, err
+	}
+	return out, nil
+}
+
+// ReleaseByService releases any active hold on behalf of a service account
+// (HOLD-8). The reason is required, 1 to 500 characters after trimming. The
+// teardown check is skipped and a pending release is completed. released_by
+// stays null; the account name is recorded on the hold and as the actor of the
+// hold.service_release audit entry, written in the same transaction.
+func (s *Service) ReleaseByService(ctx context.Context, account string, holdID int64, reason string) (Hold, error) {
+	st := s.d.Store
+	reason = strings.TrimSpace(reason)
+	if n := utf8.RuneCountInString(reason); n < 1 || n > MaxServiceReleaseReason {
+		return Hold{}, refuse(CodeValidation, fmt.Sprintf("reason is required, 1 to %d characters", MaxServiceReleaseReason))
+	}
+	h, err := st.GetHold(ctx, holdID)
+	if errors.Is(err, store.ErrNotFound) {
+		return Hold{}, refuse(CodeNotFound, "Hold not found.")
+	}
+	if err != nil {
+		return Hold{}, err
+	}
+	if h.ReleasedAt != nil {
+		return Hold{}, refuse(CodeConflict, "This hold is already released.")
+	}
+	setup, err := st.GetSetup(ctx, h.SetupID)
+	if err != nil {
+		return Hold{}, err
+	}
+	now := s.d.Clock.Now()
+	var out Hold
+	err = st.Tx(ctx, func(tx *store.Tx) error {
+		if err := tx.ReleaseHoldByService(ctx, holdID, account, reason, now); err != nil {
+			return err
+		}
+		before, _ := json.Marshal(map[string]any{"hold_id": holdID, "setup": setup.Name, "user_id": h.UserID,
+			"acquired_at": store.FormatTime(h.AcquiredAt), "release_requested": h.ReleaseRequestedAt != nil, "released_at": nil})
+		after, _ := json.Marshal(map[string]any{"hold_id": holdID, "setup": setup.Name, "user_id": h.UserID, "reason": reason})
+		if _, err := tx.AppendAudit(ctx, store.AuditEntry{ActorService: account, Action: AuditServiceRelease,
+			Target: fmt.Sprintf("hold:%d", holdID), BeforeJSON: string(before), AfterJSON: string(after)}, now); err != nil {
+			return err
+		}
+		out, err = tx.GetHold(ctx, holdID)
+		return err
+	})
+	if errors.Is(err, store.ErrConflict) || errors.Is(err, store.ErrNotFound) {
+		return Hold{}, refuse(CodeConflict, "This hold is already released.") // released concurrently
+	}
+	if err != nil {
+		return Hold{}, err
+	}
+	owner, err := st.GetUser(ctx, h.UserID)
+	if err != nil {
+		s.log.Warn("holds: load hold owner for event", "hold", holdID, "err", err)
+		return out, nil
+	}
+	roles, _ := st.GetUserRoles(ctx, h.UserID)
+	s.emit(hourglass.Event{Type: hourglass.EventHoldReleased, Time: now, User: hgUser(owner, roles), Setup: hgSetup(setup),
+		Hold: hgHold(out, setup.Name), Data: map[string]any{"forced": false, "reason": reason, "service_account": account}})
 	return out, nil
 }

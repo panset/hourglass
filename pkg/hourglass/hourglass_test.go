@@ -230,6 +230,7 @@ func TestEXT6_EventTypesMatchSpecTable(t *testing.T) {
 		{"hold.acquired", false},
 		{"hold.metering_started", false},
 		{"hold.deployed", false},
+		{"hold.releasing", false},
 		{"hold.released", false},
 		{"balance.low", false},
 		{"balance.overdrawn", false},

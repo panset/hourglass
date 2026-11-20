@@ -474,6 +474,9 @@ type holderJSON struct {
 	Balance float64 `json:"balance_tokens"`
 	Over    bool    `json:"overdrawn"`
 	IsYou   bool    `json:"is_you"`
+	// ReleaseRequestedAt is set while a release the holder asked for waits for
+	// the setup to be torn down (HOLD-6); the UI shows "Releasing".
+	ReleaseRequestedAt *string `json:"release_requested_at"`
 }
 
 type setupAdminJSON struct {
@@ -577,7 +580,8 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 			m := meteringOf(h, l.view)
 			v.HeldSince, v.Metering = &at, &m
 			v.Holder = &holderJSON{UserID: h.UserID, HoldID: h.ID, Name: userDisplayName(hu), Balance: tokens(hu.BalanceMT),
-				Over: hu.BalanceMT <= 0, IsYou: h.UserID == u.ID}
+				Over: hu.BalanceMT <= 0, IsYou: h.UserID == u.ID,
+				ReleaseRequestedAt: tsPtr(h.ReleaseRequestedAt)}
 		case !s.Enabled:
 			v.State = "disabled"
 		}
@@ -682,5 +686,9 @@ func (a *API) releaseHold(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, err)
 		return
 	}
-	a.holdResponse(w, r, http.StatusOK, h)
+	status := http.StatusOK
+	if holds.Pending(h) {
+		status = http.StatusAccepted // HOLD-6: released once the setup is torn down
+	}
+	a.holdResponse(w, r, status, h)
 }

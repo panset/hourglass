@@ -157,7 +157,7 @@ func TestHOLD3_MyHoldsShapeAndStateFilter(t *testing.T) {
 	}
 	h := hs[0].(ujobj)
 	uWantKeys(t, "hold", h, "id", "setup_id", "setup_name", "setup_labels", "user_id", "active", "weight", "acquired_at",
-		"metering_started_at", "deployed_at", "released_at", "deployed", "metering", "cost_per_hour_tokens", "charged_tokens",
+		"metering_started_at", "deployed_at", "release_requested_at", "released_at", "deployed", "metering", "cost_per_hour_tokens", "charged_tokens",
 		"released_by", "release_reason", "forced")
 	if int64(uNum(t, h, "id")) != hid || int64(uNum(t, h, "setup_id")) != sid || h["setup_name"] != "lab-01" ||
 		h["setup_labels"].(ujobj)["tier"] != "a" || h["active"] != true || uNum(t, h, "weight") != 600 {
@@ -184,11 +184,14 @@ func TestHOLD3_MyHoldsShapeAndStateFilter(t *testing.T) {
 	}
 
 	// Release it, then it is past: no cost, released_by set.
-	rel := e.post("/api/v1/holds/"+uItoa(hid)+"/release", &dev, "")
-	uWantErr(t, rel, 409, "still_deployed")
+	pend := uWantOK(t, e.post("/api/v1/holds/"+uItoa(hid)+"/release", &dev, ""), 202) // HOLD-6: still deployed, so pending
+	if pend["active"] != true || pend["released_at"] != nil || pend["release_requested_at"] == nil {
+		t.Errorf("pending hold %v", pend)
+	}
 	e.prov.SetAllocations()
 	e.step(5 * time.Minute)
-	rh := uWantOK(t, e.post("/api/v1/holds/"+uItoa(hid)+"/release", &dev, `{"force":false}`), 200)
+	// The poll without the setup completed the pending release (HOLD-7).
+	rh := uWantOK(t, e.get("/api/v1/me/holds?state=released", &dev), 200)["holds"].([]any)[0].(ujobj)
 	if rh["active"] != false || rh["cost_per_hour_tokens"] != nil || rh["released_at"] == nil || rh["forced"] != false ||
 		rh["released_by"].(ujobj)["name"] != "User dev" || rh["deployed"] != false {
 		t.Errorf("released hold %v", rh)
@@ -395,7 +398,7 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 		t.Errorf("held setup %v", sa)
 	}
 	h := sa["holder"].(ujobj)
-	uWantKeys(t, "holder", h, "user_id", "hold_id", "name", "balance_tokens", "overdrawn", "is_you")
+	uWantKeys(t, "holder", h, "user_id", "hold_id", "name", "balance_tokens", "overdrawn", "is_you", "release_requested_at")
 	if h["name"] != "User peer" || uNum(t, h, "balance_tokens") != 300 || h["overdrawn"] != false || h["is_you"] != false {
 		t.Errorf("holder %v (balance of other users is visible by design)", h)
 	}
@@ -576,12 +579,9 @@ func TestHOLD2_ReleaseRules(t *testing.T) {
 	// Still deployed: refused for the owner, allowed as a forced release.
 	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "lab-a"})
 	e.poll()
-	rec = e.post(path, &dev, `{"force":false}`)
-	uWantErr(t, rec, 409, "still_deployed")
-	var body struct{ Error struct{ Message string } }
-	_ = jsonUnmarshal(rec.Body.Bytes(), &body)
-	if body.Error.Message != "This setup is still deployed. Tear it down, then release." {
-		t.Errorf("message %q", body.Error.Message)
+	pend := uWantOK(t, e.post(path, &dev, `{"force":false}`), 202)
+	if pend["active"] != true || pend["release_requested_at"] == nil || pend["released_at"] != nil {
+		t.Errorf("pending release %v", pend)
 	}
 	h := uWantOK(t, e.post(path, &adm, `{"force":true,"reason":"lab maintenance"}`), 200)
 	if h["active"] != false || h["forced"] != true || h["release_reason"] != "lab maintenance" || h["cost_per_hour_tokens"] != nil ||

@@ -17,6 +17,7 @@ import (
 
 	"github.com/panset/hourglass/internal/app"
 	"github.com/panset/hourglass/internal/collector"
+	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
 	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/store"
@@ -24,7 +25,9 @@ import (
 	"github.com/panset/hourglass/pkg/hourglasstest"
 	"github.com/panset/hourglass/pkg/storedreports"
 	_ "github.com/panset/hourglass/policies/default"
+	_ "github.com/panset/hourglass/pressure/inventory"
 	_ "github.com/panset/hourglass/providers/reported"
+	_ "github.com/panset/hourglass/providers/static"
 )
 
 var bg = context.Background()
@@ -62,13 +65,23 @@ type env struct {
 // default policy and a real store, the way the server does.
 func newEnv(t *testing.T, provCfg, pressCfg string) *env {
 	t.Helper()
+	return newEnvOf(t, "reported", provCfg, "reported", pressCfg)
+}
+
+// newEnvOf is newEnv with chosen extensions. An empty provType means no
+// provider is configured, which the collector accepts.
+func newEnvOf(t *testing.T, provType, provCfg, pressType, pressCfg string) *env {
+	t.Helper()
 	e := &env{t: t, path: filepath.Join(t.TempDir(), "h.db"), clk: hourglasstest.NewFakeClock(time.Time{}), rec: &recorder{}}
 	e.open()
-	prov, err := hourglass.NewProvider("reported", json.RawMessage(provCfg))
-	if err != nil {
-		t.Fatal(err)
+	var prov hourglass.ResourceProvider
+	if provType != "" {
+		var err error
+		if prov, err = hourglass.NewProvider(provType, json.RawMessage(provCfg)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	press, err := hourglass.NewPressureSource("reported", json.RawMessage(pressCfg))
+	press, err := hourglass.NewPressureSource(pressType, json.RawMessage(pressCfg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +222,140 @@ func TestINT5_StaleDeploymentsAloneFailTheProviderOnly(t *testing.T) {
 	e.deployments("lab-01")
 	if err := e.c.RunOnce(bg); err != nil {
 		t.Fatalf("pressure within its own max_age: %v", err)
+	}
+}
+
+// INT-5: the pressure source checks its own report's age. Deployments are
+// fresh and their provider would answer; only the pressure report is old, and
+// the poll must fail on it, write no sample and no debit, and emit poll.failed.
+func TestINT5_StalePressureAloneFailsThePoll(t *testing.T) {
+	e := newEnv(t, `{"max_age":"1h"}`, `{"max_age":"2m"}`)
+	user, h := e.heldSetup("lab-01")
+	e.deployments("lab-01")
+	e.pressure(0.6)
+	if err := e.c.RunOnce(bg); err != nil {
+		t.Fatal(err)
+	}
+	e.clk.Advance(time.Minute)
+	e.deployments("lab-01")
+	e.pressure(0.6)
+	if err := e.c.RunOnce(bg); err != nil {
+		t.Fatal(err)
+	}
+	samples, debits := e.samples(h), e.debits(user)
+	if samples == 0 || debits == 0 {
+		t.Fatalf("setup: samples=%d debits=%d, want some of each from two good polls", samples, debits)
+	}
+
+	// Pressure is 3m old (max_age 2m); deployments are fresh.
+	e.clk.Advance(3 * time.Minute)
+	e.deployments("lab-01")
+	err := e.c.RunOnce(bg)
+	if err == nil || !strings.Contains(err.Error(), "pressure report is 3m0s old") || !strings.Contains(err.Error(), "max_age 2m0s") {
+		t.Fatalf("stale pressure: %v", err)
+	}
+	if e.rec.count(hourglass.EventPollFailed) != 1 || e.samples(h) != samples || e.debits(user) != debits {
+		t.Fatalf("after stale pressure: failed=%d samples=%d (was %d) debits=%d (was %d)",
+			e.rec.count(hourglass.EventPollFailed), e.samples(h), samples, e.debits(user), debits)
+	}
+
+	// A fresh pressure report makes the next poll succeed and charge.
+	e.pressure(0.6)
+	if err := e.c.RunOnce(bg); err != nil {
+		t.Fatalf("fresh pressure: %v", err)
+	}
+	if e.debits(user) <= debits {
+		t.Fatalf("debits after a fresh report = %d, want more than %d", e.debits(user), debits)
+	}
+}
+
+// INT-5: with fresh deployments and no pressure report at all, the poll fails
+// and charges nobody.
+func TestINT5_NoPressureReportYetFailsThePoll(t *testing.T) {
+	e := newEnv(t, `{}`, `{}`)
+	user, h := e.heldSetup("lab-01")
+	e.deployments("lab-01")
+	err := e.c.RunOnce(bg)
+	if err == nil || !strings.Contains(err.Error(), "no pressure report received yet") {
+		t.Fatalf("got %v", err)
+	}
+	if e.rec.count(hourglass.EventPollFailed) != 1 || e.samples(h) != 0 || e.debits(user) != 0 {
+		t.Fatalf("failed=%d samples=%d debits=%d", e.rec.count(hourglass.EventPollFailed), e.samples(h), e.debits(user))
+	}
+}
+
+// INT-5, design "the two extensions work independently": the provider reads
+// reports while the pressure comes from another source. No pressure report is
+// ever sent and the poll must not ask for one.
+func TestINT5_ReportedProviderWithAnotherPressureSource(t *testing.T) {
+	e := newEnvOf(t, "reported", `{}`, "inventory", `{}`)
+	user, h := e.heldSetup("lab-01")
+	e.deployments("lab-01")
+	if err := e.c.RunOnce(bg); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	got, _ := e.st.GetHold(bg, h.ID)
+	if got.DeployedAt == nil || e.rec.count(hourglass.EventHoldDeployed) != 1 {
+		t.Fatalf("hold not deployed from the report: %+v", got)
+	}
+	e.clk.Advance(time.Minute)
+	e.deployments("lab-01")
+	if err := e.c.RunOnce(bg); err != nil {
+		t.Fatalf("second poll: %v", err)
+	}
+	if e.debits(user) == 0 || e.rec.count(hourglass.EventPollFailed) != 0 {
+		t.Fatalf("debits=%d failed=%d", e.debits(user), e.rec.count(hourglass.EventPollFailed))
+	}
+	// The provider alone still goes stale.
+	e.clk.Advance(11 * time.Minute)
+	if err := e.c.RunOnce(bg); err == nil || !strings.Contains(err.Error(), "deployment report") {
+		t.Fatalf("stale deployments: %v", err)
+	}
+}
+
+// INT-5, same design sentence the other way round: the pressure is reported
+// and there is no provider, or another one. No deployment report is needed.
+func TestINT5_ReportedPressureWithNoProviderOrAnotherProvider(t *testing.T) {
+	alloc := filepath.Join(t.TempDir(), "alloc.json")
+	if err := os.WriteFile(alloc, []byte(`[{"resource_name":"lab-01"}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name, provType, provCfg string
+		wantDeployed            bool
+	}{
+		{"no provider", "", ``, false},
+		{"static provider", "static", `{"path":"` + alloc + `"}`, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnvOf(t, c.provType, c.provCfg, "reported", `{}`)
+			user, h := e.heldSetup("lab-01")
+			e.pressure(0.7) // no deployment report is ever sent
+			if err := e.c.RunOnce(bg); err != nil {
+				t.Fatalf("poll: %v", err)
+			}
+			if v := e.c.LastPoll(); !v.OK || v.RawPressure != 0.7 {
+				t.Fatalf("last poll ok=%v raw pressure=%v, want the reported 0.7", v.OK, v.RawPressure)
+			}
+			got, _ := e.st.GetHold(bg, h.ID)
+			if (got.DeployedAt != nil) != c.wantDeployed {
+				t.Fatalf("deployed_at = %v, want deployed=%v", got.DeployedAt, c.wantDeployed)
+			}
+			e.clk.Advance(time.Minute)
+			e.pressure(0.7)
+			if err := e.c.RunOnce(bg); err != nil {
+				t.Fatalf("second poll: %v", err)
+			}
+			if c.wantDeployed && e.debits(user) == 0 {
+				t.Fatal("a deployed hold was not charged")
+			}
+			// The pressure alone goes stale.
+			e.clk.Advance(11 * time.Minute)
+			if err := e.c.RunOnce(bg); err == nil || !strings.Contains(err.Error(), "pressure report") {
+				t.Fatalf("stale pressure: %v", err)
+			}
+		})
 	}
 }
 
@@ -375,5 +522,49 @@ func TestCheckProviderPrintsReportAges(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
+	}
+}
+
+type noVeto struct{ *recorder }
+
+func (noVeto) Veto(context.Context, hourglass.Event) error { return nil }
+
+// D61 (REVIEW), part a. Whether a user's release is pending is decided from the
+// last successful poll's view of the setup, not from the stored report. A
+// report that lists the setup but has not been polled yet does not make the
+// release pending; a report that no longer lists it does not make a release
+// immediate until a poll has read it.
+func TestHOLD6_ReleaseIsDecidedFromTheLastPollNotTheStoredReport(t *testing.T) {
+	e := newEnv(t, `{}`, `{}`)
+	svc := holds.NewService(holds.Deps{Store: e.st, Events: noVeto{e.rec}, ProviderConfigured: true, Clock: e.clk,
+		Poll: func() holds.PollView { return e.c.LastPoll().ForHolds() }})
+	user, h1 := e.heldSetup("lab-01")
+	sid2, err := e.st.CreateSetup(bg, store.Setup{Name: "lab-02", Enabled: true, DetailsJSON: "{}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h2, err := e.st.CreateHold(bg, sid2, user, e.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The report lists lab-01, but no poll has read it: the release is immediate.
+	e.pressure(0.6)
+	e.deployments("lab-01")
+	out, err := svc.Release(bg, user, h1.ID, holds.ReleaseOpts{})
+	if err != nil || holds.Pending(out) || out.ReleasedAt == nil {
+		t.Fatalf("release before any poll, report lists the setup: %+v, %v; want immediate", out, err)
+	}
+
+	// A poll reads a report that lists lab-02. The next report drops it, but no
+	// poll has read that one: the release is still pending.
+	e.deployments("lab-02")
+	if err := e.c.RunOnce(bg); err != nil {
+		t.Fatal(err)
+	}
+	e.deployments()
+	out, err = svc.Release(bg, user, h2.ID, holds.ReleaseOpts{})
+	if err != nil || !holds.Pending(out) || out.ReleasedAt != nil {
+		t.Fatalf("release after the poll, report no longer lists the setup: %+v, %v; want pending", out, err)
 	}
 }

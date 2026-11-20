@@ -337,15 +337,21 @@ export interface paths {
         put?: never;
         /**
          * Release a hold, or force-release as admin
-         * @description HOLD-2. The owner or an admin may call it. With an empty body or
-         *     `{"force": false}` it is a normal release, refused with 409
-         *     `still_deployed` while the provider still reports the setup and
-         *     `release_requires_teardown` is on ("This setup is still deployed. Tear
-         *     it down, then release."). `{"force": true, "reason": "..."}` is the
-         *     admin force-release: it skips the teardown check, needs a non-empty
-         *     reason (400 `validation`, `field` = `reason`) and is audited. `force`
-         *     by a non-admin, or a normal release of another user's hold, is 403
-         *     `forbidden`. An already released hold is 409 `conflict`.
+         * @description HOLD-2, HOLD-6. The owner or an admin may call it. With an empty body
+         *     or `{"force": false}` it is a normal release. While the provider still
+         *     reports the setup and `release_requires_teardown` is on, the hold is
+         *     not released: the answer is 202 with the still-active hold, whose
+         *     `release_requested_at` is set (once; a repeat request returns the same
+         *     202 and fires nothing) and `hold.releasing` fires. The hold stays
+         *     active and metered, and the collector releases it at the first
+         *     successful poll in which the setup is no longer reported. A pending
+         *     release cannot be cancelled. In every other situation the release is
+         *     immediate (200). `{"force": true, "reason": "..."}` is the admin
+         *     force-release: it skips the teardown check, completes a pending release
+         *     at once, needs a non-empty reason (400 `validation`, `field` =
+         *     `reason`) and is audited. `force` by a non-admin, or a normal release
+         *     of another user's hold, is 403 `forbidden`. An already released hold is
+         *     409 `conflict`.
          *
          */
         post: operations["releaseHold"];
@@ -820,8 +826,10 @@ export interface paths {
         /**
          * Release a hold from the service's automation
          * @description Scope `holds:release` (HOLD-8). `reason` is required, 1 to 500
-         *     characters after trimming. The teardown check is skipped. The hold is
-         *     released at once, the account's name is recorded on it, an audit entry
+         *     characters after trimming (400 `validation`, `field` = `reason`). The
+         *     teardown check is skipped. The hold, including one with a pending
+         *     release, is released at once, `released_by` stays null, the account's
+         *     name is recorded on it, an audit entry
          *     `hold.service_release` is written and `hold.released` fires with
          *     `service_account` in `data`. 404 `not_found` for an unknown id, 409
          *     `conflict` if already released.
@@ -843,7 +851,7 @@ export interface components {
          *
          * @enum {string}
          */
-        ErrorCode: "unauthenticated" | "no_role" | "forbidden" | "csrf" | "password_change_required" | "not_found" | "validation" | "invalid_selector" | "insufficient_tokens" | "hold_limit" | "setup_held" | "setup_disabled" | "still_deployed" | "hook_veto" | "has_active_hold" | "last_admin" | "self_demote" | "local_admin_protected" | "conflict" | "stale_report" | "not_configured" | "rate_limited" | "internal" | "not_implemented";
+        ErrorCode: "unauthenticated" | "no_role" | "forbidden" | "csrf" | "password_change_required" | "not_found" | "validation" | "invalid_selector" | "insufficient_tokens" | "hold_limit" | "setup_held" | "setup_disabled" | "hook_veto" | "has_active_hold" | "last_admin" | "self_demote" | "local_admin_protected" | "conflict" | "stale_report" | "not_configured" | "rate_limited" | "internal";
         Error: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -1011,6 +1019,11 @@ export interface components {
             metering_started_at: string | null;
             /** Format: date-time */
             deployed_at: string | null;
+            /**
+             * Format: date-time
+             * @description Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. The server always sends it, null when unset. It is not in `required` only so that existing UI fixtures keep compiling; the UI task may add it.
+             */
+            release_requested_at?: string | null;
             /** Format: date-time */
             released_at: string | null;
             /** @description The provider currently reports the setup. */
@@ -1124,6 +1137,11 @@ export interface components {
             balance_tokens: components["schemas"]["Tokens"];
             overdrawn: boolean;
             is_you: boolean;
+            /**
+             * Format: date-time
+             * @description Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset; not in `required` so existing UI fixtures keep compiling.
+             */
+            release_requested_at?: string | null;
         };
         /** @description Admin-only fields. */
         SetupAdminFields: {
@@ -2156,6 +2174,15 @@ export interface operations {
         responses: {
             /** @description The released hold. */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hold"];
+                };
+            };
+            /** @description The setup is still deployed. The hold is still active with `release_requested_at` set; it is released when the setup is no longer reported. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

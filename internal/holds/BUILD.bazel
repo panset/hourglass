@@ -19,6 +19,7 @@ go_test(
     srcs = [
         "block_test.go",
         "holds_test.go",
+        "pending_test.go",
     ],
     embed = [":holds"],
     deps = [

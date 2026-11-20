@@ -50,6 +50,7 @@ go_test(
         "perf_scale_test.go",
         "permissions_test.go",
         "registration_test.go",
+        "release_pending_test.go",
         "router_test.go",
         "service_accounts_test.go",
         "service_testenv_test.go",

@@ -24,7 +24,6 @@ const (
 	HoldLimit              = "hold_limit"               // 409
 	SetupHeld              = "setup_held"               // 409
 	SetupDisabled          = "setup_disabled"           // 409
-	StillDeployed          = "still_deployed"           // 409
 	HookVeto               = "hook_veto"                // 409
 	HasActiveHold          = "has_active_hold"          // 409
 	LastAdmin              = "last_admin"               // 409
@@ -35,7 +34,6 @@ const (
 	NotConfigured          = "not_configured"           // 409
 	RateLimited            = "rate_limited"             // 429
 	Internal               = "internal"                 // 500
-	NotImplemented         = "not_implemented"          // 501
 )
 
 var statusOf = map[string]int{
@@ -51,7 +49,6 @@ var statusOf = map[string]int{
 	HoldLimit:              http.StatusConflict,
 	SetupHeld:              http.StatusConflict,
 	SetupDisabled:          http.StatusConflict,
-	StillDeployed:          http.StatusConflict,
 	HookVeto:               http.StatusConflict,
 	HasActiveHold:          http.StatusConflict,
 	LastAdmin:              http.StatusConflict,
@@ -62,7 +59,6 @@ var statusOf = map[string]int{
 	NotConfigured:          http.StatusConflict,
 	RateLimited:            http.StatusTooManyRequests,
 	Internal:               http.StatusInternalServerError,
-	NotImplemented:         http.StatusNotImplemented,
 }
 
 // Status returns the HTTP status for a code (500 for an unknown code).

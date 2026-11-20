@@ -245,7 +245,9 @@ func (a *API) auditView(r *http.Request, f store.AuditFilter) (auditListOut, err
 	for _, e := range entries {
 		x := auditEntryOut{ID: e.ID, Action: e.Action, Target: e.Target, CreatedAt: ts(e.CreatedAt),
 			Before: decodeObject(e.BeforeJSON), After: decodeObject(e.AfterJSON)}
-		if e.ActorID == nil {
+		if e.ActorID == nil && e.ActorService != "" {
+			x.Actor = auditActor{Name: e.ActorService} // a service account: id 0, its name (D56)
+		} else if e.ActorID == nil {
 			x.Actor = auditActor{Name: "system"}
 		} else {
 			n, err := nameOf(*e.ActorID)

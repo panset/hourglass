@@ -1,0 +1,6 @@
+- 2026-11-20 Read BRIEF, INTENT, CONTRACT. Starting ./ci.sh (log ci.log) and reading design + code.
+- 2026-11-20 ./ci.sh exit 0 (bazel: 37 test targets, all cached). Read design, D42-D59, handlers_integration.go, internal/reported, holds, collector, providers/reported. Next: go test -race, read tests, mutations in a scratch copy.
+- 2026-11-20 go test -race -count=1 ./... exit 0: 570 top-level tests (1232 with subtests), 0 fail, 0 skip (gotest.log).
+- 2026-11-20 Mutations run in a scratch copy (so ci.sh was not disturbed), each restored and verified by shasum; real repo git diff shasum unchanged (0e162f15...).
+- 2026-11-20 Found: pressure staleness check and app.Run's storedreports.Publish are untested (no test fails when removed); race guards not exercised; leftover not_implemented stub machinery.
+- 2026-11-20 Wrote RESULT.md. Done.

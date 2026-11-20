@@ -38,15 +38,18 @@ go_test(
         "checkprovider_test.go",
         "metrics_test.go",
         "seed_test.go",
+        "storedreports_test.go",
     ],
     embed = [":app"],
     deps = [
         "//internal/app/runhook",
         "//internal/collector",
+        "//internal/reported",
         "//internal/settings",
         "//internal/store",
         "//pkg/hourglass",
         "//pkg/hourglasstest",
+        "//pkg/storedreports",
     ],
 )
 

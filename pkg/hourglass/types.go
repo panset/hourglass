@@ -85,7 +85,10 @@ type Hold struct {
 	AcquiredAt        time.Time
 	MeteringStartedAt *time.Time
 	DeployedAt        *time.Time
-	ReleasedAt        *time.Time
+	// ReleaseRequestedAt is set when a user asked to release the hold while its
+	// setup was still deployed; the hold is released once the setup is gone.
+	ReleaseRequestedAt *time.Time
+	ReleasedAt         *time.Time
 }
 
 // SetupState is an enabled setup as the core resolves it for one poll.

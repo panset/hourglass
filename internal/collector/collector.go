@@ -484,6 +484,17 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 				res.debits++
 			}
 		}
+		// HOLD-7: after metering, complete every pending release whose setup
+		// is no longer reported. Only a successful poll gets here (HOLD-9).
+		for _, h := range holds {
+			ev, err := c.completeRelease(ctx, tx, h, t, allocationFor(h.setup) != nil)
+			if err != nil {
+				return fmt.Errorf("hold %d: complete release: %w", h.row.ID, err)
+			}
+			if ev != nil {
+				res.events = append(res.events, *ev)
+			}
+		}
 		if err := writeOrphans(ctx, tx, setups, holds, reported, t); err != nil {
 			return err
 		}
@@ -566,6 +577,34 @@ func (c *Collector) applyHold(ctx context.Context, tx *store.Tx, h *holdInfo, t 
 	return append(evs, balanceEvents...), debited, nil
 }
 
+// completeRelease releases a hold whose release was requested while its setup
+// was deployed, once the setup is no longer reported (HOLD-7). The hold is
+// read again inside tx, so a hold released or requested meanwhile is seen as
+// it now is. released_by is the owner; the poll time is the release time. It
+// returns the hold.released event to emit after commit, or nil.
+func (c *Collector) completeRelease(ctx context.Context, tx *store.Tx, h *holdInfo, t time.Time, reportedNow bool) (*hourglass.Event, error) {
+	if reportedNow {
+		return nil, nil
+	}
+	cur, err := tx.GetHold(ctx, h.row.ID)
+	if err != nil {
+		return nil, err
+	}
+	if cur.ReleasedAt != nil || cur.ReleaseRequestedAt == nil {
+		return nil, nil
+	}
+	owner := cur.UserID
+	if err := tx.ReleaseHold(ctx, cur.ID, &owner, "", t); err != nil {
+		return nil, err
+	}
+	if cur, err = tx.GetHold(ctx, cur.ID); err != nil {
+		return nil, err
+	}
+	hold, setup, user := toHold(cur, h.setup.row.Name), h.setup.state.Setup, h.state.User
+	return &hourglass.Event{Type: hourglass.EventHoldReleased, Time: t, User: &user, Setup: &setup, Hold: &hold,
+		Data: map[string]any{"forced": false, "reason": ""}}, nil
+}
+
 // writeOrphans records allocations that match a setup with no active hold
 // (disabled setups included) and drops orphans not reported this poll
 // (HOLD-4). Allocations that match no setup are ignored.
@@ -603,7 +642,8 @@ func validWeight(w float64) bool { return !math.IsNaN(w) && !math.IsInf(w, 0) &&
 
 func toHold(h store.Hold, setupName string) hourglass.Hold {
 	return hourglass.Hold{ID: h.ID, SetupName: setupName, UserID: h.UserID, AcquiredAt: h.AcquiredAt,
-		MeteringStartedAt: h.MeteringStartedAt, DeployedAt: h.DeployedAt, ReleasedAt: h.ReleasedAt}
+		MeteringStartedAt: h.MeteringStartedAt, DeployedAt: h.DeployedAt,
+		ReleaseRequestedAt: h.ReleaseRequestedAt, ReleasedAt: h.ReleasedAt}
 }
 
 // callExt runs one extension call with ExtensionTimeout. A panic becomes an

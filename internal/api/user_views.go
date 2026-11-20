@@ -37,24 +37,25 @@ type userRefJSON struct {
 }
 
 type holdJSON struct {
-	ID                int64             `json:"id"`
-	SetupID           int64             `json:"setup_id"`
-	SetupName         string            `json:"setup_name"`
-	SetupLabels       map[string]string `json:"setup_labels"`
-	UserID            int64             `json:"user_id"`
-	Active            bool              `json:"active"`
-	Weight            float64           `json:"weight"`
-	AcquiredAt        string            `json:"acquired_at"`
-	MeteringStartedAt *string           `json:"metering_started_at"`
-	DeployedAt        *string           `json:"deployed_at"`
-	ReleasedAt        *string           `json:"released_at"`
-	Deployed          bool              `json:"deployed"`
-	Metering          meteringJSON      `json:"metering"`
-	CostPerHour       *costJSON         `json:"cost_per_hour_tokens"`
-	ChargedTokens     float64           `json:"charged_tokens"`
-	ReleasedBy        *userRefJSON      `json:"released_by"`
-	ReleaseReason     *string           `json:"release_reason"`
-	Forced            bool              `json:"forced"`
+	ID                 int64             `json:"id"`
+	SetupID            int64             `json:"setup_id"`
+	SetupName          string            `json:"setup_name"`
+	SetupLabels        map[string]string `json:"setup_labels"`
+	UserID             int64             `json:"user_id"`
+	Active             bool              `json:"active"`
+	Weight             float64           `json:"weight"`
+	AcquiredAt         string            `json:"acquired_at"`
+	MeteringStartedAt  *string           `json:"metering_started_at"`
+	DeployedAt         *string           `json:"deployed_at"`
+	ReleaseRequestedAt *string           `json:"release_requested_at"`
+	ReleasedAt         *string           `json:"released_at"`
+	Deployed           bool              `json:"deployed"`
+	Metering           meteringJSON      `json:"metering"`
+	CostPerHour        *costJSON         `json:"cost_per_hour_tokens"`
+	ChargedTokens      float64           `json:"charged_tokens"`
+	ReleasedBy         *userRefJSON      `json:"released_by"`
+	ReleaseReason      *string           `json:"release_reason"`
+	Forced             bool              `json:"forced"`
 }
 
 // lab is the per-request view of the lab every user route needs: settings,
@@ -205,7 +206,8 @@ func (a *API) holdViews(ctx context.Context, l *lab, holds []store.Hold) ([]hold
 		v := holdJSON{
 			ID: h.ID, SetupID: h.SetupID, SetupName: s.Name, SetupLabels: labelsNonNil(s.Labels), UserID: h.UserID,
 			Active: h.ReleasedAt == nil, Weight: w, AcquiredAt: ts(h.AcquiredAt),
-			MeteringStartedAt: tsPtr(h.MeteringStartedAt), DeployedAt: tsPtr(h.DeployedAt), ReleasedAt: tsPtr(h.ReleasedAt),
+			MeteringStartedAt: tsPtr(h.MeteringStartedAt), DeployedAt: tsPtr(h.DeployedAt),
+			ReleaseRequestedAt: tsPtr(h.ReleaseRequestedAt), ReleasedAt: tsPtr(h.ReleasedAt),
 			Metering:      meteringOf(h, l.view),
 			ChargedTokens: tokens(d.charges[h.ID]),
 			ReleaseReason: nullIfEmpty(h.ReleaseReason),

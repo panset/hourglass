@@ -165,7 +165,6 @@ func TestClassifyMapsServiceErrorsPerOpenAPITable(t *testing.T) {
 		{"holds insufficient", &holds.Error{Code: "insufficient_tokens"}, want{"insufficient_tokens", ""}},
 		{"holds hold_limit", &holds.Error{Code: "hold_limit"}, want{"hold_limit", ""}},
 		{"holds hook_veto", &holds.Error{Code: "hook_veto", Message: "frozen"}, want{"hook_veto", ""}},
-		{"holds still_deployed", &holds.Error{Code: "still_deployed"}, want{"still_deployed", ""}},
 		{"holds validation", &holds.Error{Code: "validation"}, want{"validation", ""}},
 		{"wrapped holds", fmt.Errorf("x: %w", &holds.Error{Code: "hold_limit"}), want{"hold_limit", ""}},
 		{"veto", &events.VetoError{Hook: "h", Err: errors.New("no")}, want{"hook_veto", ""}},
@@ -204,7 +203,7 @@ func TestHoldsErrorCodesAreAllKnownToTheAPI(t *testing.T) {
 	// holds' codes must be api error codes with the OpenAPI status.
 	for code, status := range map[string]int{
 		"forbidden": 403, "not_found": 404, "setup_disabled": 409, "setup_held": 409, "insufficient_tokens": 409,
-		"hold_limit": 409, "hook_veto": 409, "still_deployed": 409, "validation": 400,
+		"hold_limit": 409, "hook_veto": 409, "validation": 400,
 	} {
 		if got := apierr.Status(code); got != status {
 			t.Errorf("%s -> %d, want %d", code, got, status)

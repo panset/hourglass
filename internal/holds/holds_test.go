@@ -388,7 +388,7 @@ func TestHOLD3_AcquireEventsOrderAndContent(t *testing.T) {
 	}
 }
 
-func TestHOLD2_ReleaseRefusedWhileReportedAllowedAfter(t *testing.T) {
+func TestHOLD2_ReleaseWhileReportedIsPendingAllowedAfter(t *testing.T) {
 	e := newEnv(t)
 	u := e.user("u", 10, store.RoleDeveloper)
 	h, err := e.svc.Acquire(bg, u, e.setup("s", true))
@@ -396,17 +396,25 @@ func TestHOLD2_ReleaseRefusedWhileReportedAllowedAfter(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.poll.reported["s"] = true
-	_, err = e.svc.Release(bg, u, h.ID, ReleaseOpts{})
-	wantCode(t, err, CodeStillDeployed)
-	if err.Error() != MessageStillDeployed {
-		t.Fatalf("message %q", err.Error())
+	pend, err := e.svc.Release(bg, u, h.ID, ReleaseOpts{})
+	if err != nil || !Pending(pend) {
+		t.Fatalf("release while reported: %+v, %v; want a pending release", pend, err)
 	}
 	if n := e.countHolds(u); n != 1 {
-		t.Fatal("hold released despite refusal")
+		t.Fatal("hold released while the setup is deployed")
 	}
+	// A pending release is completed by the collector, not by a second click.
 	e.poll.reported["s"] = false
+	if again, err := e.svc.Release(bg, u, h.ID, ReleaseOpts{}); err != nil || !Pending(again) {
+		t.Fatalf("repeat request: %+v, %v; want the same pending answer", again, err)
+	}
+	// A hold on a setup that is not reported is released at once.
+	h2, err := e.svc.Acquire(bg, u, e.setup("t", true))
+	if err != nil {
+		t.Fatal(err)
+	}
 	e.clk.Advance(time.Hour)
-	out, err := e.svc.Release(bg, u, h.ID, ReleaseOpts{})
+	out, err := e.svc.Release(bg, u, h2.ID, ReleaseOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,8 +466,10 @@ func TestHOLD2_ReleaseMatchesAllocationBySetupName(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.poll.reported["t"] = true
-	_, err = e.svc.Release(bg, u, h.ID, ReleaseOpts{})
-	wantCode(t, err, CodeStillDeployed)
+	out, err := e.svc.Release(bg, u, h.ID, ReleaseOpts{})
+	if err != nil || !Pending(out) {
+		t.Fatalf("an exact name match must make the release pending: %+v, %v", out, err)
+	}
 }
 
 func TestHOLD2_ForceReleaseNeedsAdminAndReasonAndIsAudited(t *testing.T) {
@@ -537,8 +547,9 @@ func TestHOLD2_AdminReleasesOwnHoldLikeAnyone(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.poll.reported["s"] = true
-	_, err = e.svc.Release(bg, admin, h.ID, ReleaseOpts{})
-	wantCode(t, err, CodeStillDeployed)
+	if out, err := e.svc.Release(bg, admin, h.ID, ReleaseOpts{}); err != nil || !Pending(out) {
+		t.Fatalf("admin release while reported: %+v, %v; want a pending release", out, err)
+	}
 	e.poll.reported["s"] = false
 	if _, err := e.svc.Release(bg, admin, h.ID, ReleaseOpts{}); err != nil {
 		t.Fatal(err)

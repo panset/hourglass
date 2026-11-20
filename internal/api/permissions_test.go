@@ -521,14 +521,6 @@ func permWantAllowed(t *testing.T, r Route, rec *httptest.ResponseRecorder) {
 		t.Errorf("refused although allowed: %d %s", rec.Code, rec.Body)
 		return
 	}
-	// An integration route that is still a stub answers 501 not_implemented
-	// once the token and the scope pass.
-	if integrationStubs[r.OperationID] {
-		if rec.Code != http.StatusNotImplemented || permErrCode(rec) != apierr.NotImplemented {
-			t.Errorf("status = %d, want the stub's 501 not_implemented: %s", rec.Code, rec.Body)
-		}
-		return
-	}
 	if rec.Code >= 500 {
 		t.Errorf("server error: %d %s", rec.Code, rec.Body)
 		return
@@ -607,12 +599,6 @@ var permExtraCover = map[string]string{
 	"reportDeployments":    "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
 	"getIntegrationState":  "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
 	"serviceReleaseHold":   "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
-}
-
-// integrationStubs are the integration routes whose handler still answers
-// 501 not_implemented. The task that implements a route removes it here.
-var integrationStubs = map[string]bool{
-	"serviceReleaseHold": true,
 }
 
 func routeOf(t *testing.T, op string) Route {

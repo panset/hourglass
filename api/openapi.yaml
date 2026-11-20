@@ -453,15 +453,21 @@ paths:
       tags: [Holds]
       summary: Release a hold, or force-release as admin
       description: |
-        HOLD-2. The owner or an admin may call it. With an empty body or
-        `{"force": false}` it is a normal release, refused with 409
-        `still_deployed` while the provider still reports the setup and
-        `release_requires_teardown` is on ("This setup is still deployed. Tear
-        it down, then release."). `{"force": true, "reason": "..."}` is the
-        admin force-release: it skips the teardown check, needs a non-empty
-        reason (400 `validation`, `field` = `reason`) and is audited. `force`
-        by a non-admin, or a normal release of another user's hold, is 403
-        `forbidden`. An already released hold is 409 `conflict`.
+        HOLD-2, HOLD-6. The owner or an admin may call it. With an empty body
+        or `{"force": false}` it is a normal release. While the provider still
+        reports the setup and `release_requires_teardown` is on, the hold is
+        not released: the answer is 202 with the still-active hold, whose
+        `release_requested_at` is set (once; a repeat request returns the same
+        202 and fires nothing) and `hold.releasing` fires. The hold stays
+        active and metered, and the collector releases it at the first
+        successful poll in which the setup is no longer reported. A pending
+        release cannot be cancelled. In every other situation the release is
+        immediate (200). `{"force": true, "reason": "..."}` is the admin
+        force-release: it skips the teardown check, completes a pending release
+        at once, needs a non-empty reason (400 `validation`, `field` =
+        `reason`) and is audited. `force` by a non-admin, or a normal release
+        of another user's hold, is 403 `forbidden`. An already released hold is
+        409 `conflict`.
       x-roles: role
       x-csrf: true
       parameters:
@@ -475,6 +481,11 @@ paths:
       responses:
         '200':
           description: The released hold.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '202':
+          description: The setup is still deployed. The hold is still active with `release_requested_at` set; it is released when the setup is no longer reported.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Hold'}
@@ -1214,8 +1225,10 @@ paths:
       summary: Release a hold from the service's automation
       description: |
         Scope `holds:release` (HOLD-8). `reason` is required, 1 to 500
-        characters after trimming. The teardown check is skipped. The hold is
-        released at once, the account's name is recorded on it, an audit entry
+        characters after trimming (400 `validation`, `field` = `reason`). The
+        teardown check is skipped. The hold, including one with a pending
+        release, is released at once, `released_by` stays null, the account's
+        name is recorded on it, an audit entry
         `hold.service_release` is written and `hold.released` fires with
         `service_account` in `data`. 404 `not_found` for an unknown id, 409
         `conflict` if already released.
@@ -1356,7 +1369,6 @@ components:
         - hold_limit
         - setup_held
         - setup_disabled
-        - still_deployed
         - hook_veto
         - has_active_hold
         - last_admin
@@ -1367,7 +1379,6 @@ components:
         - not_configured
         - rate_limited
         - internal
-        - not_implemented
       x-http-status:
         unauthenticated: 401
         no_role: 403
@@ -1381,7 +1392,6 @@ components:
         hold_limit: 409
         setup_held: 409
         setup_disabled: 409
-        still_deployed: 409
         hook_veto: 409
         has_active_hold: 409
         last_admin: 409
@@ -1392,7 +1402,6 @@ components:
         not_configured: 409
         rate_limited: 429
         internal: 500
-        not_implemented: 501
     Error:
       type: object
       required: [error]
@@ -1585,6 +1594,7 @@ components:
         acquired_at: {type: string, format: date-time}
         metering_started_at: {type: string, format: date-time, nullable: true}
         deployed_at: {type: string, format: date-time, nullable: true}
+        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. The server always sends it, null when unset. It is not in `required` only so that existing UI fixtures keep compiling; the UI task may add it."}
         released_at: {type: string, format: date-time, nullable: true}
         deployed: {type: boolean, description: The provider currently reports the setup.}
         metering: {$ref: '#/components/schemas/MeteringState'}
@@ -1712,6 +1722,7 @@ components:
         balance_tokens: {$ref: '#/components/schemas/Tokens'}
         overdrawn: {type: boolean}
         is_you: {type: boolean}
+        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset; not in `required` so existing UI fixtures keep compiling."}
     SetupAdminFields:
       type: object
       description: Admin-only fields.

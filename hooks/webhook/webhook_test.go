@@ -77,6 +77,7 @@ func TestEXT3_FactoryConfig(t *testing.T) {
 		{"ftp", `{"url":"ftp://x.test"}`, false},
 		{"no host", `{"url":"http://"}`, false},
 		{"relative", `{"url":"/hook"}`, false},
+		{"hold.releasing type", `{"url":"http://x.test","types":["hold.releasing"]}`, true},
 		{"unknown type", `{"url":"http://x.test","types":["hold.nope"]}`, false},
 	}
 	for _, c := range cases {

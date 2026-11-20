@@ -613,7 +613,7 @@ func TestSVC8_DesignTableDecidesEveryNewRouteForEveryPrincipal(t *testing.T) {
 }
 
 // reachedHandler reports that a request passed authentication and the scope
-// check: the route answered 200, or the service release's 501 stub.
+// check: the route answered 200.
 func reachedHandler(rec *httptest.ResponseRecorder) bool {
-	return rec.Code == http.StatusOK || rec.Code == http.StatusNotImplemented
+	return rec.Code == http.StatusOK
 }

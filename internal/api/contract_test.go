@@ -337,8 +337,7 @@ func (c *contract) call(b *backend, validRequest bool, method, path string, s *s
 }
 
 // callBearer sends one request with a service token and no session, and
-// validates the response like call. A 501 from a stub is not validated (the
-// contract does not document it); it is returned for the caller to check.
+// validates the response like call.
 func (c *contract) callBearer(b *backend, method, path, token, body string) *httptest.ResponseRecorder {
 	c.t.Helper()
 	newReq := func() *http.Request {
@@ -362,9 +361,6 @@ func (c *contract) callBearer(b *backend, method, path, token, body string) *htt
 	rec := httptest.NewRecorder()
 	b.h.ServeHTTP(rec, newReq())
 	op := route.Operation.OperationID
-	if rec.Code == http.StatusNotImplemented && integrationStubs[op] {
-		return rec
-	}
 	rvi := &openapi3filter.RequestValidationInput{Request: newReq(), PathParams: params, Route: route,
 		Options: &openapi3filter.Options{AuthenticationFunc: openapi3filter.NoopAuthenticationFunc}}
 	in := &openapi3filter.ResponseValidationInput{RequestValidationInput: rvi, Status: rec.Code, Header: rec.Header(),
@@ -650,7 +646,7 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		{403, "POST", fmt.Sprintf("/api/v1/holds/%d/release", w.holdA), &w.devB, ""},
 		{404, "POST", "/api/v1/holds/99999/release", &w.devB, ""},
 		{409, "POST", fmt.Sprintf("/api/v1/holds/%d/release", w.holdB), &w.devB, ""},
-		{409, "POST", fmt.Sprintf("/api/v1/holds/%d/release", w.holdA), &w.devA, ""}, // still deployed
+		{202, "POST", fmt.Sprintf("/api/v1/holds/%d/release", w.holdA), &w.devA, ""}, // still deployed: pending (HOLD-6)
 		{403, "POST", "/auth/local/password", &w.devA, `{"current_password":"a","new_password":"b"}`},
 		{400, "POST", "/auth/local/password", &w.local, `{"current_password":"wrong","new_password":"another long password"}`},
 	} {
@@ -713,7 +709,11 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		{400, "PUT", "/api/v1/integration/deployments", `{"deployments":[{"setup":"a"},{"setup":"a"}]}`},
 		{409, "PUT", "/api/v1/integration/pressure", `{"value":0.4,"observed_at":"2026-11-19T08:00:00Z"}`},
 		{409, "PUT", "/api/v1/integration/deployments", `{"observed_at":"2026-11-19T08:00:00Z","deployments":[]}`},
-		{200, "GET", "/api/v1/integration/state", ""},
+		{200, "GET", "/api/v1/integration/state", ""}, // holdA is pending here: release_requested_at is set
+		{400, "POST", fmt.Sprintf("/api/v1/integration/holds/%d/release", w.holdA), `{"reason":"  "}`},
+		{404, "POST", "/api/v1/integration/holds/99999/release", `{"reason":"gone"}`},
+		{200, "POST", fmt.Sprintf("/api/v1/integration/holds/%d/release", w.holdA), `{"reason":"torn down by automation"}`},
+		{409, "POST", fmt.Sprintf("/api/v1/integration/holds/%d/release", w.holdA), `{"reason":"again"}`},
 	} {
 		w.status(c.callBearer(w.backend, tc.method, tc.path, rep.token, tc.body), tc.status)
 	}
@@ -735,9 +735,7 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 	// one, a validated error.
 	for _, r := range Routes() {
 		op := w.opByID(r.OperationID)
-		if c.ok[r.OperationID] == 0 && !integrationStubs[r.OperationID] {
-			// A stub answers only 501 (not part of the contract); the task
-			// that implements the route removes it from integrationStubs.
+		if c.ok[r.OperationID] == 0 {
 			t.Errorf("%s: no success response was validated", r.OperationID)
 		}
 		documentsError := false

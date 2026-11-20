@@ -3,12 +3,14 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/panset/hourglass/internal/api/apierr"
 	"github.com/panset/hourglass/internal/auth"
+	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
@@ -18,13 +20,6 @@ import (
 // "Integration routes"). They run behind auth.ServiceRoute: a service token
 // with the route's scope, no cookie, no CSRF. A handler reads its caller with
 // auth.ServiceFrom(r.Context()).
-//
-// The service release still answers 501 not_implemented after authentication
-// and the scope check pass; the pending-release task replaces it.
-
-func notImplemented(w http.ResponseWriter, _ *http.Request) {
-	apierr.WriteCode(w, apierr.NotImplemented, "not implemented yet")
-}
 
 // Limits of a deployments report (the 1 MB body limit is MaxBodyBytes).
 const (
@@ -319,4 +314,39 @@ func (a *API) getIntegrationState(w http.ResponseWriter, r *http.Request) {
 }
 
 // serviceReleaseHold is POST /api/v1/integration/holds/{id}/release (scope holds:release).
-func (a *API) serviceReleaseHold(w http.ResponseWriter, r *http.Request) { notImplemented(w, r) }
+// The reason is required (400 validation, field reason); the teardown check is
+// skipped; a pending release is completed (HOLD-8). internal/holds decides.
+func (a *API) serviceReleaseHold(w http.ResponseWriter, r *http.Request) {
+	p, ok := auth.ServiceFrom(r.Context())
+	if !ok {
+		apierr.Write(w, http.StatusUnauthorized, apierr.Unauthenticated, "a valid service token is required")
+		return
+	}
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req serviceReleaseRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if a.d.Holds == nil {
+		a.writeError(w, r, errors.New("api: holds service is not configured"))
+		return
+	}
+	h, err := a.d.Holds.ReleaseByService(r.Context(), p.AccountName, id, req.Reason)
+	if err != nil {
+		var he *holds.Error
+		if errors.As(err, &he) && he.Code == holds.CodeValidation {
+			apierr.WriteField(w, http.StatusBadRequest, apierr.Validation, he.Message, "reason")
+			return
+		}
+		a.writeError(w, r, err)
+		return
+	}
+	a.holdResponse(w, r, http.StatusOK, h)
+}
+
+type serviceReleaseRequest struct {
+	Reason string `json:"reason"`
+}

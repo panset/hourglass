@@ -73,7 +73,7 @@ func TestEXT6_EventJSONShape(t *testing.T) {
 		t.Errorf("data = %v, want {}", m["data"])
 	}
 	h := m["hold"].(map[string]any)
-	for _, k := range []string{"id", "setup", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at"} {
+	for _, k := range []string{"id", "setup", "user_id", "acquired_at", "metering_started_at", "deployed_at", "release_requested_at", "released_at"} {
 		if _, ok := h[k]; !ok {
 			t.Errorf("hold missing key %q", k)
 		}
