@@ -20,7 +20,7 @@ EXT_IMPORT_RE='^github\.com/panset/hourglass/(providers|pressure|policies|hooks|
 GOVMOMI='vmware/govmomi'
 TEXT_RE='vcenter|vsphere|govmomi|vcsim|resource pool|resourcepool|extralarge|size=|keycloak'
 NAMING_RE='_RP|resource_name_template'
-NAMING_EXEMPT='internal/store/migrations/0004_drop_resource_name_override.sql internal/store/migrate0004_test.go'
+NAMING_EXEMPT='internal/store/migrations/0004_drop_resource_name_override.sql internal/store/migrate0004_test.go internal/store/upgradenote.go'
 
 violations=0
 report() {

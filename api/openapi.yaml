@@ -686,7 +686,7 @@ paths:
       operationId: updateSetup
       tags: [Admin setups]
       summary: Replace a setup's editable fields
-      description: 'Full replacement of `SetupInput`. Setting `enabled: false` on a held setup is 409 `has_active_hold` (SET-5). A duplicate name is 409 `conflict`.'
+      description: 'Full replacement of `SetupInput`. Setting `enabled: false` on a held setup is 409 `has_active_hold` (SET-5). Changing the name of a held setup is also 409 `has_active_hold` (the name ties the setup to what the provider reports, D40); release the hold first. Other edits to a held setup are allowed. A duplicate name is 409 `conflict`.'
       x-roles: admin
       x-csrf: true
       parameters:

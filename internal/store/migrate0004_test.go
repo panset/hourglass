@@ -5,6 +5,7 @@ package store
 import (
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -63,5 +64,71 @@ func TestD40_Migration0004DropsResourceNameOverride(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
 	if n != 4 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
+	}
+}
+
+// D40: an upgrade that drops a non-default template or an override leaves one
+// note for the operator; the template value is capped at 100 characters; the
+// default template, no overrides and a fresh database leave none.
+func TestD40_Migration0004NotesDroppedNaming(t *testing.T) {
+	long := `"{{.SetupName}}` + strings.Repeat("x", 300) + `"`
+	cases := []struct {
+		name, setups, tmpl string
+		want               []string // substrings of the single note; nil for no note
+		notWant            string
+	}{
+		{"default template, no override", `('a', NULL), ('b', '')`, `"{{.SetupName}}"`, nil, ""},
+		{"no template row, no override", `('a', NULL)`, ``, nil, ""},
+		{"template only", `('a', NULL)`, `"{{.SetupName}}_RP"`, []string{`"{{.SetupName}}_RP"`}, "setup(s) had"},
+		{"overrides only", `('a', 'x'), ('b', 'y'), ('c', NULL)`, ``, []string{"2 setup(s) had a resource name override"}, "template"},
+		{"both", `('a', 'x')`, `"{{.SetupName}}_RP"`, []string{`"{{.SetupName}}_RP"`, "1 setup(s)"}, ""},
+		{"long template", `('a', NULL)`, long, []string{"..."}, strings.Repeat("x", 101)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "h.db")
+			s := openAtVersion(t, path, 3)
+			q := []string{`INSERT INTO setups (name, resource_name_override) VALUES ` + c.setups}
+			if c.tmpl != "" {
+				q = append(q, `INSERT INTO settings (key, value_json, updated_at) VALUES ('resource_name_template', '`+c.tmpl+`', '2026-11-01T00:00:00.000Z')`)
+			}
+			for _, x := range q {
+				if _, err := s.sqldb.Exec(x); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s.Close()
+			s = must(Open(path))
+			defer s.Close()
+			notes := s.UpgradeNotes()
+			if c.want == nil {
+				if len(notes) != 0 {
+					t.Fatalf("notes = %v", notes)
+				}
+				return
+			}
+			if len(notes) != 1 {
+				t.Fatalf("notes = %v", notes)
+			}
+			for _, w := range c.want {
+				if !strings.Contains(notes[0], w) {
+					t.Errorf("note %q lacks %q", notes[0], w)
+				}
+			}
+			if c.notWant != "" && strings.Contains(notes[0], c.notWant) {
+				t.Errorf("note %q contains %q", notes[0], c.notWant)
+			}
+			s.Close()
+			if again := must(Open(path)); len(again.UpgradeNotes()) != 0 {
+				t.Errorf("second open notes = %v", again.UpgradeNotes())
+			} else {
+				again.Close()
+			}
+		})
+	}
+	if s := must(Open(filepath.Join(t.TempDir(), "fresh.db"))); len(s.UpgradeNotes()) != 0 {
+		t.Errorf("fresh database notes = %v", s.UpgradeNotes())
+	} else {
+		s.Close()
 	}
 }

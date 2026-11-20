@@ -543,6 +543,13 @@ func (a *API) updateSetup(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
+		if old.Name != in.name {
+			// D40: the name ties the setup to what the provider reports, so a
+			// rename under a hold would drop the teardown guard.
+			if err := noActiveHold(ctx, tx, id, "a setup with an active hold cannot be renamed; release it first"); err != nil {
+				return err
+			}
+		}
 		s := store.Setup{ID: id, Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled}
 		if err := tx.UpdateSetup(ctx, s); err != nil {
 			if errors.Is(err, store.ErrConflict) {

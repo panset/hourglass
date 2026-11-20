@@ -157,6 +157,19 @@ describe("SET-5 disable, delete, force-release", () => {
     expect(await screen.findByText("Setup is held.")).toBeInTheDocument();
   });
 
+  it("shows the API message when renaming a held setup is refused", async () => {
+    const msg = "a setup with an active hold cannot be renamed; release it first";
+    mockApi(routes({ "PUT /api/v1/admin/setups/4": () => errorResponse(409, "has_active_hold", msg) }));
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Edit setup-04" }));
+    const panel = screen.getByRole("complementary", { name: "Edit setup" });
+    const name = within(panel).getByLabelText("Name");
+    await userEvent.clear(name);
+    await userEvent.type(name, "setup-04b");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+  });
+
   it("deletes after confirmation", async () => {
     const { calls } = mockApi(routes({ "DELETE /api/v1/admin/setups/7": new Response(null, { status: 204 }) }));
     render(<Page />);

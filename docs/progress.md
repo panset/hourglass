@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-19
+Last updated: 2026-11-20
 
 Status of Hourglass v1 against the spec in [SPEC.md](SPEC.md). Decisions are
 in [decisions.md](decisions.md). The task-by-task record (briefs, results,
@@ -20,6 +20,25 @@ code, and pushed. The four "done" criteria hold:
 
 Nothing has been run against a real vCenter. See "First run against a real
 vCenter" below.
+
+## Changes to the spec made at the owner's direction (2026-11-20)
+
+These two changes were requested after v1 was complete. They are built and
+independently verified. The end-to-end acceptance test has NOT yet been
+re-run on them (it needs the ports the owner's demo stack is using);
+`./ci.sh` passes on them, with 35 of 35 Bazel test targets.
+
+- **D40:** the core no longer has a resource-name template or a per-setup
+  override (supersedes SET-4). A provider's allocation belongs to a setup
+  when its reported name equals the setup's name. The `vsphere` extension
+  takes `pool_name_prefix` and `pool_name_suffix` in its own config; the
+  reference scenario uses suffix `_RP`. Migration 0004 drops the column.
+  Renaming a setup while it is held is refused.
+- **D41:** admins land on Setups after sign-in; My usage moves from `/` to
+  `/usage`.
+
+`docs/SPEC.md` is a copy of the source document and still shows the old
+text for both; the source needs the same edits.
 
 ## Milestones
 
@@ -48,7 +67,7 @@ The findings that mattered:
 - **Metering:** a clock stepping backwards could double-charge; a poll at
   exactly midnight on the 1st could run ahead of the rollover. Both fixed.
 - **Security:** an admin could save a resource-name template that hung the
-  collector; a route registered outside the route table would have escaped
+  collector (the template has since been removed, D40); a route registered outside the route table would have escaped
   the permissions tests; rule changes were audited without before and after
   values; deleting every setup would re-apply the seed. All fixed. No
   critical or high findings; a user with no role got no data from any
@@ -85,10 +104,9 @@ The findings that mattered:
   instant could write a carry-over twice. The spec is single-instance and
   the process serialises its own rollovers, so this needs two processes on
   one database file, which `docs/deploying.md` says not to do.
-- **Reference scenario settings:** the resource-name template
-  (`{{.SetupName}}_RP`) and the `size` display column are admin settings,
-  set once in Settings after first start; the seed file covers setups and
-  rate rules only (D33).
+- **Reference scenario settings:** the `size` display column is an admin
+  setting, set once in Settings after first start; the seed file covers
+  setups and rate rules only (D33).
 - **Not covered:** mobile screen widths; accessibility beyond keyboard
   focus in dialogs and panels; a browser download quirk on this machine
   (Playwright's Chromium install can hang; `e2e/README.md` has the
@@ -102,7 +120,8 @@ Mocks cannot settle these (from the spec, with what was learned):
 
 - [ ] The read-only vCenter role has every privilege the provider needs
       (the built-in Read-only role appears sufficient; inferred, not run).
-- [ ] The real resource pool layout matches the template. Clusters inside
+- [ ] The real resource pool names match `pool_name_prefix` /
+      `pool_name_suffix` in the vsphere config. Clusters inside
       host sub-folders are not discovered (D27).
 - [ ] The pressure source's cluster numbers agree with what vCenter shows.
       They are read as reservations, not live usage (D6).
@@ -135,6 +154,8 @@ All decisions are in [decisions.md](decisions.md). The ones marked
 | D30 | Three build- or test-only npm packages with licenses outside the spec's list are allowlisted. |
 | D31 | The local admin sign-in limit is per account. |
 | D39 | The stray binary stays in history unless you ask for a rewrite. |
+| D40 | Owner-directed: resource naming moved out of the core into the provider. |
+| D41 | Owner-directed: admins land on Setups; My usage is at `/usage`. |
 
 Also worth a look, though not marked: D33 (reference-scenario settings are
 not seedable), D34 and D38 (what the end-to-end test does outside the UI),

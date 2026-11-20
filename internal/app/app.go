@@ -166,6 +166,9 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	if err != nil {
 		return err
 	}
+	for _, n := range st.UpgradeNotes() {
+		log.Warn(n)
+	}
 	closeStore := func() {
 		if err := st.Close(); err != nil {
 			log.Error("closing the database failed", "err", err)

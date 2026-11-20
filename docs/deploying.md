@@ -333,6 +333,10 @@ Schema changes ship as numbered SQL migrations embedded in the binary and applie
 - A database whose schema is newer than the binary is refused at start (`database schema version N is newer than this binary`).
 - A restart loses at most one poll, which is not charged.
 
+### Upgrading from a build with the resource name template
+
+Earlier builds had a resource name template setting and a per-setup resource name override. Migration 0004 removes both. A setup now matches the provider's allocation with exactly its own name. Before upgrading, set `pool_name_prefix` / `pool_name_suffix` in the `vsphere` provider block (or the equivalent in your own provider) so that what the provider reports equals your setup names. For example, a template of `{{.SetupName}}_RP` becomes `pool_name_suffix: _RP`. Otherwise setups stop matching what the provider reports: nothing deploys and release is no longer blocked. When the migration removes a non-default template or any override, the server logs one warning at start with the number of setups that had overrides (a template is shown at most 100 characters).
+
 ## Data retention
 
 | Data | Kept |

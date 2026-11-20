@@ -15,6 +15,7 @@ go_library(
         "rules.go",
         "setups.go",
         "store.go",
+        "upgradenote.go",
         "usage.go",
         "users.go",
     ],

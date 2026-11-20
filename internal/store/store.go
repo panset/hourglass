@@ -104,6 +104,7 @@ func (s *Store) StatementCount() int64 { return s.count.Load() }
 type Store struct {
 	queries
 	sqldb *sql.DB
+	notes []string // see UpgradeNotes
 }
 
 // Tx is a transaction; it offers the same methods as Store.
@@ -265,6 +266,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("store: database schema version %d is newer than this binary (%d)",
 			current.Int64, len(migs))
 	}
+	s.noteDroppedNaming(ctx, int(current.Int64))
 	for _, m := range migs {
 		if m.version <= int(current.Int64) {
 			continue

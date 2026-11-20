@@ -226,7 +226,9 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
   // Admin first run (not a numbered step of the checklist, but the spec's first-run checklist): through Settings.
   await step("A0", "local admin signs in, changes the password, configures Settings", D, async () => {
     await adminSignIn(admin!);
-    asserted("admin form sign-in, forced password change completed, navigation shown");
+    await expect(admin!).toHaveURL(/\/setups$/);
+    await expect(admin!.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Setups" })).toHaveAttribute("aria-current", "page");
+    asserted("admin form sign-in, forced password change completed, navigation shown, admin lands on Setups (/setups)");
     await nav(admin!, "Settings");
     await expect(admin!.getByRole("heading", { name: "Settings" })).toBeVisible();
     const p = admin!;
@@ -288,6 +290,7 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await expect(p.getByRole("listitem").filter({ hasText: "alice@example.com" })).toHaveCount(0);
     const q = alice!;
     await q.goto("/");
+    await expect(q).toHaveURL(/\/usage$/);
     await expect(q.getByRole("heading", { name: "My usage" })).toBeVisible();
     await expect(q.locator('section[aria-label="Tokens left"]')).toContainText("300");
     await expect(q.locator("header")).toContainText("300 tokens");

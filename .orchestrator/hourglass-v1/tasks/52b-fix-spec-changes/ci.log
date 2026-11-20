@@ -1,0 +1,81 @@
+core-genericity: OK (139 core files, 154 Go files checked, no violations)
+license check ok: 25 Go modules, 267 npm packages
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:gazelle (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 0.230s, Critical Path: 0.00s
+INFO: 1 process: 1 internal.
+INFO: Build completed successfully, 1 total action
+INFO: Running command line: bazel-bin/gazelle update '-mode=diff' '-build_file_name=BUILD.bazel'
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed 254 targets (0 packages loaded, 0 targets configured).
+[6 / 82] Vite ui/dist; 1s darwin-sandbox ... (3 actions running)
+INFO: Found 254 targets...
+INFO: Elapsed time: 2.806s, Critical Path: 2.55s
+INFO: 7 processes: 1 internal, 3 darwin-sandbox, 3 local.
+INFO: Build completed successfully, 7 total actions
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+[0 / 1] checking cached actions
+INFO: Analyzed 254 targets (0 packages loaded, 0 targets configured).
+[34 / 36] 33 / 35 tests; Testing //ui:typecheck; 1s darwin-sandbox ... (2 actions running)
+[34 / 36] 33 / 35 tests; Testing //ui:typecheck; 4s darwin-sandbox ... (2 actions running)
+[35 / 36] 34 / 35 tests; Testing //ui:test; 6s darwin-sandbox
+INFO: Found 219 targets and 35 test targets...
+INFO: Elapsed time: 6.933s, Critical Path: 6.68s
+INFO: 4 processes: 6 darwin-sandbox.
+INFO: Build completed successfully, 4 total actions
+//cmd/hourglass-ui:hourglass-ui_test                            (cached) PASSED in 0.5s
+//cmd/hourglassd:ui_modes_test                                  (cached) PASSED in 2.9s
+//e2e/hourglassd-e2e:hourglassd-e2e_test                        (cached) PASSED in 0.6s
+//e2e/simulator:simulator_test                                  (cached) PASSED in 1.5s
+//examples/custom/busiestsite:busiestsite_test                  (cached) PASSED in 0.3s
+//examples/custom/businesshours:businesshours_test              (cached) PASSED in 0.3s
+//examples/custom/cmd/labd:labd_test                            (cached) PASSED in 1.2s
+//examples/custom/filedir:filedir_test                          (cached) PASSED in 0.3s
+//examples/custom/logfile:logfile_test                          (cached) PASSED in 0.2s
+//hooks/webhook:webhook_test                                    (cached) PASSED in 0.6s
+//internal/api:api_test                                         (cached) PASSED in 19.4s
+//internal/api/apierr:apierr_test                               (cached) PASSED in 0.2s
+//internal/app:app_test                                         (cached) PASSED in 4.2s
+//internal/auth:auth_test                                       (cached) PASSED in 13.0s
+//internal/collector:collector_test                             (cached) PASSED in 2.5s
+//internal/config:config_test                                   (cached) PASSED in 0.4s
+//internal/events:events_test                                   (cached) PASSED in 0.8s
+//internal/holds:holds_test                                     (cached) PASSED in 0.8s
+//internal/ledger:ledger_test                                   (cached) PASSED in 0.6s
+//internal/metering:metering_test                               (cached) PASSED in 0.2s
+//internal/rules:rules_test                                     (cached) PASSED in 0.3s
+//internal/settings:settings_test                               (cached) PASSED in 0.3s
+//internal/store:store_test                                     (cached) PASSED in 2.0s
+//internal/uiserve:uiserve_test                                 (cached) PASSED in 0.3s
+//internal/uiserve:uiserve_ui_test                              (cached) PASSED in 0.3s
+//internal/version:version_test                                 (cached) PASSED in 0.2s
+//pkg/hourglass:hourglass_test                                  (cached) PASSED in 0.2s
+//pkg/hourglasstest:hourglasstest_test                          (cached) PASSED in 1.4s
+//policies/default:default_test                                 (cached) PASSED in 0.3s
+//pressure/inventory:inventory_test                             (cached) PASSED in 0.3s
+//providers/static:static_test                                  (cached) PASSED in 0.3s
+//providers/vsphere:vsphere_test                                (cached) PASSED in 3.9s
+//ui:api_schema_drift_test                                               PASSED in 0.1s
+//ui:test                                                                PASSED in 5.5s
+//ui:typecheck                                                           PASSED in 3.7s
+
+Executed 3 out of 35 tests: 35 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

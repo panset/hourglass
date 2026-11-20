@@ -168,6 +168,41 @@ func TestSET1_UpdateSetup(t *testing.T) {
 	adErr(t, e.send("PUT", setupPath+"/0", body), 400, "validation")
 }
 
+// D40, SET-5: the name ties a setup to what the provider reports, so a held
+// setup cannot be renamed; labels and details can still change, and an
+// unheld setup can be renamed.
+func TestSET5_D40_HeldSetupCannotBeRenamed(t *testing.T) {
+	e := newAdEnv(t)
+	d := e.dev("dev")
+	id := e.setup("lab-01", true, nil)
+	free := e.setup("lab-02", true, nil)
+	h := e.hold(id, d.user.ID)
+	path := setupPath + "/" + uItoa(id)
+
+	r := e.send("PUT", path, setupBody("renamed", `{}`, true))
+	adErr(t, r, 409, "has_active_hold")
+	if !strings.Contains(r.Body.String(), "release it first") {
+		t.Errorf("body = %s", r.Body.String())
+	}
+	if got, err := e.st.GetSetup(uBg, id); err != nil || got.Name != "lab-01" {
+		t.Errorf("setup after refused rename = %+v, %v", got, err)
+	}
+	if n := len(e.audits("setup.update")); n != 0 {
+		t.Errorf("refused rename wrote %d audit rows", n)
+	}
+	s := uWantOK(t, e.send("PUT", path, setupBody("lab-01", `{"edited":true}`, true)), 200)
+	if s["name"] != "lab-01" || s["state"] != "held" {
+		t.Errorf("same-name edit = %v", s)
+	}
+	if _, err := e.st.ActiveHoldForSetup(uBg, id); err != nil || h.ID == 0 {
+		t.Errorf("hold lost: %v", err)
+	}
+	s = uWantOK(t, e.send("PUT", setupPath+"/"+uItoa(free), setupBody("lab-03", `{}`, true)), 200)
+	if s["name"] != "lab-03" {
+		t.Errorf("rename of an unheld setup = %v", s)
+	}
+}
+
 func TestSET5_HeldSetupCannotBeDisabledOrDeleted(t *testing.T) {
 	e := newAdEnv(t)
 	d := e.dev("dev")
