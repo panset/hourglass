@@ -14,9 +14,11 @@ import (
 	"github.com/panset/hourglass/internal/app/runhook"
 	"github.com/panset/hourglass/internal/collector"
 	"github.com/panset/hourglass/internal/config"
+	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
 	"github.com/panset/hourglass/pkg/hourglass"
+	"github.com/panset/hourglass/pkg/storedreports"
 )
 
 // CheckOptions configure CheckProvider.
@@ -61,6 +63,24 @@ func CheckProvider(ctx context.Context, opts CheckOptions) error {
 		return err
 	}
 
+	// The reported extensions read the stored reports; the database is
+	// opened read-only, as for the setups below.
+	var ages []string
+	if _, _, sel := reportedSelected(cfg); sel {
+		if _, statErr := os.Stat(cfg.Database); statErr == nil {
+			rst, err := store.OpenReadOnly(cfg.Database)
+			if err != nil {
+				return err
+			}
+			defer rst.Close()
+			rd := StoredReader{reported.New(rst, systemClock{})}
+			defer storedreports.Publish(rd)()
+			ages = reportAges(ctx, cfg, rd)
+		} else {
+			ages = reportAges(ctx, cfg, nil)
+		}
+	}
+
 	set, setups, holdNames, source, err := loadSetups(ctx, cfg)
 	if err != nil {
 		return err
@@ -101,6 +121,9 @@ func CheckProvider(ctx context.Context, opts CheckOptions) error {
 
 	w := stdout
 	fmt.Fprintf(w, "setups: %d (%s)\n", len(refs), source)
+	for _, l := range ages {
+		fmt.Fprintln(w, l)
+	}
 	if ext.provider == nil {
 		fmt.Fprintln(w, "provider: none configured (no allocations to match)")
 	} else {
@@ -216,4 +239,49 @@ func callWithTimeout[T any](ctx context.Context, fn func(context.Context) (T, er
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
 	return fn(ctx)
+}
+
+// reportedSelected reports whether the provider and the pressure source are
+// the reported extensions.
+func reportedSelected(cfg config.Config) (prov, press, any bool) {
+	_, prov, _ = config.ReportedMaxAge(cfg.Provider)
+	_, press, _ = config.ReportedMaxAge(&cfg.Pressure)
+	return prov, press, prov || press
+}
+
+// reportAges describes the age of each stored report in use; rd is nil when
+// there is no database yet.
+func reportAges(ctx context.Context, cfg config.Config, rd storedreports.Reader) []string {
+	prov, press, _ := reportedSelected(cfg)
+	var out []string
+	if prov {
+		out = append(out, "deployment report: "+describeAge(func() (time.Time, time.Duration, error) {
+			if rd == nil {
+				return time.Time{}, 0, storedreports.ErrNoReport
+			}
+			d, err := rd.Deployments(ctx)
+			return d.ObservedAt, d.Age, err
+		}))
+	}
+	if press {
+		out = append(out, "pressure report: "+describeAge(func() (time.Time, time.Duration, error) {
+			if rd == nil {
+				return time.Time{}, 0, storedreports.ErrNoReport
+			}
+			p, err := rd.Pressure(ctx)
+			return p.ObservedAt, p.Age, err
+		}))
+	}
+	return out
+}
+
+func describeAge(get func() (time.Time, time.Duration, error)) string {
+	at, age, err := get()
+	switch {
+	case errors.Is(err, storedreports.ErrNoReport):
+		return "none received yet"
+	case err != nil:
+		return "unreadable: " + err.Error()
+	}
+	return fmt.Sprintf("age %s (observed_at %s)", age.Round(time.Second), at.UTC().Format(time.RFC3339))
 }

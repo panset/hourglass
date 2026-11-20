@@ -33,6 +33,7 @@ import (
 	_ "github.com/panset/hourglass/pkg/hourglass/server" // implements hourglass.Run (EXT-5)
 	_ "github.com/panset/hourglass/policies/default"
 	_ "github.com/panset/hourglass/pressure/inventory"
+	_ "github.com/panset/hourglass/providers/reported"
 	_ "github.com/panset/hourglass/providers/static"
 	_ "github.com/panset/hourglass/providers/vsphere"
 )

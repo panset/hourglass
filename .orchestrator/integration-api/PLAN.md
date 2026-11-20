@@ -14,8 +14,8 @@ store. Later tasks are outlines and are re-planned when the one before returns.
 | 61 | 2 | Service accounts: bearer auth, service principal, `ServiceRoute(scope)`, failed-attempt rate limit, `AccessService`, six admin routes, OpenAPI, permissions test (SVC-1..8) | build | opus | 60 | `internal/auth/`, `internal/api/`, `api/openapi.yaml`, `ui/src/api/schema.gen.ts` | verified |
 | 62 | 2 | Independent verification of 60-61, with a security read of the token path | verify | opus | 61 | (read-only) | done (findings: 62b) |
 | 63 | 3 | Report routes and state route; OpenAPI and contract test (INT-1..4, INT-8) | build | sonnet | 62 | `internal/api/`, `internal/reported/`, `api/`, config | done (verified in 66) |
-| 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | running |
-| 65 | 5 | Pending release, `hold.releasing`, collector completion, service release route (HOLD-6..9, CMP-1) | build | sonnet | 64 | `internal/holds/`, `internal/collector/`, `internal/api/`, `pkg/hourglass/`, `hooks/webhook/`, `api/` | pending |
+| 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | done (verified in 66) |
+| 65 | 5 | Pending release, `hold.releasing`, collector completion, service release route (HOLD-6..9, CMP-1) | build | sonnet | 64 | `internal/holds/`, `internal/collector/`, `internal/api/`, `pkg/hourglass/`, `hooks/webhook/`, `api/` | running |
 | 66 | 5 | Independent verification of 63-65 | verify | opus | 65 | (read-only) | pending |
 | 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | pending |
 | 68 | 7 | End-to-end scenario with `reported` extensions and a scripted reporter: acquire, deploy, release request, teardown, completion, reporter going silent | build | sonnet | 67 | `deploy/`, `e2e/` | pending |

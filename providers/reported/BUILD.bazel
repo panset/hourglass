@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "reported",
+    srcs = ["reported.go"],
+    importpath = "github.com/panset/hourglass/providers/reported",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/hourglass",
+        "//pkg/storedreports",
+    ],
+)
+
+go_test(
+    name = "reported_test",
+    srcs = ["reported_test.go"],
+    deps = [
+        ":reported",
+        "//internal/app",
+        "//internal/collector",
+        "//internal/ledger",
+        "//internal/reported",
+        "//internal/store",
+        "//pkg/hourglass",
+        "//pkg/hourglasstest",
+        "//pkg/storedreports",
+        "//policies/default",
+    ],
+)

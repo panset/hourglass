@@ -8,6 +8,7 @@ go_library(
         "checkprovider.go",
         "metrics.go",
         "seed.go",
+        "storedreports.go",
     ],
     importpath = "github.com/panset/hourglass/internal/app",
     visibility = ["//:__subpackages__"],
@@ -20,11 +21,13 @@ go_library(
         "//internal/events",
         "//internal/holds",
         "//internal/ledger",
+        "//internal/reported",
         "//internal/rules",
         "//internal/settings",
         "//internal/store",
         "//internal/uiserve",
         "//pkg/hourglass",
+        "//pkg/storedreports",
     ],
 )
 

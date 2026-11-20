@@ -27,9 +27,11 @@ import (
 	"github.com/panset/hourglass/internal/events"
 	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/store"
 	"github.com/panset/hourglass/internal/uiserve"
 	"github.com/panset/hourglass/pkg/hourglass"
+	"github.com/panset/hourglass/pkg/storedreports"
 )
 
 func init() { runhook.Impl = Run }
@@ -178,6 +180,9 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	if opts.Clock != nil {
 		clock = opts.Clock
 	}
+	// The reported extensions read the stored reports through this window; it
+	// is published for the life of the server.
+	defer storedreports.Publish(StoredReader{reported.New(st, clock)})()
 	// The seed comes before the local admin: a bad seed file must not use up the
 	// one-time print of a generated admin password.
 	if applied, err := ImportSeed(ctx, st, cfg.Seed, clock.Now()); err != nil {

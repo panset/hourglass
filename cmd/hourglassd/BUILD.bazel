@@ -15,6 +15,7 @@ go_library(
         "//pkg/hourglass/server",
         "//policies/default",
         "//pressure/inventory",
+        "//providers/reported",
         "//providers/static",
         "//providers/vsphere",
     ],
