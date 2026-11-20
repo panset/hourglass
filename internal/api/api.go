@@ -6,9 +6,11 @@
 //
 // Handlers live in three places so parallel work never collides:
 //
-//	handlers_user.go   the "any role" data routes (me, pressure, setups, acquire, release)
-//	handlers_admin.go  the admin routes
-//	health.go          GET /healthz
+//	handlers_user.go         the "any role" data routes (me, pressure, setups, acquire, release)
+//	handlers_admin.go        the admin routes
+//	handlers_service.go      the service-account admin routes
+//	handlers_integration.go  the /api/v1/integration/ routes (service tokens)
+//	health.go                GET /healthz
 //
 // The /auth/* routes, GET /api/v1/auth/methods and GET /api/v1/session are
 // served by internal/auth.
@@ -112,7 +114,7 @@ func build(d Deps) (http.Handler, *registrar) {
 		if !ok {
 			panic(fmt.Sprintf("api: no handler for operation %s", r.OperationID))
 		}
-		reg.register(r.Method+" "+r.Pattern, a.guard(r.Access, h))
+		reg.register(r.Method+" "+r.Pattern, a.guard(r, h))
 	}
 	// Anything else under /api/ or /auth/ is a JSON not_found, never HTML.
 	reg.register("/api/", http.HandlerFunc(notFound))
@@ -137,17 +139,23 @@ func build(d Deps) (http.Handler, *registrar) {
 // guard wraps a handler in the middleware chain of an access level. Role and
 // admin routes get role/admin check, then the forced-password-change guard,
 // then CSRF on state-changing methods (so 401 comes before 403, and CSRF is
-// only checked for a caller that is allowed in at all).
-func (a *API) guard(acc Access, h http.Handler) http.Handler {
-	switch acc {
+// only checked for a caller that is allowed in at all). Service routes get
+// the bearer token and the route's scope, and nothing that reads a cookie.
+func (a *API) guard(r Route, h http.Handler) http.Handler {
+	switch r.Access {
 	case AccessPublic:
 		return h
 	case AccessRole:
 		return a.d.Auth.RoleRoute(h)
 	case AccessAdmin:
 		return a.d.Auth.AdminRoute(h)
+	case AccessService:
+		if !strings.HasPrefix(r.Pattern, auth.IntegrationPrefix) {
+			panic("api: service route " + r.Pattern + " is outside " + auth.IntegrationPrefix)
+		}
+		return a.d.Auth.ServiceRoute(r.Scope, h)
 	default:
-		panic("api: access level " + string(acc) + " is only served by internal/auth")
+		panic("api: access level " + string(r.Access) + " is only served by internal/auth")
 	}
 }
 
@@ -180,6 +188,18 @@ func (a *API) handlers() map[string]http.HandlerFunc {
 		"updateSettings": a.updateSettings,
 		"getCollector":   a.getCollector,
 		"listAudit":      a.listAudit,
+		// handlers_service.go
+		"listServiceAccounts":  a.listServiceAccounts,
+		"createServiceAccount": a.createServiceAccount,
+		"updateServiceAccount": a.updateServiceAccount,
+		"deleteServiceAccount": a.deleteServiceAccount,
+		"issueServiceToken":    a.issueServiceToken,
+		"revokeServiceToken":   a.revokeServiceToken,
+		// handlers_integration.go
+		"reportPressure":      a.reportPressure,
+		"reportDeployments":   a.reportDeployments,
+		"getIntegrationState": a.getIntegrationState,
+		"serviceReleaseHold":  a.serviceReleaseHold,
 	}
 }
 

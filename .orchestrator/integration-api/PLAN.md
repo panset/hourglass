@@ -10,10 +10,10 @@ store. Later tasks are outlines and are re-planned when the one before returns.
 | # | M | Task | Kind | Model | Depends on | Writes to | Status |
 |---|---|---|---|---|---|---|---|
 | 59 | 0 | Commit the owner's edits to the design doc and guide, unchanged | - | orchestrator | - | - | done (5808957) |
-| 60 | 1 | Migration 0005, store queries, `internal/reported` (ordering, staleness, atomic replace) (INT-2,3,6 at store level) | build | sonnet | 59 | `internal/store/`, `internal/reported/` | done (verified in 62) |
-| 61 | 2 | Service accounts: bearer auth, service principal, `ServiceRoute(scope)`, failed-attempt rate limit, `AccessService`, six admin routes, OpenAPI, permissions test (SVC-1..8) | build | opus | 60 | `internal/auth/`, `internal/api/`, `api/openapi.yaml`, `ui/src/api/schema.gen.ts` | running |
-| 62 | 2 | Independent verification of 60-61, with a security read of the token path | verify | opus | 61 | (read-only) | pending |
-| 63 | 3 | Report routes and state route; OpenAPI and contract test (INT-1..4, INT-8) | build | sonnet | 62 | `internal/api/`, `internal/reported/`, `api/`, config | pending |
+| 60 | 1 | Migration 0005, store queries, `internal/reported` (ordering, staleness, atomic replace) (INT-2,3,6 at store level) | build | sonnet | 59 | `internal/store/`, `internal/reported/` | verified |
+| 61 | 2 | Service accounts: bearer auth, service principal, `ServiceRoute(scope)`, failed-attempt rate limit, `AccessService`, six admin routes, OpenAPI, permissions test (SVC-1..8) | build | opus | 60 | `internal/auth/`, `internal/api/`, `api/openapi.yaml`, `ui/src/api/schema.gen.ts` | verified |
+| 62 | 2 | Independent verification of 60-61, with a security read of the token path | verify | opus | 61 | (read-only) | done (findings: 62b) |
+| 63 | 3 | Report routes and state route; OpenAPI and contract test (INT-1..4, INT-8) | build | sonnet | 62 | `internal/api/`, `internal/reported/`, `api/`, config | running |
 | 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | pending |
 | 65 | 5 | Pending release, `hold.releasing`, collector completion, service release route (HOLD-6..9, CMP-1) | build | sonnet | 64 | `internal/holds/`, `internal/collector/`, `internal/api/`, `pkg/hourglass/`, `hooks/webhook/`, `api/` | pending |
 | 66 | 5 | Independent verification of 63-65 | verify | opus | 65 | (read-only) | pending |
@@ -42,3 +42,11 @@ Fix tasks after a verification are numbered with a letter (62b, 66b, ...).
 - `docs/decisions.md`: D42 and D43 by the orchestrator in milestone 1; agents
   append from D44.
 - The end-to-end test needs Docker and stays outside `bazel test //...`.
+
+## Added during the work
+
+| # | Task | Model | Status |
+|---|---|---|---|
+| 62 | Verification found 1 high (valid token locked out by the failure limiter), 6 low | opus | done |
+| 62b | Fix the findings of 62 | sonnet | verified |
+| 62c | Verify the fixes of 62b | sonnet | done: all closed |

@@ -77,9 +77,10 @@ type Service struct {
 	csrfKey  []byte // HMAC key for CSRF tokens
 	stateKey []byte // HMAC key for the OIDC flow cookie
 
-	limiter   failureLimiter
-	localMu   sync.Mutex // serializes local password checks (bounds argon2 memory, makes the limit exact)
-	dummyHash string     // verified against for unknown usernames (equal timing)
+	limiter       failureLimiter
+	bearerLimiter addrLimiter // failed service-token attempts per client address (SVC-7)
+	localMu       sync.Mutex  // serializes local password checks (bounds argon2 memory, makes the limit exact)
+	dummyHash     string      // verified against for unknown usernames (equal timing)
 
 	oidcMu   sync.Mutex
 	provider *oidc.Provider
@@ -172,6 +173,7 @@ type ctxKey int
 const (
 	userKey ctxKey = iota
 	sessionKey
+	serviceKey
 )
 
 // UserFrom returns the signed-in user, if any.

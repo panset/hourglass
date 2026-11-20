@@ -612,6 +612,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/service-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List service accounts with their tokens
+         * @description SVC-6. Every account by name, with its scopes, enabled flag and each
+         *     token's id, creation, expiry and last-used times. A token itself is
+         *     never listed (SVC-4).
+         *
+         */
+        get: operations["listServiceAccounts"];
+        put?: never;
+        /**
+         * Create a service account
+         * @description SVC-6. The account starts enabled and without a token. `name` is 1 to
+         *     64 letters, digits, `.`, `_` or `-`, starting with a letter or digit,
+         *     and cannot change later; a duplicate is 409 `conflict`. `scopes` is any
+         *     subset of the four scopes; an unknown scope is 400 `validation`
+         *     (`field` = `scopes`). Audited as `service_account.create`.
+         *
+         */
+        post: operations["createServiceAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/service-accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change a service account's description, scopes and enabled flag
+         * @description SVC-5, SVC-6. Full replacement of the three fields, all required.
+         *     Disabling the account, or removing a scope, takes effect on the
+         *     account's next request. Audited as `service_account.update`.
+         *
+         */
+        put: operations["updateServiceAccount"];
+        post?: never;
+        /**
+         * Delete a service account and its tokens
+         * @description SVC-5, SVC-6. Its tokens are refused from the next request on. Holds
+         *     and audit entries keep the account's name. Audited as
+         *     `service_account.delete`.
+         *
+         */
+        delete: operations["deleteServiceAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/service-accounts/{id}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a token for a service account
+         * @description SVC-4, SVC-6. The response is the only place the token ever appears:
+         *     Hourglass stores only a SHA-256 hash of its secret and cannot show it
+         *     again. The token has the form `hgsa_<token id>_<secret>` and is sent
+         *     as `Authorization: Bearer <token>`. The body is optional;
+         *     `expires_at`, when given, must be in the future (400 `validation`,
+         *     `field` = `expires_at`). An account may hold several live tokens, for
+         *     rotation. Audited as `service_account.token_issue` (token id and
+         *     expiry only).
+         *
+         */
+        post: operations["issueServiceToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/service-accounts/{id}/tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one token
+         * @description SVC-5, SVC-6. The token is refused from the next request on. A token
+         *     id that does not belong to the account is 404 `not_found`. Audited as
+         *     `service_account.token_revoke`.
+         *
+         */
+        delete: operations["revokeServiceToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integration/pressure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Report the raw lab pressure
+         * @description Scope `pressure:write`. `value` is required, finite, from 0 to 1
+         *     inclusive (INT-1); `observed_at` defaults to the time of receipt.
+         *     `expires_at` is `observed_at` plus the configured `max_age`. A report
+         *     older than the stored one is 409 `stale_report` (INT-3); an equal
+         *     `observed_at` replaces it. An `observed_at` more than 2 minutes in the
+         *     future is 400 `validation`. Without the `reported` pressure source
+         *     configured it is 409 `not_configured` (INT-4). A report takes effect
+         *     at the next poll.
+         *
+         */
+        put: operations["reportPressure"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integration/deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Report the complete set of deployed setups
+         * @description Scope `deployments:write`. The list is the complete set deployed now;
+         *     an absent setup is not deployed, an empty list means nothing is. It
+         *     replaces the stored set atomically (INT-2). A name that matches no
+         *     setup is accepted, ignored and listed in `unknown`. A duplicate name
+         *     is 400 `validation`. Limits: 10,000 entries, 32 labels per entry, 1 MB
+         *     body. Ordering, clock skew and `not_configured` (the `reported`
+         *     provider) are as for the pressure report.
+         *
+         */
+        put: operations["reportDeployments"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integration/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything a service needs to act and to reconcile
+         * @description Scope `state:read` (INT-8). Every setup, disabled ones included, with
+         *     its active hold (`null` for a free setup) and the holder's id,
+         *     username, email and name. `reported_deployed` reflects the stored
+         *     report, not the last poll. `reported` and the `observed_at` fields are
+         *     `null` before the first report. Never includes balances, ledger
+         *     entries, other users, settings or audit data.
+         *
+         */
+        get: operations["getIntegrationState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integration/holds/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release a hold from the service's automation
+         * @description Scope `holds:release` (HOLD-8). `reason` is required, 1 to 500
+         *     characters after trimming. The teardown check is skipped. The hold is
+         *     released at once, the account's name is recorded on it, an audit entry
+         *     `hold.service_release` is written and `hold.released` fires with
+         *     `service_account` in `data`. 404 `not_found` for an unknown id, 409
+         *     `conflict` if already released.
+         *
+         */
+        post: operations["serviceReleaseHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -621,7 +841,7 @@ export interface components {
          *
          * @enum {string}
          */
-        ErrorCode: "unauthenticated" | "no_role" | "forbidden" | "csrf" | "password_change_required" | "not_found" | "validation" | "invalid_selector" | "insufficient_tokens" | "hold_limit" | "setup_held" | "setup_disabled" | "still_deployed" | "hook_veto" | "has_active_hold" | "last_admin" | "self_demote" | "local_admin_protected" | "conflict" | "rate_limited" | "internal";
+        ErrorCode: "unauthenticated" | "no_role" | "forbidden" | "csrf" | "password_change_required" | "not_found" | "validation" | "invalid_selector" | "insufficient_tokens" | "hold_limit" | "setup_held" | "setup_disabled" | "still_deployed" | "hook_veto" | "has_active_hold" | "last_admin" | "self_demote" | "local_admin_protected" | "conflict" | "stale_report" | "not_configured" | "rate_limited" | "internal" | "not_implemented";
         Error: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -1247,6 +1467,180 @@ export interface components {
             limit: number;
             offset: number;
         };
+        /**
+         * @description What a service account may call (one integration route each).
+         * @enum {string}
+         */
+        ServiceScope: "state:read" | "pressure:write" | "deployments:write" | "holds:release";
+        /** @description A token as listed. The token itself is shown only once, when issued. */
+        ServiceToken: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string | null;
+            /**
+             * Format: date-time
+             * @description Recorded at most once a minute.
+             */
+            last_used_at: string | null;
+        };
+        IssuedServiceToken: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string | null;
+            /** Format: date-time */
+            last_used_at: string | null;
+            /** @description `hgsa_<token id>_<secret>`. Shown in this response only; store it now. */
+            token: string;
+        };
+        ServiceAccount: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            description: string;
+            scopes: components["schemas"]["ServiceScope"][];
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Oldest first. */
+            tokens: components["schemas"]["ServiceToken"][];
+        };
+        ServiceAccountList: {
+            /** @description By name. */
+            service_accounts: components["schemas"]["ServiceAccount"][];
+        };
+        CreateServiceAccountRequest: {
+            name: string;
+            description?: string;
+            scopes: components["schemas"]["ServiceScope"][];
+        };
+        UpdateServiceAccountRequest: {
+            description: string;
+            scopes: components["schemas"]["ServiceScope"][];
+            enabled: boolean;
+        };
+        IssueServiceTokenRequest: {
+            /**
+             * Format: date-time
+             * @description Optional; must be in the future.
+             */
+            expires_at?: string;
+        };
+        PressureReport: {
+            /** @description Raw pressure; Hourglass smooths it. */
+            value: number;
+            /**
+             * Format: date-time
+             * @description Defaults to the time of receipt.
+             */
+            observed_at?: string;
+        };
+        PressureReportResult: {
+            value: number;
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: date-time */
+            received_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        DeploymentReport: {
+            /** @description The setup's name in Hourglass. */
+            setup: string;
+            /** @description Free-form; shown to admins like a provider's allocation labels. */
+            labels?: components["schemas"]["Labels"];
+        };
+        DeploymentsReport: {
+            /**
+             * Format: date-time
+             * @description Defaults to the time of receipt.
+             */
+            observed_at?: string;
+            /** @description The complete set deployed now; empty means nothing is deployed. */
+            deployments: components["schemas"]["DeploymentReport"][];
+        };
+        DeploymentsReportResult: {
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: date-time */
+            received_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            accepted: number;
+            /** @description Reported names that match no setup. */
+            unknown: string[];
+        };
+        StateHolder: {
+            /** Format: int64 */
+            id: number;
+            username: string;
+            email: string;
+            name: string;
+        };
+        StateHold: {
+            /** Format: int64 */
+            id: number;
+            user: components["schemas"]["StateHolder"];
+            /** Format: date-time */
+            acquired_at: string;
+            /** Format: date-time */
+            metering_started_at: string | null;
+            /** Format: date-time */
+            deployed_at: string | null;
+            /** Format: date-time */
+            release_requested_at: string | null;
+        };
+        StateSetup: {
+            name: string;
+            labels: components["schemas"]["Labels"];
+            details: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+            /** @description From the stored report, not the last poll. */
+            reported_deployed: boolean;
+            /** @description The active hold; null for a free setup. */
+            hold: components["schemas"]["StateHold"] | null;
+        };
+        IntegrationState: {
+            /** Format: date-time */
+            server_time: string;
+            poll: {
+                interval_seconds: number;
+                /** Format: date-time */
+                last_ok_at: string | null;
+            };
+            pressure: {
+                /** @description The configured pressure source. */
+                source: string | null;
+                reported: {
+                    value: number;
+                    /** Format: date-time */
+                    observed_at: string;
+                    /** Format: date-time */
+                    expires_at: string;
+                } | null;
+                smoothed: number | null;
+                multiplier: number;
+            };
+            deployments: {
+                /** @description The configured provider. */
+                provider: string | null;
+                /** Format: date-time */
+                observed_at: string | null;
+                /** Format: date-time */
+                expires_at: string | null;
+            };
+            setups: components["schemas"]["StateSetup"][];
+        };
+        ServiceReleaseRequest: {
+            reason: string;
+        };
     };
     responses: {
         /** @description 400 `validation` (optional `field`) or `invalid_selector`. */
@@ -1299,6 +1693,24 @@ export interface components {
             headers: {
                 /** @description Seconds until another attempt is allowed. */
                 "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 401 `unauthenticated`. Missing, wrong, expired or revoked token, or a disabled or deleted account; the reason is not given (SVC-5). A session cookie is not read (SVC-2). */
+        ServiceUnauthenticated: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 403 `forbidden`. The token lacks the route's scope; nothing else is said (SVC-3). */
+        ServiceForbidden: {
+            headers: {
                 [name: string]: unknown;
             };
             content: {
@@ -2172,6 +2584,303 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listServiceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccountList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createServiceAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The new account. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateServiceAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateServiceAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccount"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteServiceAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    issueServiceToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IssueServiceTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description The new token, shown once. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedServiceToken"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeServiceToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+                tokenId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reportPressure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PressureReport"];
+            };
+        };
+        responses: {
+            /** @description The stored report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PressureReportResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["ServiceUnauthenticated"];
+            403: components["responses"]["ServiceForbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reportDeployments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeploymentsReport"];
+            };
+        };
+        responses: {
+            /** @description The stored report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentsReportResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["ServiceUnauthenticated"];
+            403: components["responses"]["ServiceForbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getIntegrationState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationState"];
+                };
+            };
+            401: components["responses"]["ServiceUnauthenticated"];
+            403: components["responses"]["ServiceForbidden"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    serviceReleaseHold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description The released hold. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hold"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["ServiceUnauthenticated"];
+            403: components["responses"]["ServiceForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };

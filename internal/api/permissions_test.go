@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/panset/hourglass/internal/api/apierr"
+	"github.com/panset/hourglass/internal/auth"
 	"github.com/panset/hourglass/internal/store"
 )
 
@@ -37,7 +38,16 @@ type permActor struct {
 	class      string
 	localAdmin bool
 	mustChange bool // the local admin before the forced password change
+	// svc is set for a service account: it sends a bearer token and no
+	// session. Outside /api/v1/integration/ it is anonymous (SVC-1).
+	svc string
 }
+
+// Service-account actors (SVC-8).
+const (
+	svcScoped   = "scoped"   // holds the scope of the route (all four scopes)
+	svcUnscoped = "unscoped" // holds every scope except the route's
+)
 
 // Spec columns an actor falls under (the Manager column is out of scope for v1).
 const (
@@ -61,16 +71,22 @@ const (
 	actAdmin      = "Admin"
 	actLocal      = "Local_admin"
 	actLocalFirst = "Local_admin_before_password_change"
+	actSvcScoped  = "Service_account_with_scope"
+	actSvcNoScope = "Service_account_without_scope"
 )
 
 // Markers seeded into data the role-less actors must never see.
-var permMarkers = []string{"MKR-setup", "MKR-label", "MKR-details", "MKR-victim", "MKR-audit", "MKR-ledger"}
+var permMarkers = []string{"MKR-setup", "MKR-label", "MKR-details", "MKR-victim", "MKR-audit", "MKR-ledger", "MKR-service"}
 
 type permFix struct {
 	*backend
 	actors []permActor
 	victim sess // a developer holding a marked setup
 	n      int  // counter for unique names
+	// service tokens: one with every scope, and per scope one with every
+	// other scope (the "without the scope" actor of SVC-8)
+	svcAll     svcAccount
+	svcWithout map[string]svcAccount
 }
 
 func newPermFix(t *testing.T) *permFix {
@@ -100,6 +116,13 @@ func newPermFix(t *testing.T) *permFix {
 		{name: actAdmin, s: &adm, class: classAdmin},
 		{name: actLocal, s: &local, class: classAdmin, localAdmin: true},
 		{name: actLocalFirst, s: &local, class: classAdmin, localAdmin: true, mustChange: true},
+		{name: actSvcScoped, class: classNone, svc: svcScoped},
+		{name: actSvcNoScope, class: classNone, svc: svcUnscoped},
+	}
+	f.svcAll = b.mintServiceAccount("perm-svc-all", allScopes()...)
+	f.svcWithout = map[string]svcAccount{"": b.mintServiceAccount("perm-svc-none")}
+	for _, sc := range allScopes() {
+		f.svcWithout[sc] = b.mintServiceAccount("perm-svc-without-"+strings.ReplaceAll(sc, ":", "-"), scopesWithout(sc)...)
 	}
 
 	// Data with markers: a setup held by a marked user, details, labels, a
@@ -125,7 +148,23 @@ func newPermFix(t *testing.T) *permFix {
 		BeforeJSON: `{"reason":"MKR-audit reason"}`, AfterJSON: `{"reason":"MKR-audit reason 2"}`}, b.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
+	// A marked service account with a token: only admins may see it.
+	mkr := b.mintServiceAccount("MKR-service-account", auth.ScopeStateRead)
+	if _, err := b.st.UpdateServiceAccount(ctx, mkr.acct.ID, "MKR-service description", mkr.acct.Scopes, true); err != nil {
+		t.Fatal(err)
+	}
 	return f
+}
+
+// newServiceAccount creates a fresh account (no token) for a probe to change.
+func (f *permFix) newServiceAccount() int64 {
+	f.t.Helper()
+	a, err := f.st.CreateServiceAccount(context.Background(), store.ServiceAccount{Name: fmt.Sprintf("perm-target-%d", f.uniq()),
+		Scopes: []string{auth.ScopeStateRead}, Enabled: true}, f.clk.Now())
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return a.ID
 }
 
 func (f *permFix) actor(name string) permActor {
@@ -185,7 +224,8 @@ const (
 
 type permProbe struct {
 	method, path, body string
-	as                 *sess // overrides the actor's session (logout destroys the one it is given)
+	as                 *sess  // overrides the actor's session (logout destroys the one it is given)
+	scope              string // an integration route's scope: picks the service actor's token
 }
 
 // probeOps lists the operations probe can build; the meta-test compares it
@@ -198,6 +238,9 @@ var probeOps = map[string]bool{
 	"listAdminUsers": true, "setUserRoles": true, "rejectUser": true, "grantTokens": true, "resetBalance": true,
 	"createSetup": true, "updateSetup": true, "deleteSetup": true, "getRules": true, "replaceRules": true,
 	"getSettings": true, "updateSettings": true, "getCollector": true, "listAudit": true,
+	"listServiceAccounts": true, "createServiceAccount": true, "updateServiceAccount": true, "deleteServiceAccount": true,
+	"issueServiceToken": true, "revokeServiceToken": true,
+	"reportPressure": true, "reportDeployments": true, "getIntegrationState": true, "serviceReleaseHold": true,
 }
 
 const permSettingsBody = `{"default_weight":1,"display_label_keys":["tier"],` +
@@ -285,6 +328,31 @@ func (f *permFix) probe(op string, a permActor, mode probeMode) permProbe {
 		return permProbe{method: "GET", path: "/api/v1/admin/collector"}
 	case "listAudit":
 		return permProbe{method: "GET", path: "/api/v1/admin/audit"}
+	case "listServiceAccounts":
+		return permProbe{method: "GET", path: "/api/v1/admin/service-accounts"}
+	case "createServiceAccount":
+		return permProbe{method: "POST", path: "/api/v1/admin/service-accounts",
+			body: fmt.Sprintf(`{"name":"perm-created-%d","description":"permissions test","scopes":["state:read"]}`, f.uniq())}
+	case "updateServiceAccount":
+		return permProbe{method: "PUT", path: "/api/v1/admin/service-accounts/" + id(f.newServiceAccount()),
+			body: `{"description":"edited","scopes":["state:read","holds:release"],"enabled":true}`}
+	case "deleteServiceAccount":
+		return permProbe{method: "DELETE", path: "/api/v1/admin/service-accounts/" + id(f.newServiceAccount())}
+	case "issueServiceToken":
+		return permProbe{method: "POST", path: "/api/v1/admin/service-accounts/" + id(f.newServiceAccount()) + "/tokens", body: `{}`}
+	case "revokeServiceToken":
+		acct := f.newServiceAccount()
+		_, tok := f.mintServiceToken(acct, nil)
+		return permProbe{method: "DELETE", path: "/api/v1/admin/service-accounts/" + id(acct) + "/tokens/" + id(tok)}
+	case "reportPressure":
+		return permProbe{method: "PUT", path: "/api/v1/integration/pressure", body: `{"value":0.5}`, scope: auth.ScopePressureWrite}
+	case "reportDeployments":
+		return permProbe{method: "PUT", path: "/api/v1/integration/deployments", body: `{"deployments":[]}`, scope: auth.ScopeDeploymentsWrite}
+	case "getIntegrationState":
+		return permProbe{method: "GET", path: "/api/v1/integration/state", scope: auth.ScopeStateRead}
+	case "serviceReleaseHold":
+		return permProbe{method: "POST", path: "/api/v1/integration/holds/" + id(f.victimHold()) + "/release",
+			body: `{"reason":"permissions test"}`, scope: auth.ScopeHoldsRelease}
 	}
 	f.t.Fatalf("no probe for operation %q", op)
 	return permProbe{}
@@ -303,7 +371,23 @@ func (f *permFix) send(a permActor, p permProbe) *httptest.ResponseRecorder {
 	if p.as != nil {
 		s = p.as
 	}
+	if tok := f.svcToken(a, p.scope); tok != "" {
+		return f.serve(p.method, p.path, s, true, p.body, bearer(tok)...)
+	}
 	return f.serve(p.method, p.path, s, true, p.body)
+}
+
+// svcToken is the bearer token a service actor sends for a route of the
+// given scope ("" for a route outside /api/v1/integration/): the all-scopes
+// token, or one holding every scope but the route's. Others send none.
+func (f *permFix) svcToken(a permActor, scope string) string {
+	switch a.svc {
+	case svcScoped:
+		return f.svcAll.token
+	case svcUnscoped:
+		return f.svcWithout[scope].token
+	}
+	return ""
 }
 
 // ---- expectations ----
@@ -357,6 +441,16 @@ func gateDenial(r Route, a permActor) *permDenial {
 			return deny(apierr.Forbidden)
 		}
 		return nil
+	case AccessService:
+		// A session, even an admin's, is not read here (SVC-2); only a
+		// service token with the route's scope gets in (SVC-3).
+		switch a.svc {
+		case svcScoped:
+			return nil
+		case svcUnscoped:
+			return deny(apierr.Forbidden)
+		}
+		return deny(apierr.Unauthenticated)
 	}
 	panic("unknown access level " + string(r.Access))
 }
@@ -426,6 +520,14 @@ func permWantAllowed(t *testing.T, r Route, rec *httptest.ResponseRecorder) {
 		t.Errorf("refused although allowed: %d %s", rec.Code, rec.Body)
 		return
 	}
+	// An integration route that is still a stub answers 501 not_implemented
+	// once the token and the scope pass.
+	if integrationStubs[r.OperationID] {
+		if rec.Code != http.StatusNotImplemented || permErrCode(rec) != apierr.NotImplemented {
+			t.Errorf("status = %d, want the stub's 501 not_implemented: %s", rec.Code, rec.Body)
+		}
+		return
+	}
 	if rec.Code >= 500 {
 		t.Errorf("server error: %d %s", rec.Code, rec.Body)
 		return
@@ -490,8 +592,26 @@ var capMatrix = []capRow{
 }
 
 // permExtraCover lists routes no spec row names, with where they are covered.
+// The service-account and integration routes come from
+// docs/design/integration-api.md, not the spec's table (D42).
 var permExtraCover = map[string]string{
-	"changeLocalPassword": "TestAUTH8_LocalAdminIsPermanent (AUTH-8) and the exhaustive test",
+	"changeLocalPassword":  "TestAUTH8_LocalAdminIsPermanent (AUTH-8) and the exhaustive test",
+	"listServiceAccounts":  "TestSVC8_ (SVC-6, SVC-8) and the exhaustive test",
+	"createServiceAccount": "TestSVC8_ (SVC-6, SVC-8) and the exhaustive test",
+	"updateServiceAccount": "TestSVC8_ (SVC-6, SVC-8) and the exhaustive test",
+	"deleteServiceAccount": "TestSVC8_ (SVC-6, SVC-8) and the exhaustive test",
+	"issueServiceToken":    "TestSVC8_ (SVC-6, SVC-8) and the exhaustive test",
+	"revokeServiceToken":   "TestSVC8_ (SVC-6, SVC-8) and the exhaustive test",
+	"reportPressure":       "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
+	"reportDeployments":    "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
+	"getIntegrationState":  "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
+	"serviceReleaseHold":   "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
+}
+
+// integrationStubs are the integration routes whose handler still answers
+// 501 not_implemented. The task that implements a route removes it here.
+var integrationStubs = map[string]bool{
+	"reportPressure": true, "reportDeployments": true, "getIntegrationState": true, "serviceReleaseHold": true,
 }
 
 func routeOf(t *testing.T, op string) Route {
@@ -638,11 +758,20 @@ var permCombos int
 func TestPermissions_EveryRouteEveryActor(t *testing.T) {
 	f := newPermFix(t)
 	permCombos = 0
+	everyRouteEveryActor(t, f, Routes())
+	if want := len(Routes()) * len(f.actors); permCombos != want {
+		t.Errorf("exercised %d (route, actor) combinations, want %d", permCombos, want)
+	}
+}
+
+// everyRouteEveryActor sends a valid probe of each route as each actor and
+// checks the access rules' answer.
+func everyRouteEveryActor(t *testing.T, f *permFix, rs []Route) {
 	exempt := func(r Route) bool { // routes that stay open to a user with no role (AUTH-4)
 		return r.Pattern == "/healthz" || strings.HasPrefix(r.Pattern, "/auth/") ||
 			(r.Method == "GET" && (r.Pattern == "/api/v1/auth/methods" || r.Pattern == "/api/v1/session"))
 	}
-	for _, r := range Routes() {
+	for _, r := range rs {
 		t.Run(r.Method+" "+strings.ReplaceAll(r.Pattern, "/", "_"), func(t *testing.T) {
 			for _, a := range f.actors {
 				permCombos++
@@ -657,7 +786,9 @@ func TestPermissions_EveryRouteEveryActor(t *testing.T) {
 				default:
 					permWantAllowed(t, r, rec)
 				}
-				roleless := !a.signedIn() || a.class == classUnassigned
+				// A role-less actor gets no data. The one exception is a service
+				// account on an integration route it holds the scope for.
+				roleless := (!a.signedIn() || a.class == classUnassigned) && !(r.Access == AccessService && d == nil)
 				if roleless {
 					if m := permContainsMarker(rec); m != "" {
 						t.Errorf("%s as %s: response holds seeded data %q: %s", r.OperationID, a.name, m, rec.Body)
@@ -675,9 +806,6 @@ func TestPermissions_EveryRouteEveryActor(t *testing.T) {
 				}
 			}
 		})
-	}
-	if want := len(Routes()) * len(f.actors); permCombos != want {
-		t.Errorf("exercised %d (route, actor) combinations, want %d", permCombos, want)
 	}
 }
 

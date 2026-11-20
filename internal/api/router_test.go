@@ -16,10 +16,12 @@ import (
 	"github.com/panset/hourglass/internal/store"
 )
 
-func concretePath(p string) string { return strings.ReplaceAll(p, "{id}", "1") }
+func concretePath(p string) string {
+	return strings.NewReplacer("{id}", "1", "{tokenId}", "1").Replace(p)
+}
 
-// seed creates setup 1 and hold 1 (held by a developer), so that every
-// {id} of concretePath names something that exists.
+// seed creates setup 1, hold 1 (held by a developer), service account 1 and
+// its token 1, so that every id of concretePath names something that exists.
 func (e *env) seed() {
 	e.t.Helper()
 	ctx := context.Background()
@@ -29,6 +31,12 @@ func (e *env) seed() {
 	holder := e.user("holder", store.StatusActive, store.RoleDeveloper)
 	if h, err := e.st.CreateHold(ctx, 1, holder.user.ID, e.clk.Now()); err != nil || h.ID != 1 {
 		e.t.Fatalf("seed hold: %d %v", h.ID, err)
+	}
+	if a, err := e.st.CreateServiceAccount(ctx, store.ServiceAccount{Name: "svc-01", Scopes: []string{}, Enabled: true}, e.clk.Now()); err != nil || a.ID != 1 {
+		e.t.Fatalf("seed service account: %d %v", a.ID, err)
+	}
+	if tok, err := e.st.InsertServiceToken(ctx, 1, "seed-hash", nil, e.clk.Now()); err != nil || tok.ID != 1 {
+		e.t.Fatalf("seed service token: %d %v", tok.ID, err)
 	}
 }
 
@@ -42,8 +50,8 @@ func TestAPI_RouteTableIsConsistent(t *testing.T) {
 		}
 		seen[k], ops[r.OperationID] = true, true
 	}
-	if len(Routes()) != 30 {
-		t.Errorf("routes = %d, want the 30 operations of api/openapi.yaml", len(Routes()))
+	if len(Routes()) != 40 {
+		t.Errorf("routes = %d, want the 40 operations of api/openapi.yaml", len(Routes()))
 	}
 	// Every non-auth operation has a handler, and the handler map has nothing extra.
 	hs := (&API{}).handlers()

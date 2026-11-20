@@ -336,6 +336,52 @@ func (c *contract) call(b *backend, validRequest bool, method, path string, s *s
 	return rec
 }
 
+// callBearer sends one request with a service token and no session, and
+// validates the response like call. A 501 from a stub is not validated (the
+// contract does not document it); it is returned for the caller to check.
+func (c *contract) callBearer(b *backend, method, path, token, body string) *httptest.ResponseRecorder {
+	c.t.Helper()
+	newReq := func() *http.Request {
+		var rd io.Reader
+		if body != "" {
+			rd = strings.NewReader(body)
+		}
+		req := httptest.NewRequest(method, path, rd)
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		return req
+	}
+	vreq := newReq()
+	route, params, err := c.router.FindRoute(vreq)
+	if err != nil {
+		c.t.Errorf("%s %s: no such operation in api/openapi.yaml: %v", method, path, err)
+		return nil
+	}
+	rec := httptest.NewRecorder()
+	b.h.ServeHTTP(rec, newReq())
+	op := route.Operation.OperationID
+	if rec.Code == http.StatusNotImplemented && integrationStubs[op] {
+		return rec
+	}
+	rvi := &openapi3filter.RequestValidationInput{Request: newReq(), PathParams: params, Route: route,
+		Options: &openapi3filter.Options{AuthenticationFunc: openapi3filter.NoopAuthenticationFunc}}
+	in := &openapi3filter.ResponseValidationInput{RequestValidationInput: rvi, Status: rec.Code, Header: rec.Header(),
+		Options: &openapi3filter.Options{IncludeResponseStatus: true}}
+	in.SetBodyBytes(rec.Body.Bytes())
+	if err := openapi3filter.ValidateResponse(context.Background(), in); err != nil {
+		c.t.Errorf("%s (%s %s) answered %d and the response does not match the contract: %v\nbody: %s", op, method, path, rec.Code, err, rec.Body)
+		return rec
+	}
+	if rec.Code >= 400 {
+		c.bad[op]++
+	} else {
+		c.ok[op]++
+	}
+	return rec
+}
+
 // world is a backend with data in every part of the API.
 type world struct {
 	*backend
@@ -610,6 +656,49 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		rec := c.call(w.backend, false, tc.method, tc.path, tc.as, true, tc.body)
 		w.status(rec, tc.status)
 	}
+	// Service accounts: the admin routes with data, and their refusals.
+	acct := w.must(201, "POST", "/api/v1/admin/service-accounts", &w.adm,
+		`{"name":"deployer","description":"lab automation","scopes":["state:read","deployments:write"]}`)
+	aid := fmt.Sprint(int64(acct["id"].(float64)))
+	w.must(201, "POST", "/api/v1/admin/service-accounts/"+aid+"/tokens", &w.adm, `{"expires_at":"2027-01-01T00:00:00.000Z"}`)
+	second := w.must(201, "POST", "/api/v1/admin/service-accounts/"+aid+"/tokens", &w.adm, "")
+	w.must(200, "PUT", "/api/v1/admin/service-accounts/"+aid, &w.adm, `{"description":"","scopes":["state:read"],"enabled":false}`)
+	w.must(200, "PUT", "/api/v1/admin/service-accounts/"+aid, &w.adm, `{"description":"lab automation","scopes":["state:read"],"enabled":true}`)
+	// A use records last_used_at, so the listing has every timestamp filled.
+	tok := second["token"].(string)
+	w.status(c.callBearer(w.backend, "GET", "/api/v1/integration/state", tok, ""), http.StatusNotImplemented)
+	w.status(w.get("/api/v1/admin/service-accounts", &w.adm), 200)
+	for _, tc := range []struct {
+		status       int
+		method, path string
+		body         string
+	}{
+		{400, "POST", "/api/v1/admin/service-accounts", `{"name":"x","scopes":["admin"]}`},
+		{400, "POST", "/api/v1/admin/service-accounts", `{"name":"","scopes":[]}`},
+		{409, "POST", "/api/v1/admin/service-accounts", `{"name":"deployer","scopes":[]}`},
+		{400, "PUT", "/api/v1/admin/service-accounts/" + aid, `{"description":"","scopes":["nope"],"enabled":true}`},
+		{404, "PUT", "/api/v1/admin/service-accounts/99999", `{"description":"","scopes":[],"enabled":true}`},
+		{400, "POST", "/api/v1/admin/service-accounts/" + aid + "/tokens", `{"expires_at":"2020-01-01T00:00:00.000Z"}`},
+		{404, "POST", "/api/v1/admin/service-accounts/99999/tokens", ""},
+		{404, "DELETE", "/api/v1/admin/service-accounts/" + aid + "/tokens/99999", ""},
+		{400, "DELETE", "/api/v1/admin/service-accounts/" + aid + "/tokens/x", ""},
+	} {
+		w.status(c.call(w.backend, false, tc.method, tc.path, &w.adm, true, tc.body), tc.status)
+	}
+	w.must(204, "DELETE", "/api/v1/admin/service-accounts/"+aid+"/tokens/"+fmt.Sprint(int64(second["id"].(float64))), &w.adm, "")
+	w.must(204, "DELETE", "/api/v1/admin/service-accounts/"+aid, &w.adm, "")
+	w.status(c.call(w.backend, false, "DELETE", "/api/v1/admin/service-accounts/"+aid, &w.adm, true, ""), 404)
+	// Integration routes: a token without the scope (403) and a refused token (401).
+	weak := w.mintServiceAccount("weak")
+	for _, r := range Routes() {
+		if r.Access != AccessService {
+			continue
+		}
+		path := strings.ReplaceAll(r.Pattern, "{id}", fmt.Sprint(w.holdA))
+		w.status(c.callBearer(w.backend, r.Method, path, weak.token, "{}"), 403)
+		w.status(c.callBearer(w.backend, r.Method, path, tok, "{}"), 401)
+	}
+
 	// The password change and the sign-out come last: they end sessions.
 	lm := w.newLocalMustChange()
 	w.status(c.call(w.backend, false, "GET", "/api/v1/me", &lm, false, ""), 403) // password_change_required
@@ -627,7 +716,9 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 	// one, a validated error.
 	for _, r := range Routes() {
 		op := w.opByID(r.OperationID)
-		if c.ok[r.OperationID] == 0 {
+		if c.ok[r.OperationID] == 0 && !integrationStubs[r.OperationID] {
+			// A stub answers only 501 (not part of the contract); the task
+			// that implements the route removes it from integrationStubs.
 			t.Errorf("%s: no success response was validated", r.OperationID)
 		}
 		documentsError := false

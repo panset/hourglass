@@ -147,6 +147,12 @@ func (e *scaleEnv) scaleRoutes() []scaleRoute {
 		if r.Method != "GET" {
 			continue
 		}
+		// Integration routes take a service token, not a session; GET state
+		// is still a 501 stub. Remove this skip when it is implemented and
+		// time it with a state:read token.
+		if r.Access == AccessService {
+			continue
+		}
 		path := r.Pattern
 		switch path {
 		case "/api/v1/me/ledger", "/api/v1/me/usage":

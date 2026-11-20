@@ -23,8 +23,13 @@ info:
       pre-session sign-in calls cannot (no session exists yet) and are marked
       `x-csrf: false`.
     - Operations carry `x-roles` (`public`, `session`, `role`, `admin`,
-      `local-admin`) matching the spec's "Who" column, and `x-csrf: true` when
-      they change state and require the CSRF header.
+      `local-admin`, `service`) matching the spec's "Who" column, and
+      `x-csrf: true` when they change state and require the CSRF header.
+    - `service` operations live under `/api/v1/integration/` and take only a
+      service token, `Authorization: Bearer hgsa_...`, with the scope the
+      operation names. They read no cookie and need no CSRF token. A service
+      token sent to any other route is ignored (the request is anonymous).
+      Failed bearer attempts are rate-limited per client address (429).
     - Every route except those marked `public` and `GET /api/v1/session`,
       `POST /auth/logout` requires at least one role (AUTH-4): a user with no
       role gets 403 `no_role` and no data. While `must_change_password` is true
@@ -63,6 +68,10 @@ tags:
     description: Collector health, outages, orphans, event delivery (ADM-4).
   - name: Admin audit
     description: Audit log (ADM-3).
+  - name: Admin service accounts
+    description: Service accounts and their tokens (SVC-4 to SVC-6).
+  - name: Integration
+    description: Routes a customer's service calls with a service token (docs/design/integration-api.md).
 security:
   - cookieAuth: []
 paths:
@@ -897,6 +906,348 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts:
+    get:
+      operationId: listServiceAccounts
+      tags: [Admin service accounts]
+      summary: List service accounts with their tokens
+      description: |
+        SVC-6. Every account by name, with its scopes, enabled flag and each
+        token's id, creation, expiry and last-used times. A token itself is
+        never listed (SVC-4).
+      x-roles: admin
+      responses:
+        '200':
+          description: Service accounts.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceAccountList'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createServiceAccount
+      tags: [Admin service accounts]
+      summary: Create a service account
+      description: |
+        SVC-6. The account starts enabled and without a token. `name` is 1 to
+        64 letters, digits, `.`, `_` or `-`, starting with a letter or digit,
+        and cannot change later; a duplicate is 409 `conflict`. `scopes` is any
+        subset of the four scopes; an unknown scope is 400 `validation`
+        (`field` = `scopes`). Audited as `service_account.create`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateServiceAccountRequest'}
+      responses:
+        '201':
+          description: The new account.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceAccount'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts/{id}:
+    put:
+      operationId: updateServiceAccount
+      tags: [Admin service accounts]
+      summary: Change a service account's description, scopes and enabled flag
+      description: |
+        SVC-5, SVC-6. Full replacement of the three fields, all required.
+        Disabling the account, or removing a scope, takes effect on the
+        account's next request. Audited as `service_account.update`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateServiceAccountRequest'}
+      responses:
+        '200':
+          description: The updated account.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceAccount'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteServiceAccount
+      tags: [Admin service accounts]
+      summary: Delete a service account and its tokens
+      description: |
+        SVC-5, SVC-6. Its tokens are refused from the next request on. Holds
+        and audit entries keep the account's name. Audited as
+        `service_account.delete`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts/{id}/tokens:
+    post:
+      operationId: issueServiceToken
+      tags: [Admin service accounts]
+      summary: Issue a token for a service account
+      description: |
+        SVC-4, SVC-6. The response is the only place the token ever appears:
+        Hourglass stores only a SHA-256 hash of its secret and cannot show it
+        again. The token has the form `hgsa_<token id>_<secret>` and is sent
+        as `Authorization: Bearer <token>`. The body is optional;
+        `expires_at`, when given, must be in the future (400 `validation`,
+        `field` = `expires_at`). An account may hold several live tokens, for
+        rotation. Audited as `service_account.token_issue` (token id and
+        expiry only).
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueServiceTokenRequest'}
+      responses:
+        '201':
+          description: The new token, shown once.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedServiceToken'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts/{id}/tokens/{tokenId}:
+    delete:
+      operationId: revokeServiceToken
+      tags: [Admin service accounts]
+      summary: Revoke one token
+      description: |
+        SVC-5, SVC-6. The token is refused from the next request on. A token
+        id that does not belong to the account is 404 `not_found`. Audited as
+        `service_account.token_revoke`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: tokenId
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Revoked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/pressure:
+    put:
+      operationId: reportPressure
+      tags: [Integration]
+      summary: Report the raw lab pressure
+      description: |
+        Scope `pressure:write`. `value` is required, finite, from 0 to 1
+        inclusive (INT-1); `observed_at` defaults to the time of receipt.
+        `expires_at` is `observed_at` plus the configured `max_age`. A report
+        older than the stored one is 409 `stale_report` (INT-3); an equal
+        `observed_at` replaces it. An `observed_at` more than 2 minutes in the
+        future is 400 `validation`. Without the `reported` pressure source
+        configured it is 409 `not_configured` (INT-4). A report takes effect
+        at the next poll.
+      x-roles: service
+      x-csrf: false
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PressureReport'}
+      responses:
+        '200':
+          description: The stored report.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PressureReportResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/deployments:
+    put:
+      operationId: reportDeployments
+      tags: [Integration]
+      summary: Report the complete set of deployed setups
+      description: |
+        Scope `deployments:write`. The list is the complete set deployed now;
+        an absent setup is not deployed, an empty list means nothing is. It
+        replaces the stored set atomically (INT-2). A name that matches no
+        setup is accepted, ignored and listed in `unknown`. A duplicate name
+        is 400 `validation`. Limits: 10,000 entries, 32 labels per entry, 1 MB
+        body. Ordering, clock skew and `not_configured` (the `reported`
+        provider) are as for the pressure report.
+      x-roles: service
+      x-csrf: false
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeploymentsReport'}
+      responses:
+        '200':
+          description: The stored report.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentsReportResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/state:
+    get:
+      operationId: getIntegrationState
+      tags: [Integration]
+      summary: Everything a service needs to act and to reconcile
+      description: |
+        Scope `state:read` (INT-8). Every setup, disabled ones included, with
+        its active hold (`null` for a free setup) and the holder's id,
+        username, email and name. `reported_deployed` reflects the stored
+        report, not the last poll. `reported` and the `observed_at` fields are
+        `null` before the first report. Never includes balances, ledger
+        entries, other users, settings or audit data.
+      x-roles: service
+      security:
+        - serviceToken: []
+      responses:
+        '200':
+          description: The state.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IntegrationState'}
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/holds/{id}/release:
+    post:
+      operationId: serviceReleaseHold
+      tags: [Integration]
+      summary: Release a hold from the service's automation
+      description: |
+        Scope `holds:release` (HOLD-8). `reason` is required, 1 to 500
+        characters after trimming. The teardown check is skipped. The hold is
+        released at once, the account's name is recorded on it, an audit entry
+        `hold.service_release` is written and `hold.released` fires with
+        `service_account` in `data`. 404 `not_found` for an unknown id, 409
+        `conflict` if already released.
+      x-roles: service
+      x-csrf: false
+      security:
+        - serviceToken: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceReleaseRequest'}
+      responses:
+        '200':
+          description: The released hold.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     cookieAuth:
@@ -904,6 +1255,10 @@ components:
       in: cookie
       name: hourglass_session
       description: Server-side session; HttpOnly, Secure, SameSite=Lax, 8-hour idle timeout (AUTH-3).
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: A service account token, `hgsa_<token id>_<secret>`. Accepted only under `/api/v1/integration/` (SVC-1).
   parameters:
     CsrfToken:
       name: X-CSRF-Token
@@ -963,6 +1318,18 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
           example: {error: {code: rate_limited, message: too many failed attempts}}
+    ServiceUnauthenticated:
+      description: 401 `unauthenticated`. Missing, wrong, expired or revoked token, or a disabled or deleted account; the reason is not given (SVC-5). A session cookie is not read (SVC-2).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: unauthenticated, message: a valid service token is required}}
+    ServiceForbidden:
+      description: 403 `forbidden`. The token lacks the route's scope; nothing else is said (SVC-3).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: forbidden, message: not allowed}}
     InternalError:
       description: 500 `internal`.
       content:
@@ -994,8 +1361,11 @@ components:
         - self_demote
         - local_admin_protected
         - conflict
+        - stale_report
+        - not_configured
         - rate_limited
         - internal
+        - not_implemented
       x-http-status:
         unauthenticated: 401
         no_role: 403
@@ -1016,8 +1386,11 @@ components:
         self_demote: 409
         local_admin_protected: 409
         conflict: 409
+        stale_report: 409
+        not_configured: 409
         rate_limited: 429
         internal: 500
+        not_implemented: 501
     Error:
       type: object
       required: [error]
@@ -1734,3 +2107,196 @@ components:
         total: {type: integer, description: Entries matching the filters.}
         limit: {type: integer}
         offset: {type: integer}
+    ServiceScope:
+      type: string
+      description: What a service account may call (one integration route each).
+      enum: [state:read, pressure:write, deployments:write, holds:release]
+    ServiceToken:
+      type: object
+      description: A token as listed. The token itself is shown only once, when issued.
+      required: [id, created_at, expires_at, last_used_at]
+      properties:
+        id: {type: integer, format: int64}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time, nullable: true}
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Recorded at most once a minute.
+    IssuedServiceToken:
+      type: object
+      required: [id, created_at, expires_at, last_used_at, token]
+      properties:
+        id: {type: integer, format: int64}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time, nullable: true}
+        last_used_at: {type: string, format: date-time, nullable: true}
+        token:
+          type: string
+          description: '`hgsa_<token id>_<secret>`. Shown in this response only; store it now.'
+          pattern: '^hgsa_[0-9]+_[0-9a-f]{64}$'
+    ServiceAccount:
+      type: object
+      required: [id, name, description, scopes, enabled, created_at, tokens]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+        description: {type: string}
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/ServiceScope'}
+        enabled: {type: boolean}
+        created_at: {type: string, format: date-time}
+        tokens:
+          type: array
+          description: Oldest first.
+          items: {$ref: '#/components/schemas/ServiceToken'}
+    ServiceAccountList:
+      type: object
+      required: [service_accounts]
+      properties:
+        service_accounts:
+          type: array
+          description: By name.
+          items: {$ref: '#/components/schemas/ServiceAccount'}
+    CreateServiceAccountRequest:
+      type: object
+      required: [name, scopes]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+        description: {type: string, maxLength: 500}
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/ServiceScope'}
+    UpdateServiceAccountRequest:
+      type: object
+      required: [description, scopes, enabled]
+      properties:
+        description: {type: string, maxLength: 500}
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/ServiceScope'}
+        enabled: {type: boolean}
+    IssueServiceTokenRequest:
+      type: object
+      properties:
+        expires_at: {type: string, format: date-time, description: Optional; must be in the future.}
+    PressureReport:
+      type: object
+      required: [value]
+      properties:
+        value: {type: number, minimum: 0, maximum: 1, description: Raw pressure; Hourglass smooths it.}
+        observed_at: {type: string, format: date-time, description: Defaults to the time of receipt.}
+    PressureReportResult:
+      type: object
+      required: [value, observed_at, received_at, expires_at]
+      properties:
+        value: {type: number}
+        observed_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+    DeploymentReport:
+      type: object
+      required: [setup]
+      properties:
+        setup: {type: string, minLength: 1, description: The setup's name in Hourglass.}
+        labels:
+          allOf: [{$ref: '#/components/schemas/Labels'}]
+          maxProperties: 32
+          description: Free-form; shown to admins like a provider's allocation labels.
+    DeploymentsReport:
+      type: object
+      required: [deployments]
+      properties:
+        observed_at: {type: string, format: date-time, description: Defaults to the time of receipt.}
+        deployments:
+          type: array
+          maxItems: 10000
+          description: The complete set deployed now; empty means nothing is deployed.
+          items: {$ref: '#/components/schemas/DeploymentReport'}
+    DeploymentsReportResult:
+      type: object
+      required: [observed_at, received_at, expires_at, accepted, unknown]
+      properties:
+        observed_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        accepted: {type: integer}
+        unknown:
+          type: array
+          description: Reported names that match no setup.
+          items: {type: string}
+    StateHolder:
+      type: object
+      required: [id, username, email, name]
+      properties:
+        id: {type: integer, format: int64}
+        username: {type: string}
+        email: {type: string}
+        name: {type: string}
+    StateHold:
+      type: object
+      required: [id, user, acquired_at, metering_started_at, deployed_at, release_requested_at]
+      properties:
+        id: {type: integer, format: int64}
+        user: {$ref: '#/components/schemas/StateHolder'}
+        acquired_at: {type: string, format: date-time}
+        metering_started_at: {type: string, format: date-time, nullable: true}
+        deployed_at: {type: string, format: date-time, nullable: true}
+        release_requested_at: {type: string, format: date-time, nullable: true}
+    StateSetup:
+      type: object
+      required: [name, labels, details, enabled, reported_deployed, hold]
+      properties:
+        name: {type: string}
+        labels: {$ref: '#/components/schemas/Labels'}
+        details: {type: object, additionalProperties: true}
+        enabled: {type: boolean}
+        reported_deployed: {type: boolean, description: "From the stored report, not the last poll."}
+        hold:
+          allOf: [{$ref: '#/components/schemas/StateHold'}]
+          type: object
+          nullable: true
+          description: The active hold; null for a free setup.
+    IntegrationState:
+      type: object
+      required: [server_time, poll, pressure, deployments, setups]
+      properties:
+        server_time: {type: string, format: date-time}
+        poll:
+          type: object
+          required: [interval_seconds, last_ok_at]
+          properties:
+            interval_seconds: {type: integer}
+            last_ok_at: {type: string, format: date-time, nullable: true}
+        pressure:
+          type: object
+          required: [source, reported, smoothed, multiplier]
+          properties:
+            source: {type: string, nullable: true, description: The configured pressure source.}
+            reported:
+              type: object
+              nullable: true
+              required: [value, observed_at, expires_at]
+              properties:
+                value: {type: number}
+                observed_at: {type: string, format: date-time}
+                expires_at: {type: string, format: date-time}
+            smoothed: {type: number, nullable: true}
+            multiplier: {type: number}
+        deployments:
+          type: object
+          required: [provider, observed_at, expires_at]
+          properties:
+            provider: {type: string, nullable: true, description: The configured provider.}
+            observed_at: {type: string, format: date-time, nullable: true}
+            expires_at: {type: string, format: date-time, nullable: true}
+        setups:
+          type: array
+          items: {$ref: '#/components/schemas/StateSetup'}
+    ServiceReleaseRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 500}

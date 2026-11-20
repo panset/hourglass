@@ -20,9 +20,15 @@ const (
 )
 
 // Authenticate loads the session and the user with roles into the request
-// context. A request without a valid session continues anonymous.
+// context. A request without a valid session continues anonymous. Under
+// IntegrationPrefix the cookie is not read at all: those routes authenticate
+// a service token only (SVC-2).
 func (s *Service) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if IsIntegrationPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		u, sess, ok, err := s.loadSession(r.Context(), r)
 		if err != nil {
 			s.log.Error("loading session failed", "err", err)

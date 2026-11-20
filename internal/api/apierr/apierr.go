@@ -31,8 +31,11 @@ const (
 	SelfDemote             = "self_demote"              // 409
 	LocalAdminProtected    = "local_admin_protected"    // 409
 	Conflict               = "conflict"                 // 409
+	StaleReport            = "stale_report"             // 409
+	NotConfigured          = "not_configured"           // 409
 	RateLimited            = "rate_limited"             // 429
 	Internal               = "internal"                 // 500
+	NotImplemented         = "not_implemented"          // 501
 )
 
 var statusOf = map[string]int{
@@ -55,8 +58,11 @@ var statusOf = map[string]int{
 	SelfDemote:             http.StatusConflict,
 	LocalAdminProtected:    http.StatusConflict,
 	Conflict:               http.StatusConflict,
+	StaleReport:            http.StatusConflict,
+	NotConfigured:          http.StatusConflict,
 	RateLimited:            http.StatusTooManyRequests,
 	Internal:               http.StatusInternalServerError,
+	NotImplemented:         http.StatusNotImplemented,
 }
 
 // Status returns the HTTP status for a code (500 for an unknown code).
