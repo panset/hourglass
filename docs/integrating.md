@@ -97,7 +97,8 @@ Rules:
 - **Send the complete set every time.** Any setup you leave out is treated as not deployed. Do not send only what changed.
 - **Send an empty list when nothing is deployed.** `{"deployments": []}` is a valid report. Sending nothing at all is not the same thing.
 - **If you cannot see your infrastructure, do not report.** Skip the call and let the report age. An empty list sent because your vCenter query failed tells Hourglass everything was torn down.
-- `setup` is the Hourglass setup name. You decide what "deployed" means for a setup, for example that its resource pool exists in vCenter.
+- `setup` is the Hourglass setup name, exactly. Hourglass has no name mapping of its own. If your backend names things differently (a resource pool `lab-03_RP` for the setup `lab-03`), translate in your service before reporting. You may put the backend name in `labels` so admins can see it.
+- You decide what "deployed" means for a setup, for example that its resource pool exists in vCenter.
 - `labels` is optional and free-form. Admins see it next to the setup.
 - `observed_at` is when you took the measurement, in RFC 3339 UTC. It may be omitted.
 

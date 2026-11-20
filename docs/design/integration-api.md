@@ -1,6 +1,6 @@
 # Design: integration API (push model)
 
-Status: approved direction, not implemented. Written 2026-11-20 against `main` at `1ba15db` (after D40 and D41).
+Status: approved direction, not implemented. Written 2026-11-20 against `main` at `fd948a5`, which includes D40 (resource-name template and override removed) and D41.
 
 This document is the brief for the agent that implements the work. It says what to build and why, and names the decisions the owner already made. Where it leaves a detail open, choose the simplest option that satisfies the numbered requirements in [Requirements](#requirements) and record the choice in `docs/decisions.md`.
 
@@ -24,6 +24,15 @@ Hourglass stays the system of record for setups, holds and tokens. It still neve
 | The service may release holds. | Owner, 2026-11-20 |
 | A new `hold.releasing` event tells the service that a user asked to release a setup that is still deployed. | Owner, 2026-11-20 |
 | Setups are identified by their own name everywhere. There is no resource-name mapping in the core. | D40 |
+
+## Fit with D40
+
+D40 removed the resource-name template and the per-setup override. An allocation now belongs to the setup whose name equals its `ResourceName`, and mapping backend names to setup names is the provider's job. This design relies on that and adds nothing to it:
+
+- Reports name setups by their Hourglass name. The `reported` provider returns that name unchanged as `ResourceName`, so it has no naming config.
+- A customer whose backend objects are named differently (a pool `lab-03_RP` for the setup `lab-03`) does the mapping in their own service before reporting. Hourglass never sees the backend name unless they put it in `labels`.
+- Renaming a held setup is refused (D40 follow-up, `internal/api/handlers_admin.go`), so a name is stable for the life of a hold. After a free setup is renamed, the old name shows up in the report response's `unknown` list until the service re-reads the state.
+- Do not reintroduce a resource name, template or override anywhere: not in the stored reports, the state response, the OpenAPI file or the UI. `tools/check_core_generic.sh` rule 4 enforces part of this.
 
 ## Non-goals
 
@@ -227,7 +236,7 @@ The two can be used independently. `provider: reported` with `pressure: inventor
 
 - Extension factories receive only their config block, and extensions do not touch the database. The stored reports therefore live in a core package (suggested: `internal/reported`) that the API handlers write and the two extensions read.
 - The extensions live in a public package (suggested: `providers/reported`), register under the name `reported`, and are blank-imported by `cmd/hourglassd`. A third-party `main` gets them the same way.
-- The core must not import the extension package. `tools/check_core_generic.sh` must still pass.
+- The core must not import the extension package. `tools/check_core_generic.sh` must still pass: besides imports, it rejects vendor and provider terms and resource naming rules in any file under `internal/`, `pkg/hourglass/` and `pkg/hourglasstest/`, comments and test data included.
 - Both extensions must pass the conformance suites in `pkg/hourglasstest`.
 - `hourglassd check-provider` must work with them and report the age of each stored report.
 
@@ -332,9 +341,9 @@ New requirement ids continue the spec's scheme. Each needs at least one test tha
 ## Documentation deliverables
 
 1. **`docs/integrating.md`**, the guide for a customer's AI agent or engineer. A draft exists and was written from this design before the code. Run every example in it against the real server, correct whatever differs, and remove its status banner. It must stay self-contained: a reader who has only that file can build a working integration.
-2. `docs/SPEC.md`: add the requirements above, the new routes in the HTTP API table, the new tables, a service-account column in Roles and permissions, and `hold.releasing` in the event table.
+2. **Do not edit `docs/SPEC.md`.** It is a copy of the owner's source document (see D40). This design is the contract for the feature. Record it in `docs/decisions.md` as an owner-directed change that supersedes HOLD-2's refusal and extends AUTH-4, and list there the edits the source needs: the requirements above, the new routes in the HTTP API table, the new tables, a service-account column in Roles and permissions, and `hold.releasing` in the event table.
 3. `docs/extending.md`: `hold.releasing`, `Hold.ReleaseRequestedAt`, the `reported` rows in Bundled extensions, and a pointer to the integration guide as the no-Go path.
-4. `docs/deploying.md`: the `reported` config, service account setup, and `max_age`.
+4. `docs/deploying.md`: the `reported` config, service account setup, `max_age`, and an entry under Upgrade for migration 0005 and the changed release behaviour.
 5. `README.md`: one paragraph and a link under Documentation.
 6. `docs/decisions.md`: one row per decision taken during the work, from D42 on.
 
