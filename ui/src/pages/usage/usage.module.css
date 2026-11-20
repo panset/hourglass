@@ -18,3 +18,5 @@
 .axis { display: flex; justify-content: space-between; font-size: var(--fs-12); color: var(--color-muted); }
 .total { font-size: var(--fs-13); color: var(--color-muted); margin: 0 0 8px; }
 .stack { display: flex; flex-direction: column; gap: 12px; }
+
+.releasing { display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-start; }

@@ -1582,7 +1582,7 @@ components:
           description: Tokens per hour at the highest band's multiplier.
     Hold:
       type: object
-      required: [id, setup_id, setup_name, setup_labels, user_id, active, weight, acquired_at, metering_started_at, deployed_at, released_at, deployed, metering, cost_per_hour_tokens, charged_tokens, released_by, release_reason, forced]
+      required: [id, setup_id, setup_name, setup_labels, user_id, active, weight, acquired_at, metering_started_at, deployed_at, release_requested_at, released_at, deployed, metering, cost_per_hour_tokens, charged_tokens, released_by, release_reason, forced]
       properties:
         id: {type: integer, format: int64}
         setup_id: {type: integer, format: int64}
@@ -1594,7 +1594,7 @@ components:
         acquired_at: {type: string, format: date-time}
         metering_started_at: {type: string, format: date-time, nullable: true}
         deployed_at: {type: string, format: date-time, nullable: true}
-        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. The server always sends it, null when unset. It is not in `required` only so that existing UI fixtures keep compiling; the UI task may add it."}
+        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. Always sent, null when unset."}
         released_at: {type: string, format: date-time, nullable: true}
         deployed: {type: boolean, description: The provider currently reports the setup.}
         metering: {$ref: '#/components/schemas/MeteringState'}
@@ -1714,7 +1714,7 @@ components:
           items: {$ref: '#/components/schemas/PressurePoint'}
     Holder:
       type: object
-      required: [user_id, hold_id, name, balance_tokens, overdrawn, is_you]
+      required: [user_id, hold_id, name, balance_tokens, overdrawn, is_you, release_requested_at]
       properties:
         user_id: {type: integer, format: int64}
         hold_id: {type: integer, format: int64, description: "Use with POST /api/v1/holds/{id}/release."}
@@ -1722,7 +1722,7 @@ components:
         balance_tokens: {$ref: '#/components/schemas/Tokens'}
         overdrawn: {type: boolean}
         is_you: {type: boolean}
-        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset; not in `required` so existing UI fixtures keep compiling."}
+        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset."}
     SetupAdminFields:
       type: object
       description: Admin-only fields.
@@ -2048,9 +2048,16 @@ components:
         error: {type: string}
         started_at: {type: string, format: date-time}
         finished_at: {type: string, format: date-time, nullable: true}
+    ReportedReportTimes:
+      type: object
+      required: [observed_at, received_at, service_account]
+      properties:
+        observed_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        service_account: {type: string, description: Name of the service account that sent the report.}
     Collector:
       type: object
-      required: [extensions, last_successful_poll_at, last_error, matched_setups, orphan_count, outages_this_month, recent_runs, outages, orphans, failed_deliveries, queue_length]
+      required: [extensions, last_pressure_report, last_deployments_report, last_successful_poll_at, last_error, matched_setups, orphan_count, outages_this_month, recent_runs, outages, orphans, failed_deliveries, queue_length]
       properties:
         extensions:
           type: object
@@ -2062,6 +2069,14 @@ components:
             hooks:
               type: array
               items: {type: string}
+        last_pressure_report:
+          allOf: [{$ref: '#/components/schemas/ReportedReportTimes'}]
+          nullable: true
+          description: The stored pressure report. Null before the first one and when the pressure source is not `reported`.
+        last_deployments_report:
+          allOf: [{$ref: '#/components/schemas/ReportedReportTimes'}]
+          nullable: true
+          description: The stored deployment report. Null before the first one and when the provider is not `reported`.
         last_successful_poll_at: {type: string, format: date-time, nullable: true}
         last_error:
           type: object

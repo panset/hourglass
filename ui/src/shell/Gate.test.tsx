@@ -91,12 +91,18 @@ describe("UI-5 shell routing by session state", () => {
     expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
+  it("SVC-6 a developer on the service accounts URL gets not-found", async () => {
+    mockApi({ "GET /api/v1/session": developerSession, ...barRoutes });
+    renderAt("/admin/service-accounts");
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+  });
+
   it("an admin sees the admin links, with the pending count on Users", async () => {
     mockApi({ "GET /api/v1/session": adminSession, ...barRoutes });
     renderAt("/admin/users");
     expect(await screen.findByRole("heading", { name: "Users" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Users · 2 pending" })).toHaveAttribute("aria-current", "page");
-    for (const name of ["Setup inventory", "Settings", "Audit log"]) {
+    for (const name of ["Setup inventory", "Settings", "Service accounts", "Audit log"]) {
       expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
   });

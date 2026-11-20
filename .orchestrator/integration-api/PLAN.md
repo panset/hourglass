@@ -17,8 +17,8 @@ store. Later tasks are outlines and are re-planned when the one before returns.
 | 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | verified |
 | 65 | 5 | Pending release, `hold.releasing`, collector completion, service release route (HOLD-6..9, CMP-1) | build | sonnet | 64 | `internal/holds/`, `internal/collector/`, `internal/api/`, `pkg/hourglass/`, `hooks/webhook/`, `api/` | verified |
 | 66 | 5 | Independent verification of 63-65 | verify | opus | 65 | (read-only) | done (0 high, 2 medium, 4 low: 66b) |
-| 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | running |
-| 68 | 7 | End-to-end scenario with `reported` extensions and a scripted reporter: acquire, deploy, release request, teardown, completion, reporter going silent | build | sonnet | 67 | `deploy/`, `e2e/` | pending |
+| 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | done (verified in 69) |
+| 68 | 7 | End-to-end scenario with `reported` extensions and a scripted reporter: acquire, deploy, release request, teardown, completion, reporter going silent | build | sonnet | 67 | `deploy/`, `e2e/` | running |
 | 69 | 7 | Independent verification of 67-68 by running the scenario from scratch | verify | sonnet | 68 | (read-only) | pending |
 | 70 | 8 | Docs: run every example in `docs/integrating.md` against the running server, correct it, remove the banner; `extending.md`, `deploying.md` (Upgrade entry), `README.md`, `progress.md` | build | sonnet | 69 | `docs/`, `README.md` | pending |
 | 71 | 8 | Final verification: requirement-id coverage table, `./ci.sh`, guide examples re-run | verify | opus | 70 | (read-only) | pending |

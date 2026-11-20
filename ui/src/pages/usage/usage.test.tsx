@@ -77,6 +77,7 @@ const hold: Hold = {
   acquired_at: "2026-11-16T10:00:00Z",
   metering_started_at: "2026-11-16T12:00:00Z",
   deployed_at: "2026-11-16T11:00:00Z",
+  release_requested_at: null,
   released_at: null,
   deployed: true,
   metering: { active: true, started_at: "2026-11-16T12:00:00Z", expected_start_at: null, reason: null },
@@ -199,16 +200,33 @@ describe("My usage page", () => {
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/v1/me/holds?state=active").length).toBe(2));
   });
 
-  it("HOLD-2 a refused release shows the API message", async () => {
+  it("HOLD-6 a 202 shows the hold as Releasing without an error or a Released toast", async () => {
+    let held: Hold = hold;
     mockApi({
       ...okRoutes(),
-      "POST /api/v1/holds/7/release": () =>
-        errorResponse(409, "still_deployed", "This setup is still deployed. Tear it down, then release."),
+      "GET /api/v1/me/holds": () => ({ holds: [held] }),
+      "POST /api/v1/holds/7/release": () => {
+        held = { ...hold, release_requested_at: "2026-11-18T12:00:00Z" };
+        return new Response(JSON.stringify(held), { status: 202, headers: { "Content-Type": "application/json" } });
+      },
     });
     mount();
     await userEvent.click(await screen.findByRole("button", { name: "Release" }));
-    expect(await screen.findByText("This setup is still deployed. Tear it down, then release.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Release" })).toBeEnabled();
+    expect(await screen.findByText("Releasing")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Released setup-04.")).not.toBeInTheDocument();
+  });
+
+  it("HOLD-6 a hold with release_requested_at renders Releasing and no Release button", async () => {
+    mockApi({
+      ...okRoutes(),
+      "GET /api/v1/me/holds": { holds: [{ ...hold, release_requested_at: "2026-11-18T12:00:00Z" }] },
+    });
+    mount();
+    expect(await screen.findByText("Releasing")).toBeInTheDocument();
+    expect(screen.getByText(/requested/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release" })).not.toBeInTheDocument();
   });
 
   it("the local admin sees no balance, no holds section and no personal calls", async () => {

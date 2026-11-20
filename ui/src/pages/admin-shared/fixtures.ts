@@ -118,7 +118,7 @@ export const setup04: Setup = {
   labels: { size: "medium", site: "sjc" },
   weight: 1,
   state: "held",
-  holder: { user_id: 11, hold_id: 77, name: "Sam Lee", balance_tokens: 61, overdrawn: false, is_you: false },
+  holder: { user_id: 11, hold_id: 77, name: "Sam Lee", balance_tokens: 61, overdrawn: false, is_you: false, release_requested_at: null },
   held_since: "2026-11-18T08:00:00Z",
   deployed: true,
   metering: null,
@@ -160,6 +160,8 @@ export function setupList(setups: Setup[]): SetupList {
 
 export const emptyCollector: Collector = {
   extensions: { provider: "vsphere", pressure_source: "vsphere", metering_policy: "default", hooks: [] },
+  last_pressure_report: null,
+  last_deployments_report: null,
   last_successful_poll_at: "2026-11-18T17:30:00Z",
   last_error: null,
   matched_setups: 9,

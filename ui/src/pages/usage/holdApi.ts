@@ -18,8 +18,14 @@ const periodQuery = (period?: string) => (period ? `?period=${encodeURIComponent
 export const getMyUsage = (period?: string) => api.get<UsageResponse>(`/api/v1/me/usage${periodQuery(period)}`);
 export const getMyLedger = (period?: string) => api.get<LedgerResponse>(`/api/v1/me/ledger${periodQuery(period)}`);
 
-/** Normal release: empty body, so the API applies the teardown check (HOLD-2). */
+/**
+ * Normal release: empty body. The API answers 200 with the released hold, or 202 with the still-active
+ * hold and `release_requested_at` set, when the setup is still deployed (HOLD-6).
+ */
 export const releaseHold = (holdId: number) => api.post<Hold>(`/api/v1/holds/${holdId}/release`);
+
+/** True when the release answer is the pending one (202): the hold is still active and waiting for teardown. */
+export const isPendingRelease = (h: Hold | undefined): boolean => !!h && h.active && !!h.release_requested_at;
 
 /** Display only: elapsed time since an API timestamp, as "2 d 4 h". */
 export function elapsedSince(iso: string | null | undefined, now: number = Date.now()): string {

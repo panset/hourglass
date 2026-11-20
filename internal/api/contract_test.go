@@ -569,6 +569,16 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 	for _, s := range []*sess{&w.pending, &w.rejected, &w.noRole} {
 		w.status(w.get("/api/v1/session", s), 200)
 	}
+	// Stored reports, so the collector answer carries both report objects.
+	{
+		at := time.Date(2026, 11, 19, 8, 0, 0, 0, time.UTC) // older than any report the later steps send
+		if err := w.st.ReplaceReportedPressure(context.Background(), store.ReportedPressure{Value: 0.4, ObservedAt: at, ReceivedAt: at, ServiceAccount: "reporter"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.st.ReplaceReportedDeployments(context.Background(), store.ReportedHeader{ObservedAt: at, ReceivedAt: at, ServiceAccount: "reporter"}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, p := range []string{"/api/v1/admin/users", "/api/v1/admin/users?status=pending", "/api/v1/admin/rules", "/api/v1/admin/settings",
 		"/api/v1/admin/collector", "/api/v1/admin/audit", "/api/v1/admin/audit?action=settings.update", "/api/v1/admin/audit?limit=2"} {
 		w.status(w.get(p, &w.adm), 200)

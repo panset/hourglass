@@ -40,21 +40,21 @@ const setups: Setup[] = [
   {
     ...base, id: 1, name: "setup-01", labels: { size: "extralarge" }, weight: 4, state: "held", deployed: true,
     held_since: "2026-11-10T00:00:00Z",
-    holder: { user_id: 9, hold_id: 91, name: "Sam Lee", balance_tokens: 61, overdrawn: false, is_you: false },
+    holder: { user_id: 9, hold_id: 91, name: "Sam Lee", balance_tokens: 61, overdrawn: false, is_you: false, release_requested_at: null },
     metering: { active: true, started_at: "2026-11-10T00:00:00Z", expected_start_at: null, reason: null },
     cost_per_hour_tokens: { now: 8, at_peak: 12 },
   },
   {
     ...base, id: 2, name: "setup-02", labels: { size: "large" }, weight: 2, state: "held", deployed: true,
     held_since: "2026-11-09T00:00:00Z",
-    holder: { user_id: 10, hold_id: 92, name: "Priya N.", balance_tokens: -12, overdrawn: true, is_you: false },
+    holder: { user_id: 10, hold_id: 92, name: "Priya N.", balance_tokens: -12, overdrawn: true, is_you: false, release_requested_at: null },
     metering: { active: true, started_at: "2026-11-09T00:00:00Z", expected_start_at: null, reason: null },
     cost_per_hour_tokens: { now: 4, at_peak: 6 },
   },
   {
     ...base, id: 4, name: "setup-04", labels: { size: "medium" }, weight: 1, state: "held", deployed: true,
     held_since: "2026-11-16T10:00:00Z",
-    holder: { user_id: 2, hold_id: 94, name: "Dana Dev", balance_tokens: 142, overdrawn: false, is_you: true },
+    holder: { user_id: 2, hold_id: 94, name: "Dana Dev", balance_tokens: 142, overdrawn: false, is_you: true, release_requested_at: null },
     metering: { active: true, started_at: "2026-11-16T10:00:00Z", expected_start_at: null, reason: null },
     cost_per_hour_tokens: { now: 2, at_peak: 3 },
   },
@@ -128,7 +128,7 @@ describe("Setups page", () => {
   it("UI-1 not-yet-charging setups show their cost per hour, with the API reason text as secondary text when there is one", async () => {
     const waiting = (id: number, reason: string | null): Setup => ({
       ...base, id, name: `wait-${id}`, labels: { size: "small" }, weight: 1, state: "held", deployed: false, held_since: "2026-11-16T10:00:00Z",
-      holder: { user_id: 3, hold_id: 90 + id, name: "Sam Lee", balance_tokens: 5, overdrawn: false, is_you: false },
+      holder: { user_id: 3, hold_id: 90 + id, name: "Sam Lee", balance_tokens: 5, overdrawn: false, is_you: false, release_requested_at: null },
       metering: { active: false, started_at: null, expected_start_at: "2099-01-01T00:00:00Z", reason },
       cost_per_hour_tokens: { now: 2, at_peak: 3 },
     });
@@ -242,21 +242,61 @@ describe("Setups page", () => {
     expect(await screen.findByText("You already hold 2 of 2 allowed setups.")).toBeInTheDocument();
   });
 
-  it("HOLD-2 Release on own hold posts to its hold id; a refusal shows the API message", async () => {
+  it("HOLD-2 Release on own hold posts to its hold id and says Released on a 200", async () => {
     const { calls } = mockApi(
-      routes({
-        "POST /api/v1/holds/94/release": () =>
-          errorResponse(409, "still_deployed", "This setup is still deployed. Tear it down, then release."),
-      }),
+      routes({ "POST /api/v1/holds/94/release": { id: 94, active: false, release_requested_at: null } }),
     );
     mount();
     const row = (await screen.findByText("setup-04")).closest("tr")!;
     expect(within(screen.getByText("setup-01").closest("tr")!).queryByRole("button", { name: "Release" })).not.toBeInTheDocument();
     await userEvent.click(within(row).getByRole("button", { name: "Release" }));
-    expect(await screen.findByText("This setup is still deployed. Tear it down, then release.")).toBeInTheDocument();
+    expect(await screen.findByText("Released setup-04.")).toBeInTheDocument();
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.url).toBe("/api/v1/holds/94/release");
     expect(post.headers.get("X-CSRF-Token")).toBe("csrf-dana");
+  });
+
+  it("HOLD-6 a 202 moves the row to Releasing without an error or a Released toast", async () => {
+    let requested: string | null = null;
+    const mine = (s: Setup): Setup =>
+      s.id === 4 ? { ...s, holder: { ...s.holder!, release_requested_at: requested } } : s;
+    mockApi(
+      routes({
+        "GET /api/v1/setups": () => list({}, setups.map(mine)),
+        "POST /api/v1/holds/94/release": () => {
+          requested = "2026-11-18T12:00:00Z";
+          return new Response(JSON.stringify({ id: 94, active: true, release_requested_at: requested }), {
+            status: 202,
+            headers: { "Content-Type": "application/json" },
+          });
+        },
+      }),
+    );
+    mount();
+    const row = (await screen.findByText("setup-04")).closest("tr")!;
+    await userEvent.click(within(row).getByRole("button", { name: "Release" }));
+    const after = await waitFor(() => {
+      const r = screen.getByText("setup-04").closest("tr")!;
+      expect(within(r).getByText("Releasing")).toBeInTheDocument();
+      return r;
+    });
+    expect(within(after).queryByRole("button", { name: "Release" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Released setup-04.")).not.toBeInTheDocument();
+    expect(screen.getByText(/Release requested for setup-04/)).toBeInTheDocument();
+  });
+
+  it("HOLD-6 a hold with release_requested_at shows Releasing with the request time and no Release button", async () => {
+    const releasing = setups.map((s) =>
+      s.id === 4 ? { ...s, holder: { ...s.holder!, release_requested_at: "2026-11-18T12:00:00Z" } } : s,
+    );
+    mockApi(routes({ "GET /api/v1/setups": list({}, releasing) }));
+    mount();
+    const row = (await screen.findByText("setup-04")).closest("tr")!;
+    expect(within(row).getByText("Releasing")).toBeInTheDocument();
+    expect(within(row).getByText(/requested/)).toBeInTheDocument();
+    expect(row.querySelector("time")).toHaveAttribute("datetime", "2026-11-18T12:00:00Z");
+    expect(within(row).queryByRole("button", { name: "Release" })).not.toBeInTheDocument();
   });
 
   it("the local admin sees no Acquire button and /me is not called", async () => {

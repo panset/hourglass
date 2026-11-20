@@ -290,7 +290,7 @@ func TestADM4_CollectorHealth(t *testing.T) {
 	}
 
 	b := uWantOK(t, e.get("/api/v1/admin/collector"), 200)
-	uWantKeys(t, "collector", b, "extensions", "last_successful_poll_at", "last_error", "matched_setups", "orphan_count", "outages_this_month",
+	uWantKeys(t, "collector", b, "extensions", "last_pressure_report", "last_deployments_report", "last_successful_poll_at", "last_error", "matched_setups", "orphan_count", "outages_this_month",
 		"recent_runs", "outages", "orphans", "failed_deliveries", "queue_length")
 	ext := adObjOf(t, b["extensions"])
 	uWantKeys(t, "extensions", ext, "provider", "pressure_source", "metering_policy", "hooks")

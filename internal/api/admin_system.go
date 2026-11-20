@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/store"
 )
 
@@ -72,8 +73,17 @@ type collectorOutagesMonth struct {
 	Minutes int `json:"minutes_not_charged"`
 }
 
+// collectorReport is the stored report of one `reported` extension (D62).
+type collectorReport struct {
+	ObservedAt     string `json:"observed_at"`
+	ReceivedAt     string `json:"received_at"`
+	ServiceAccount string `json:"service_account"`
+}
+
 type collectorOut struct {
 	Extensions           collectorExtensions    `json:"extensions"`
+	LastPressureReport   *collectorReport       `json:"last_pressure_report"`
+	LastDeploymentReport *collectorReport       `json:"last_deployments_report"`
 	LastSuccessfulPollAt *string                `json:"last_successful_poll_at"`
 	LastError            *collectorLastError    `json:"last_error"`
 	MatchedSetups        int                    `json:"matched_setups"`
@@ -95,6 +105,23 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 	out := collectorOut{
 		Extensions: collectorExtensions{Provider: rt.Provider, PressureSource: rt.PressureSource,
 			MeteringPolicy: rt.MeteringPolicy.Name, Hooks: rt.Hooks},
+	}
+	// The stored reports exist for the reported extensions only; otherwise both stay null (D62).
+	if a.d.Runtime.ReportedPressureMaxAge > 0 {
+		switch pr, err := a.reported.Pressure(ctx); {
+		case err == nil:
+			out.LastPressureReport = &collectorReport{ObservedAt: ts(pr.ObservedAt), ReceivedAt: ts(pr.ReceivedAt), ServiceAccount: pr.ServiceAccount}
+		case err != reported.ErrNoReport:
+			return out, err
+		}
+	}
+	if a.d.Runtime.ReportedProviderMaxAge > 0 {
+		switch dr, err := a.reported.Deployments(ctx); {
+		case err == nil:
+			out.LastDeploymentReport = &collectorReport{ObservedAt: ts(dr.ObservedAt), ReceivedAt: ts(dr.ReceivedAt), ServiceAccount: dr.ServiceAccount}
+		case err != reported.ErrNoReport:
+			return out, err
+		}
 	}
 	runs, err := st.ListCollectorRuns(ctx, collectorListLimit)
 	if err != nil {

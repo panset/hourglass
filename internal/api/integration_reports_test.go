@@ -515,3 +515,52 @@ func TestINT8_StateWithoutReportedExtensions(t *testing.T) {
 		t.Errorf("state = %s", rec.Body)
 	}
 }
+
+// D62: the admin collector answer carries the stored reports' times and the
+// sending account; both are null before the first report and when the
+// extension is not `reported`.
+func TestINT7_AdminCollectorShowsReportTimes(t *testing.T) {
+	e := newReportEnv(t)
+	admin := e.newUser("boss", store.StatusActive, store.RoleAdmin)
+	get := func(b *backend) map[string]any {
+		t.Helper()
+		rec := b.serve("GET", "/api/v1/admin/collector", &admin, false, "")
+		if rec.Code != 200 {
+			t.Fatalf("%d %s", rec.Code, rec.Body)
+		}
+		return decodeMap(t, rec)
+	}
+	m := get(e.backend)
+	if v, ok := m["last_pressure_report"]; !ok || v != nil {
+		t.Errorf("before a report: last_pressure_report = %v", v)
+	}
+	if v, ok := m["last_deployments_report"]; !ok || v != nil {
+		t.Errorf("before a report: last_deployments_report = %v", v)
+	}
+	if rec := e.put(pressurePath, `{"value":0.5,"observed_at":"2026-11-20T09:59:00Z"}`); rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if rec := e.put(deploymentsPath, `{"deployments":[]}`); rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	m = get(e.backend)
+	pr, _ := m["last_pressure_report"].(map[string]any)
+	dr, _ := m["last_deployments_report"].(map[string]any)
+	if pr["observed_at"] != "2026-11-20T09:59:00.000Z" || pr["received_at"] != "2026-11-20T10:00:00.000Z" || pr["service_account"] != "reporter" || len(pr) != 3 {
+		t.Errorf("last_pressure_report = %v", pr)
+	}
+	if dr["service_account"] != "reporter" || dr["received_at"] != "2026-11-20T10:00:00.000Z" || len(dr) != 3 {
+		t.Errorf("last_deployments_report = %v", dr)
+	}
+
+	// A stored report of an earlier configuration does not show when the extensions are not `reported`.
+	o := newBackend(t, backendOpts{runtime: Runtime{Provider: "other", PressureSource: "other"}})
+	if _, err := reported.New(o.st, o.clk).SubmitDeployments(context.Background(), "old", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	admin = o.newUser("boss", store.StatusActive, store.RoleAdmin)
+	m = get(o)
+	if m["last_pressure_report"] != nil || m["last_deployments_report"] != nil {
+		t.Errorf("without the reported extensions: %v", m)
+	}
+}

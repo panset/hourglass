@@ -5,12 +5,12 @@ import { useState, type FormEvent } from "react";
 import { ApiError, api } from "../../api/client";
 import { getMe, getPressure } from "../../api/endpoints";
 import type { Me } from "../../api/types";
-import { Alert, Badge, Button, Clip, ConfirmDialog, Field, Input, Modal, Select, Table, useToast } from "../../components";
+import { Alert, Badge, Button, Clip, ConfirmDialog, Field, Input, Modal, Select, Table, Time, useToast } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { POLL_INTERVAL_MS } from "../../hooks/usePolling";
 import { formatMultiplier, formatPerHour, formatTokens } from "../../lib/format";
 import { isAdmin, useSession } from "../../shell/session";
-import { elapsedSince, releaseHold, type Hold, type Setup, type SetupList } from "../usage/holdApi";
+import { elapsedSince, isPendingRelease, releaseHold, type Hold, type Setup, type SetupList } from "../usage/holdApi";
 import styles from "./setups.module.css";
 
 const getSetups = (selector: string) =>
@@ -100,8 +100,13 @@ export default function SetupsPage() {
     setReleasing(s.holder.hold_id);
     setActionError(undefined);
     try {
-      await releaseHold(s.holder.hold_id);
-      toast.push(`Released ${s.name}.`, "success");
+      const done = await releaseHold(s.holder.hold_id);
+      toast.push(
+        isPendingRelease(done)
+          ? `Release requested for ${s.name}. It completes when the setup is torn down.`
+          : `Released ${s.name}.`,
+        "success",
+      );
       reloadAll();
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "Release failed.");
@@ -180,9 +185,18 @@ export default function SetupsPage() {
             Details
           </button>
           {s.holder?.is_you ? (
-            <Button disabled={releasing === s.holder.hold_id} onClick={() => void release(s)}>
-              Release
-            </Button>
+            s.holder.release_requested_at ? (
+              <span className={styles.releasing}>
+                <Badge tone="amber">Releasing</Badge>
+                <span className={styles.reason}>
+                  requested <Time iso={s.holder.release_requested_at} />
+                </span>
+              </span>
+            ) : (
+              <Button disabled={releasing === s.holder.hold_id} onClick={() => void release(s)}>
+                Release
+              </Button>
+            )
           ) : null}
           {s.state === "free" && !localAdmin ? (
             <Button

@@ -5,11 +5,34 @@ import { Alert, Button, Field, Input, Table, Time, zoneLabel } from "../../compo
 import { useApi } from "../../hooks/useApi";
 import shared from "../admin-shared/admin.module.css";
 import { errorText, useAction } from "../admin-shared/useAction";
-import { getCollector, getRules, getSettings, putRules, putSettings } from "./api";
+import { getCollector, getRules, getSettings, putRules, putSettings, type Collector as CollectorData } from "./api";
 import { sameJson, toForm, toRuleInputs, toRuleRows, toSettings, type FieldErrors, type RuleRow, type SettingsForm } from "./form";
 
 const POLL_MS = 60_000;
 let newKey = 1;
+
+type ReportTimes = NonNullable<CollectorData["last_pressure_report"]>;
+
+/** One stored report: when it was observed and received, and which account sent it (D62). Null is "None received". */
+function ReportStat({ title, report }: { title: string; report: ReportTimes | null }) {
+  return (
+    <div className={shared.stat}>
+      <span className={shared.sub}>{title}</span>
+      {report ? (
+        <>
+          <span className={shared.statValue}>
+            <Time iso={report.received_at} />
+          </span>
+          <span className={shared.sub}>
+            received from {report.service_account}; observed <Time iso={report.observed_at} />
+          </span>
+        </>
+      ) : (
+        <span className={shared.statValue}>None received</span>
+      )}
+    </div>
+  );
+}
 
 function Collector() {
   const c = useApi(getCollector, [], { pollMs: POLL_MS });
@@ -25,6 +48,8 @@ function Collector() {
             {d.last_successful_poll_at ? <Time iso={d.last_successful_poll_at} /> : "Never"}
           </span>
         </div>
+        <ReportStat title="Last pressure report" report={d.last_pressure_report} />
+        <ReportStat title="Last deployment report" report={d.last_deployments_report} />
         <div className={shared.stat}>
           <span className={shared.sub}>Setups matched</span>
           <span className={shared.statValue}>{d.matched_setups}</span>
@@ -219,7 +244,7 @@ export default function Page() {
               Require teardown before release
             </label>
             <p className={shared.note}>
-              Release is refused while the provider still reports the setup. No effect without a provider.
+              A release while the provider still reports the setup is only requested; the hold is released when the setup is gone. No effect without a provider.
             </p>
           </section>
 

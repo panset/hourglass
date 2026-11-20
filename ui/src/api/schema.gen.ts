@@ -1021,9 +1021,9 @@ export interface components {
             deployed_at: string | null;
             /**
              * Format: date-time
-             * @description Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. The server always sends it, null when unset. It is not in `required` only so that existing UI fixtures keep compiling; the UI task may add it.
+             * @description Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. Always sent, null when unset.
              */
-            release_requested_at?: string | null;
+            release_requested_at: string | null;
             /** Format: date-time */
             released_at: string | null;
             /** @description The provider currently reports the setup. */
@@ -1139,9 +1139,9 @@ export interface components {
             is_you: boolean;
             /**
              * Format: date-time
-             * @description Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset; not in `required` so existing UI fixtures keep compiling.
+             * @description Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset.
              */
-            release_requested_at?: string | null;
+            release_requested_at: string | null;
         };
         /** @description Admin-only fields. */
         SetupAdminFields: {
@@ -1425,6 +1425,14 @@ export interface components {
             /** Format: date-time */
             finished_at: string | null;
         };
+        ReportedReportTimes: {
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: date-time */
+            received_at: string;
+            /** @description Name of the service account that sent the report. */
+            service_account: string;
+        };
         Collector: {
             extensions: {
                 provider: string | null;
@@ -1432,6 +1440,10 @@ export interface components {
                 metering_policy: string;
                 hooks: string[];
             };
+            /** @description The stored pressure report. Null before the first one and when the pressure source is not `reported`. */
+            last_pressure_report: components["schemas"]["ReportedReportTimes"] | null;
+            /** @description The stored deployment report. Null before the first one and when the provider is not `reported`. */
+            last_deployments_report: components["schemas"]["ReportedReportTimes"] | null;
             /** Format: date-time */
             last_successful_poll_at: string | null;
             last_error: {

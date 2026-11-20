@@ -92,6 +92,33 @@ describe("ADM-2 settings page states", () => {
     expect(screen.getByText(/Provider: vsphere/)).toHaveTextContent("Hooks: notify");
   });
 
+  it("INT-7 shows when the last pressure and deployment reports arrived, and who sent them", async () => {
+    mockApi(
+      routes({
+        "GET /api/v1/admin/collector": {
+          ...collector,
+          last_pressure_report: { observed_at: "2026-11-18T17:20:00Z", received_at: "2026-11-18T17:21:00Z", service_account: "lab-agent" },
+          last_deployments_report: { observed_at: "2026-11-18T17:10:00Z", received_at: "2026-11-18T17:11:00Z", service_account: "lab-sync" },
+        },
+      }),
+    );
+    render(<Page />);
+    const pressure = (await screen.findByText("Last pressure report")).closest("div")!;
+    expect(pressure).toHaveTextContent("received from lab-agent");
+    expect(pressure.querySelector("time[datetime='2026-11-18T17:21:00Z']")).not.toBeNull();
+    const deployments = screen.getByText("Last deployment report").closest("div")!;
+    expect(deployments).toHaveTextContent("received from lab-sync");
+    expect(deployments.querySelector("time[datetime='2026-11-18T17:11:00Z']")).not.toBeNull();
+  });
+
+  it("INT-7 shows None received when a report is null (none yet, or the extension is not reported)", async () => {
+    mockApi(routes({ "GET /api/v1/admin/collector": emptyCollector }));
+    render(<Page />);
+    const pressure = (await screen.findByText("Last pressure report")).closest("div")!;
+    expect(pressure).toHaveTextContent("None received");
+    expect(screen.getByText("Last deployment report").closest("div")).toHaveTextContent("None received");
+  });
+
   it("shows an empty collector state", async () => {
     mockApi(routes({ "GET /api/v1/admin/collector": emptyCollector, "GET /api/v1/admin/rules": { ...rules, rules: [], unmatched_setups: [] } }));
     render(<Page />);

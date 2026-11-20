@@ -20,6 +20,7 @@ import { BarChart } from "./BarChart";
 import {
   elapsedSince,
   getMyLedger,
+  isPendingRelease,
   getMyUsage,
   listActiveHolds,
   releaseHold,
@@ -76,8 +77,13 @@ export default function UsagePage() {
     setReleasing(h.id);
     setReleaseError(undefined);
     try {
-      await releaseHold(h.id);
-      toast.push(`Released ${h.setup_name}.`, "success");
+      const done = await releaseHold(h.id);
+      toast.push(
+        isPendingRelease(done)
+          ? `Release requested for ${h.setup_name}. It completes when the setup is torn down.`
+          : `Released ${h.setup_name}.`,
+        "success",
+      );
       holds.reload();
       me.reload();
       ledger.reload();
@@ -212,18 +218,26 @@ export default function UsagePage() {
                     {
                       key: "action",
                       header: "",
-                      render: (h) => (
-                        <Button disabled={releasing === h.id} onClick={() => void release(h)}>
-                          Release
-                        </Button>
-                      ),
+                      render: (h) =>
+                        h.release_requested_at ? (
+                          <span className={styles.releasing}>
+                            <Badge tone="amber">Releasing</Badge>
+                            <span className={styles.sub}>
+                              requested <Time iso={h.release_requested_at} />
+                            </span>
+                          </span>
+                        ) : (
+                          <Button disabled={releasing === h.id} onClick={() => void release(h)}>
+                            Release
+                          </Button>
+                        ),
                     },
                   ]}
                 />
               ) : null}
               <p className={styles.note}>
-                Charging continues until you release. Tear the setup down first: release is refused while it is still
-                deployed.
+                Charging continues until you release. If the setup is still deployed, Release only requests it: the hold shows
+                Releasing, keeps charging, and is released when the setup is torn down.
               </p>
             </section>
 
