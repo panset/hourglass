@@ -167,7 +167,7 @@ What the first sign-in looks like:
 1. The user opens Hourglass and chooses Sign in with SSO. They sign in at your provider.
 2. Hourglass creates them with no role and status `pending`, and shows one page: "You are not authorized to use Hourglass. Reach out to your admin." Every data route of the API returns 403 for them.
 3. An admin opens Admin, Users. Pending requests are listed oldest first with name, email and first sign-in time, and the navigation shows the count. The admin assigns `developer` or `admin` to approve, or rejects. A rejected user keeps seeing the same page and can be approved later.
-4. The user reloads and lands on My usage. The monthly allowance is credited when the first role is assigned, not at sign-in.
+4. The user reloads and lands on My usage (`/usage`). The monthly allowance is credited when the first role is assigned, not at sign-in.
 
 Signing out of Hourglass ends only the Hourglass session. It does not sign the user out of the identity provider, so a second sign-in in the same browser can be silent and use the same identity. To test with several users, use separate private windows.
 

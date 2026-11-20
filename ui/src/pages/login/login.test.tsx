@@ -72,11 +72,12 @@ describe("AUTH-6 login page", () => {
       "POST /auth/local": localAdminSession,
       "GET /api/v1/pressure": { smoothed: 0.5, multiplier: 1 },
       "GET /api/v1/admin/users": { pending_count: 0 },
+      "GET /api/v1/setups": { setups: [], display_label_keys: [], summary: { enabled: 0, deployed: 0, free: 0 }, metering_description: "" },
     });
     renderLogin();
     await userEvent.type(await screen.findByLabelText("Password"), "secret-pass");
     await userEvent.click(screen.getByRole("button", { name: "Sign in as admin" }));
-    expect(await screen.findByRole("heading", { name: "My usage" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Setups" })).toBeInTheDocument();
     expect(calls.find((c) => c.method === "POST")?.body).toEqual({ username: "admin", password: "secret-pass" });
   });
 });

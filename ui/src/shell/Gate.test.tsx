@@ -73,6 +73,7 @@ describe("UI-5 shell routing by session state", () => {
     mockApi({ "GET /api/v1/session": developerSession, ...barRoutes });
     renderAt("/");
     expect(await screen.findByRole("heading", { name: "My usage" })).toBeInTheDocument();
+    expect(where()).toBe("/usage");
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(nav).toHaveTextContent("My usage");
     expect(nav).toHaveTextContent("Setups");
@@ -102,7 +103,7 @@ describe("UI-5 shell routing by session state", () => {
 
   it("the local admin sees no balance and /me is never called", async () => {
     const { calls } = mockApi({ "GET /api/v1/session": localAdminSession, ...barRoutes });
-    renderAt("/");
+    renderAt("/usage");
     expect(await screen.findByText(/Lab 82%/)).toBeInTheDocument();
     expect(screen.queryByText(/tokens$/)).not.toBeInTheDocument();
     expect(calls.some((c) => c.url === "/api/v1/me")).toBe(false);
@@ -112,7 +113,32 @@ describe("UI-5 shell routing by session state", () => {
     mockApi({ "GET /api/v1/session": developerSession, ...barRoutes });
     renderAt("/login");
     expect(await screen.findByRole("heading", { name: "My usage" })).toBeInTheDocument();
-    expect(where()).toBe("/");
+    expect(where()).toBe("/usage");
+  });
+
+  it("D41 an admin (the local admin included) landing on / is sent to /setups", async () => {
+    for (const session of [adminSession, localAdminSession]) {
+      mockApi({ "GET /api/v1/session": session, ...barRoutes, "GET /api/v1/setups": { setups: [], display_label_keys: [], summary: { enabled: 0, deployed: 0, free: 0 }, metering_description: "" } });
+      const { unmount } = renderAt("/");
+      expect(await screen.findByRole("navigation", { name: "Main" })).toBeInTheDocument();
+      await waitFor(() => expect(where()).toBe("/setups"));
+      expect(screen.getByRole("link", { name: "My usage" })).toHaveAttribute("href", "/usage");
+      unmount();
+    }
+  });
+
+  it("D41 a deep link is respected: /usage and /admin/users stay where they are for an admin", async () => {
+    mockApi({ "GET /api/v1/session": adminSession, ...barRoutes });
+    renderAt("/usage");
+    expect(await screen.findByRole("heading", { name: "My usage" })).toBeInTheDocument();
+    expect(where()).toBe("/usage");
+  });
+
+  it("D41 a user with no role on / still sees only the not-authorized page", async () => {
+    mockApi({ "GET /api/v1/session": noRoleSession });
+    renderAt("/");
+    expect(await screen.findByText(/not authorized/)).toBeInTheDocument();
+    expect(where()).toBe("/unauthorized");
   });
 
   it("a 401 from any call sends the user to /login", async () => {

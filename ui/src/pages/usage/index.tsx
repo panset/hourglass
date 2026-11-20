@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// My usage (`/`): balance, burn, projection, pressure, holds, tokens per day, ledger. Every number is an API field (UI-1).
+// My usage (`/usage`): balance, burn, projection, pressure, holds, tokens per day, ledger. Every number is an API field (UI-1).
 import { useState } from "react";
 import { ApiError } from "../../api/client";
 import { getMe, getPressure } from "../../api/endpoints";

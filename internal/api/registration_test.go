@@ -102,7 +102,7 @@ func TestAUTH4_NoHandlerIsRegisteredOutsideTheRouteTable(t *testing.T) {
 
 // uiRouteLiterals are the UI's client-side routes. UI-7: nothing in the Go
 // code may depend on them (the OIDC callback redirects only to "/").
-var uiRouteLiterals = []string{"/login", "/unauthorized", "/setups", "/admin/users", "/admin/setups", "/admin/settings", "/admin/audit"}
+var uiRouteLiterals = []string{"/login", "/unauthorized", "/setups", "/usage", "/admin/users", "/admin/setups", "/admin/settings", "/admin/audit"}
 
 // TestUI7_NoGoCodeNamesAUIRoute is a source scan: a string literal in non-test
 // Go code under internal/, cmd/ or pkg/ that is, or starts with, a UI route

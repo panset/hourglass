@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Manifest of the six role pages. Each page lives alone in pages/<name>/index.tsx (default export) and is
+// Manifest of the six role pages. "/" is not a page: the Gate sends admins to /setups and everyone else to /usage (D41). Each page lives alone in pages/<name>/index.tsx (default export) and is
 // lazy-loaded. A page task edits only its own directory; adding a seventh page is one line here.
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 
@@ -13,7 +13,7 @@ export interface PageRoute {
 }
 
 export const pageRoutes: PageRoute[] = [
-  { path: "/", title: "My usage", Component: lazy(() => import("./pages/usage")) },
+  { path: "/usage", title: "My usage", Component: lazy(() => import("./pages/usage")) },
   { path: "/setups", title: "Setups", Component: lazy(() => import("./pages/setups")) },
   { path: "/admin/users", title: "Users", admin: true, Component: lazy(() => import("./pages/admin-users")) },
   { path: "/admin/setups", title: "Setup inventory", admin: true, Component: lazy(() => import("./pages/admin-setups")) },

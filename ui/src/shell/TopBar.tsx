@@ -25,7 +25,7 @@ export function TopBar() {
   const link = (path: string, title: string) => {
     const label = path === "/admin/users" && pendingCount > 0 ? `${title} · ${pendingCount} pending` : title;
     return (
-      <NavLink key={path} to={path} end={path === "/"} className={styles.link}>
+      <NavLink key={path} to={path} className={styles.link}>
         {label}
       </NavLink>
     );

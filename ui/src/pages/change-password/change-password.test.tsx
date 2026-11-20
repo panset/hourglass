@@ -49,12 +49,13 @@ describe("AUTH-7 change-password screen", () => {
     const { calls } = setup({
       "POST /auth/local/password": { ...localAdminSession, csrf_token: "csrf-new" },
       ...barRoutes,
+      "GET /api/v1/setups": { setups: [], display_label_keys: [], summary: { enabled: 0, deployed: 0, free: 0 }, metering_description: "" },
     });
     await userEvent.type(await screen.findByLabelText("Current password"), "old");
     await userEvent.type(screen.getByLabelText("New password"), "a-long-enough-pw");
     await userEvent.type(screen.getByLabelText("Repeat new password"), "a-long-enough-pw");
     await userEvent.click(screen.getByRole("button", { name: "Change password" }));
-    expect(await screen.findByRole("heading", { name: "My usage" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Setups" })).toBeInTheDocument();
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.headers.get("X-CSRF-Token")).toBe("csrf-local");
     expect(post.body).toEqual({ current_password: "old", new_password: "a-long-enough-pw" });

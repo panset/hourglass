@@ -6,14 +6,15 @@ import Login from "../pages/login";
 import Unauthorized from "../pages/unauthorized";
 import { Layout } from "./Layout";
 import { useState } from "react";
-import { useSessionState } from "./session";
+import { isAdmin, useSessionState } from "./session";
 
 const PUBLIC_ONLY = new Set(["/login", "/unauthorized", "/change-password"]);
 
 /**
  * Decides what to render from the session alone (UI-5, AUTH-5):
  * no session -> /login; must_change_password -> only the change-password screen;
- * no roles -> only /unauthorized, whatever URL was requested; otherwise the app layout.
+ * no roles -> only /unauthorized, whatever URL was requested; otherwise the app layout
+ * ("/" redirects by role, D41).
  */
 export function Gate() {
   const { state, refresh } = useSessionState();
@@ -37,7 +38,10 @@ export function Gate() {
   if (s.roles.length === 0) {
     return pathname === "/unauthorized" ? <Unauthorized /> : <Navigate to="/unauthorized" replace />;
   }
-  if (PUBLIC_ONLY.has(pathname)) return <Navigate to="/" replace />;
+  // "/" has no page of its own (D41): admins land on Setups, everyone else on My usage. Other URLs stay as requested.
+  if (pathname === "/" || PUBLIC_ONLY.has(pathname)) {
+    return <Navigate to={isAdmin(s) ? "/setups" : "/usage"} replace />;
+  }
   return <Layout />;
 }
 

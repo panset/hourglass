@@ -173,7 +173,7 @@ const debits = (l: LedgerRow[], mult?: number) =>
   l.filter((r) => r.type.startsWith("Debit") && (mult === undefined || r.mult === mult));
 
 async function reloadHome(page: Page) {
-  await page.goto("/");
+  await page.goto("/usage");
   await expect(page.getByRole("heading", { name: "My usage" })).toBeVisible();
   await expect(page.getByRole("table", { name: "Ledger" })).toBeVisible();
 }
@@ -497,7 +497,7 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     const l = await expect
       .poll(
         async () => {
-          await p.goto("/");
+          await p.goto("/usage");
           if (new URL(p.url()).pathname === "/login" || (await p.getByRole("link", { name: "Sign in with SSO" }).count())) {
             await p.getByRole("link", { name: "Sign in with SSO" }).click();
             await finishKeycloak(p, ALICE);
