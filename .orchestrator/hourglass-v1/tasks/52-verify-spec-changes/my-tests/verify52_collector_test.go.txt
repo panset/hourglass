@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+
+package collector
+
+import (
+	"testing"
+
+	defpol "github.com/panset/hourglass/policies/default"
+	"github.com/panset/hourglass/internal/holds"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+func v52env(t *testing.T) *env {
+	e := newEnv(t, true)
+	p, err := defpol.New([]byte(`{"start_after":"off","start_on_allocation":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.c.d.Policy = p
+	return e
+}
+
+func v52svc(e *env) *holds.Service {
+	return holds.NewService(holds.Deps{Store: e.st, Clock: e.clk, ProviderConfigured: true,
+		Poll: func() holds.PollView { return e.c.LastPoll().ForHolds() }})
+}
+
+func TestV52_ExactNameDeploysAndMeters(t *testing.T) {
+	e := v52env(t)
+	e.rules("", 1)
+	u := e.user("dev")
+	e.allowance(u)
+	s := e.setup("Lab-01", true, nil)
+	h := e.hold(s, u)
+	// near misses
+	for _, n := range []string{"lab-01", "Lab-01 ", " Lab-01", "Lab-01_RP", "x-Lab-01", "Lab-0l"} {
+		e.prov.SetAllocations(hourglass.Allocation{ResourceName: n})
+		e.step(poll)
+		got := e.getHold(h.ID)
+		if got.DeployedAt != nil || got.MeteringStartedAt != nil {
+			t.Fatalf("near miss %q matched: %+v", n, got)
+		}
+	}
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "Lab-01"})
+	e.step(poll)
+	got := e.getHold(h.ID)
+	if got.DeployedAt == nil || got.MeteringStartedAt == nil {
+		t.Fatalf("exact match did not deploy/meter: %+v", got)
+	}
+	e.step(poll)
+	if d := e.debits(u); len(d) == 0 {
+		t.Fatalf("no debit after metering: %v", d)
+	}
+	// release refused while reported
+	svc := v52svc(e)
+	_, err := svc.Release(bg, u, h.ID, holds.ReleaseOpts{})
+	if holds.CodeOf(err) != holds.CodeStillDeployed {
+		t.Fatalf("release while reported: %v", err)
+	}
+	e.prov.SetAllocations()
+	e.step(poll)
+	if _, err := svc.Release(bg, u, h.ID, holds.ReleaseOpts{}); err != nil {
+		t.Fatalf("release after: %v", err)
+	}
+}
+
+func TestV52_NearMissDoesNotBlockRelease(t *testing.T) {
+	e := v52env(t)
+	u := e.user("dev")
+	h := e.hold(e.setup("a", true, nil), u)
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "A"}, hourglass.Allocation{ResourceName: "a "}, hourglass.Allocation{ResourceName: "a_RP"})
+	e.runOK()
+	if _, err := v52svc(e).Release(bg, u, h.ID, holds.ReleaseOpts{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestV52_OrphanAndIgnored(t *testing.T) {
+	e := v52env(t)
+	e.setup("free", true, nil)
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "free"}, hourglass.Allocation{ResourceName: "FREE"}, hourglass.Allocation{ResourceName: "nosuch"})
+	e.runOK()
+	o, _ := e.st.ListOrphans(bg)
+	if len(o) != 1 || o[0].ResourceName != "free" {
+		t.Fatalf("orphans %+v", o)
+	}
+}
+
+func TestV52_RenameWhileHeld(t *testing.T) {
+	e := v52env(t)
+	u := e.user("dev")
+	e.allowance(u)
+	sid := e.setup("old", true, nil)
+	h := e.hold(sid, u)
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "old"})
+	e.step(poll)
+	if e.getHold(h.ID).DeployedAt == nil {
+		t.Fatal("not deployed")
+	}
+	if err := e.st.UpdateSetup(bg, store.Setup{ID: sid, Name: "new", Enabled: true, DetailsJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	e.step(poll)
+	got := e.getHold(h.ID)
+	t.Logf("after rename: deployed_at=%v metering=%v", got.DeployedAt, got.MeteringStartedAt)
+	o, _ := e.st.ListOrphans(bg)
+	t.Logf("orphans after rename: %+v", o)
+	_, err := v52svc(e).Release(bg, u, h.ID, holds.ReleaseOpts{})
+	t.Logf("release after rename while provider still reports 'old': err=%v", err)
+	e.step(poll)
+	debits := e.debits(u)
+	t.Logf("debits %v", debits)
+}
+
+func TestV52_DuplicateNames(t *testing.T) {
+	e := v52env(t)
+	e.setup("dup", true, nil)
+	if _, err := e.st.CreateSetup(bg, store.Setup{Name: "dup"}); err == nil {
+		t.Fatal("duplicate accepted")
+	} else {
+		t.Log(err)
+	}
+	if _, err := e.st.CreateSetup(bg, store.Setup{Name: "Dup"}); err != nil {
+		t.Log("case variant rejected:", err)
+	} else {
+		t.Log("case variant 'Dup' accepted as distinct setup (store level)")
+	}
+}

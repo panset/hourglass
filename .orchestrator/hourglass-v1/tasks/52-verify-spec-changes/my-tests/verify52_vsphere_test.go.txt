@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: MIT
+
+package vsphere
+
+import (
+	"context"
+	"reflect"
+	"sort"
+	"testing"
+
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+func TestV52_SimulatorNaming(t *testing.T) {
+	s := startSim(t, false)
+	lab := s.createPool(t, s.root, "hg-lab-01_RP")
+	s.createPool(t, lab, "hg-nested_RP")
+	s.createPool(t, s.root, "lab-02") // named like a setup, no affix
+	s.createPool(t, s.root, "hg-lab-03")
+	s.createPool(t, s.root, "lab-04_RP")
+	s.createPool(t, s.root, "hg-_RP") // empty remainder
+	for _, tc := range []struct {
+		name  string
+		extra map[string]any
+		want  []string
+	}{
+		{"neither", nil, []string{"hg-_RP", "hg-lab-01_RP", "hg-lab-03", "hg-nested_RP", "lab-02", "lab-04_RP"}},
+		{"suffix", map[string]any{"pool_name_suffix": "_RP"}, []string{"hg-", "hg-lab-01", "hg-nested", "lab-04"}},
+		{"prefix", map[string]any{"pool_name_prefix": "hg-"}, []string{"lab-01_RP", "lab-03", "nested_RP", "_RP"}},
+		{"both", map[string]any{"pool_name_prefix": "hg-", "pool_name_suffix": "_RP"}, []string{"lab-01", "nested"}},
+	} {
+		p, err := NewProvider(s.cfgJSON(tc.extra))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := listNames(t, p)
+		var names []string
+		for n, a := range got {
+			names = append(names, n)
+			if a.Labels["pool"] == "" {
+				t.Errorf("%s: no pool label", tc.name)
+			}
+		}
+		sort.Strings(names)
+		sort.Strings(tc.want)
+		if !reflect.DeepEqual(names, tc.want) {
+			t.Errorf("%s: got %v want %v", tc.name, names, tc.want)
+		}
+		if tc.name == "both" {
+			if got["lab-01"].Labels["pool"] != "hg-lab-01_RP" || got["nested"].Labels["parent"] != "hg-lab-01_RP" {
+				t.Errorf("labels %+v", got)
+			}
+			if _, ok := got["lab-02"]; ok {
+				t.Error("lab-02 reported without affix")
+			}
+		}
+		// the pressure source takes the same block
+		ps, err := NewPressureSource(s.cfgJSON(tc.extra))
+		if err != nil {
+			t.Fatalf("pressure %s: %v", tc.name, err)
+		}
+		if _, err := ps.Pressure(context.Background(), hourglass.Snapshot{}); err != nil {
+			t.Fatalf("pressure %s: %v", tc.name, err)
+		}
+	}
+	for _, bad := range []map[string]any{{"pool_name_prefx": "a"}, {"pool_name_template": "{{.SetupName}}"}, {"resource_name_template": "x"}} {
+		if _, err := NewProvider(s.cfgJSON(bad)); err == nil {
+			t.Errorf("unknown key accepted: %v", bad)
+		}
+		if _, err := NewPressureSource(s.cfgJSON(bad)); err == nil {
+			t.Errorf("pressure: unknown key accepted: %v", bad)
+		}
+	}
+}
