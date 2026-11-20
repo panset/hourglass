@@ -638,7 +638,7 @@ func TestSET5_DisabledSetupAbsentFromSnapshot(t *testing.T) {
 	e.runOK()
 	snaps := e.pressure.Snapshots()
 	s := snaps[len(snaps)-1]
-	if len(s.Setups) != 1 || s.Setups[0].Name != "on" || s.Setups[0].Weight != 1 || s.Setups[0].ResourceName != "on" || s.ProviderConfigured {
+	if len(s.Setups) != 1 || s.Setups[0].Name != "on" || s.Setups[0].Weight != 1 || s.ProviderConfigured {
 		t.Fatalf("snapshot %+v", s)
 	}
 }

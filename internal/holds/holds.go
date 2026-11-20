@@ -322,11 +322,8 @@ func (s *Service) Release(ctx context.Context, actorID, holdID int64, opts Relea
 		}
 		if cfg.ReleaseRequiresTeardown && s.d.ProviderConfigured && s.d.Poll != nil {
 			if pv := s.d.Poll(); pv != nil && pv.OK() {
-				name, err := settings.ResourceName(cfg.ResourceNameTemplate, setup.Name, setup.Labels, setup.ResourceNameOverride)
-				if err != nil {
-					return Hold{}, err
-				}
-				if pv.Reported(name) {
+				// D40: the provider reports a setup under its exact name.
+				if pv.Reported(setup.Name) {
 					return Hold{}, refuse(CodeStillDeployed, MessageStillDeployed)
 				}
 			}

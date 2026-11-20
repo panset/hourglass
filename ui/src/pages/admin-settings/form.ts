@@ -8,7 +8,6 @@ export interface BandRow {
 }
 
 export interface SettingsForm {
-  template: string;
   defaultWeight: string;
   labelKeys: string;
   baseMultiplier: string;
@@ -22,7 +21,6 @@ export interface SettingsForm {
 
 export function toForm(s: Settings): SettingsForm {
   return {
-    template: s.resource_name_template,
     defaultWeight: String(s.default_weight),
     labelKeys: s.display_label_keys.join(", "),
     baseMultiplier: String(s.bands.base),
@@ -61,7 +59,6 @@ export function toSettings(f: SettingsForm): { ok: true; value: Settings } | { o
   return {
     ok: true,
     value: {
-      resource_name_template: f.template,
       default_weight,
       display_label_keys: f.labelKeys
         .split(",")

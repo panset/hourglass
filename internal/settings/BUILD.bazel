@@ -3,10 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "settings",
-    srcs = [
-        "resourcename.go",
-        "settings.go",
-    ],
+    srcs = ["settings.go"],
     importpath = "github.com/panset/hourglass/internal/settings",
     visibility = ["//:__subpackages__"],
     deps = [
@@ -18,10 +15,7 @@ go_library(
 
 go_test(
     name = "settings_test",
-    srcs = [
-        "resourcename_test.go",
-        "settings_test.go",
-    ],
+    srcs = ["settings_test.go"],
     embed = [":settings"],
     deps = [
         "//internal/metering",

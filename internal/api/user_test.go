@@ -422,27 +422,27 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 func TestSET6_SetupsListForAdminHasAdminFieldsAndDisabled(t *testing.T) {
 	e := defaultEnv(t)
 	e.rateRule("tier=a", 2)
-	e.setting("resource_name_template", `"{{.SetupName}}_RP"`)
 	e.setup("lab-a", true, map[string]string{"tier": "a"})
-	if _, err := e.st.CreateSetup(uBg, store.Setup{Name: "lab-off", Enabled: false, ResourceNameOverride: "custom-name", Labels: map[string]string{"tier": "z"}, DetailsJSON: "{}"}); err != nil {
+	if _, err := e.st.CreateSetup(uBg, store.Setup{Name: "lab-off", Enabled: false, Labels: map[string]string{"tier": "z"}, DetailsJSON: "{}"}); err != nil {
 		t.Fatal(err)
 	}
 	adm := e.dev("boss", store.RoleAdmin)
-	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "lab-a_RP"})
+	// D40: an allocation is the setup's only under the setup's exact name.
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "lab-a"}, hourglass.Allocation{ResourceName: "lab-off-pool"})
 	e.poll()
 	ss := uWantOK(t, e.get("/api/v1/setups", &adm), 200)["setups"].([]any)
 	if len(ss) != 2 {
 		t.Fatalf("setups %v", ss)
 	}
 	a := ss[0].(ujobj)["admin"].(ujobj)
-	uWantKeys(t, "admin", a, "enabled", "resource_name", "resource_name_override", "last_seen_at", "matched_rule_selector")
-	if a["enabled"] != true || a["resource_name"] != "lab-a_RP" || a["resource_name_override"] != nil ||
+	uWantKeys(t, "admin", a, "enabled", "last_seen_at", "matched_rule_selector")
+	if ss[0].(ujobj)["deployed"] != true || a["enabled"] != true ||
 		a["last_seen_at"] != "2026-11-19T10:00:00.000Z" || a["matched_rule_selector"] != "tier=a" {
 		t.Errorf("admin fields %v", a)
 	}
 	off := ss[1].(ujobj)
 	oa := off["admin"].(ujobj)
-	if off["state"] != "disabled" || oa["enabled"] != false || oa["resource_name"] != "custom-name" || oa["resource_name_override"] != "custom-name" ||
+	if off["state"] != "disabled" || off["deployed"] != false || oa["enabled"] != false ||
 		oa["last_seen_at"] != nil || oa["matched_rule_selector"] != nil {
 		t.Errorf("disabled setup %v", off)
 	}

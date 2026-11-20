@@ -107,21 +107,10 @@ func (l *lab) weight(s store.Setup) (w float64, selector string, err error) {
 	return w, selector, err
 }
 
-func (l *lab) resourceName(s store.Setup) (string, error) {
-	return settings.ResourceName(l.set.ResourceNameTemplate, s.Name, s.Labels, s.ResourceNameOverride)
-}
-
-// reported reports whether the provider reported the setup's resource in the
-// latest successful poll.
-func (l *lab) reported(s store.Setup) (bool, error) {
-	if !l.view.OK {
-		return false, nil
-	}
-	name, err := l.resourceName(s)
-	if err != nil {
-		return false, err
-	}
-	return l.view.Reported(name), nil
+// reported reports whether the provider reported an allocation with the
+// setup's exact name (D40) in the latest successful poll.
+func (l *lab) reported(s store.Setup) bool {
+	return l.view.OK && l.view.Reported(s.Name)
 }
 
 func (l *lab) cost(weight float64) costJSON {
@@ -222,9 +211,7 @@ func (a *API) holdViews(ctx context.Context, l *lab, holds []store.Hold) ([]hold
 			ReleaseReason: nullIfEmpty(h.ReleaseReason),
 		}
 		if v.Active {
-			if v.Deployed, err = l.reported(s); err != nil {
-				return nil, err
-			}
+			v.Deployed = l.reported(s)
 			c := l.cost(w)
 			v.CostPerHour = &c
 		}

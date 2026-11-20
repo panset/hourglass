@@ -38,7 +38,7 @@ type ResourceProvider interface {
 
 // Allocation is one deployed resource as reported by a ResourceProvider.
 type Allocation struct {
-	ResourceName string            // matched to a setup by the name template
+	ResourceName string            // belongs to the setup with exactly this name
 	Labels       map[string]string // provider-specific, shown to admins
 }
 
@@ -111,9 +111,6 @@ type SetupState struct {
 	// Weight is the weight resolved from the rate rules, or the default
 	// weight when no rule matches.
 	Weight float64
-	// ResourceName is the name a provider is expected to report for this
-	// setup, from the resource name template or the setup's override.
-	ResourceName string
 }
 
 // Snapshot is the read-only view of the lab for one poll. Extensions need
@@ -201,7 +198,7 @@ The config file names each extension with `type` and an optional `config` block:
 provider:
   type: fixed
   config:
-    names: [lab-01_RP]
+    names: [lab-01]
 ```
 
 The factory receives the `config` mapping as JSON, whatever the file's syntax. Keys other than `type` and `config` in that entry are rejected. Some rules:
@@ -275,7 +272,7 @@ func init() {
 }
 ```
 
-A provider reports what exists. The core matches each `ResourceName` to a setup through the resource name template (default `{{.SetupName}}`) or the setup's own override. Allocations that match no setup are ignored. An allocation that matches a setup with no active hold is recorded as an orphan and shown to admins. Return an error when you cannot see the backend: the poll fails and nobody is charged for the gap. Do not return an empty list in that case, because an empty list means "nothing is deployed".
+A provider reports what exists. The core matches each `ResourceName` to the setup whose name equals it, and nothing else: there is no template or per-setup override in the core. If your backend names things differently (a pool `lab-01_RP` for the setup `lab-01`, say), the provider maps the names itself before returning them, as the `vsphere` provider does with `pool_name_prefix` and `pool_name_suffix`. Allocations that match no setup are ignored. An allocation that matches a setup with no active hold is recorded as an orphan and shown to admins. Return an error when you cannot see the backend: the poll fails and nobody is charged for the gap. Do not return an empty list in that case, because an empty list means "nothing is deployed".
 
 ### Pressure source
 
@@ -613,11 +610,11 @@ go test -race -count=1 ./pkg/... ./providers/... ./pressure/... ./policies/... .
 setups: 2 (database hourglass.db)
 provider: static
 matched setups (1):
-  lab-01 -> lab-01_RP
-expected but not reported (1):
-  lab-02 -> lab-02_RP
+  lab-01
+enabled setups not reported (1):
+  lab-02
 orphans (1):
-  lab-01_RP
+  lab-01
 ignored allocations: 1
 pressure source: inventory
 raw pressure: 0.0000  multiplier: 0x (current bands, unsmoothed)
@@ -625,13 +622,13 @@ raw pressure: 0.0000  multiplier: 0x (current bands, unsmoothed)
 
 | Section | Meaning |
 | --- | --- |
-| `matched setups` | Setups whose expected resource name the provider reported. Disabled and held setups are flagged. |
-| `expected but not reported` | Enabled setups the provider did not report. |
+| `matched setups` | Setups the provider reported an allocation for, under the setup's exact name. Disabled and held setups are flagged. |
+| `enabled setups not reported` | Enabled setups the provider did not report. |
 | `orphans` | Reported resources that match a setup with no active hold. |
 | `ignored allocations` | Distinct reported resources that match no setup. |
 | `raw pressure`, `multiplier` | The pressure source's value now, and the multiplier the current bands give it. No smoothing history is read. |
 
-Setups come from the database if it exists (opened read-only), else from the seed file, else none. The pressure source gets a snapshot whose setups carry resource names but weight 0 and whose holds carry only the setup name. Each call has a 30-second bound. Any error exits 1 with a message. The command is part of `hourglassd`; a custom binary does not get it unless you build the same wiring yourself, which needs `internal/` and so is not possible outside this module.
+Setups come from the database if it exists (opened read-only), else from the seed file, else none. The pressure source gets a snapshot whose setups carry names, labels and details but weight 0 and whose holds carry only the setup name. Each call has a 30-second bound. Any error exits 1 with a message. The command is part of `hourglassd`; a custom binary does not get it unless you build the same wiring yourself, which needs `internal/` and so is not possible outside this module.
 
 Opening a WAL database read-only can create empty `-wal` and `-shm` files next to it. The database file itself is not modified.
 
@@ -641,7 +638,7 @@ All are linked into `hourglassd`. Setting a name in the config is what enables o
 
 | Name | Kind | Config keys |
 | --- | --- | --- |
-| `vsphere` | provider | `url`, `username`, `password`, `insecure_skip_verify`, `datacenter`, `clusters`, `request_timeout` |
+| `vsphere` | provider | `url`, `username`, `password`, `insecure_skip_verify`, `datacenter`, `clusters`, `request_timeout`, `pool_name_prefix`, `pool_name_suffix` |
 | `static` | provider | `path` |
 | `inventory` | pressure source | none |
 | `vsphere` | pressure source | the same block as the `vsphere` provider |
@@ -673,7 +670,9 @@ With both triggers off, nothing is ever metered. It always returns `Weight: 0`, 
 | `datacenter` | all datacenters | Limit the scope to one datacenter |
 | `clusters` | every cluster in scope | Names of the clusters to read. A name that does not exist fails the pressure source. |
 | `request_timeout` | `20s` | Go duration, per call |
+| `pool_name_prefix` | empty | Provider only (the pressure source accepts and ignores it). See below. |
+| `pool_name_suffix` | empty | Provider only (the pressure source accepts and ignores it). See below. |
 
-The provider lists every resource pool except each cluster's hidden root pool, nested pools included, by the pool's own name. The pressure source returns, for each cluster, the highest of: CPU reservation used over capacity of the root pool, memory reservation used over capacity of the root pool, and one minus free over total space of the accessible datastores. It then takes the highest across clusters. The provider and pressure source only read. See [Deploying](deploying.md#the-vsphere-provider) for privileges and the first-run checklist.
+The provider lists every resource pool except each cluster's hidden root pool, nested pools included. With `pool_name_prefix` and `pool_name_suffix` both empty, each pool is reported under its own name. When either is set, only pools whose name has that prefix and suffix are reported, with both stripped (suffix `_RP` reports pool `lab-06_RP` as `lab-06`); other pools, and a pool named exactly prefix plus suffix, are not reported. The pool's own name is in the allocation's `pool` label, beside `cluster`, `datacenter`, `parent` and `path`. The pressure source returns, for each cluster, the highest of: CPU reservation used over capacity of the root pool, memory reservation used over capacity of the root pool, and one minus free over total space of the accessible datastores. It then takes the highest across clusters. The provider and pressure source only read. See [Deploying](deploying.md#the-vsphere-provider) for privileges and the first-run checklist.
 
 For the `webhook` hook, see [The webhook hook](#the-webhook-hook).

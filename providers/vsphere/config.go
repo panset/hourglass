@@ -37,12 +37,19 @@ type config struct {
 	Datacenter         string
 	Clusters           []string
 	RequestTimeout     time.Duration
+	// PoolNamePrefix and PoolNameSuffix turn pool names into setup names
+	// (D40): when either is set, only pools carrying both are reported, with
+	// both stripped. The pressure source accepts and ignores them, so both
+	// extensions can share one block.
+	PoolNamePrefix string
+	PoolNameSuffix string
 }
 
 // String lists the fields with the password redacted.
 func (c config) String() string {
-	return fmt.Sprintf("vsphere config{url=%s username=%s password=%s insecure_skip_verify=%t datacenter=%q clusters=%q request_timeout=%s}",
-		redactURL(c.URL), c.Username, c.Password, c.InsecureSkipVerify, c.Datacenter, c.Clusters, c.RequestTimeout)
+	return fmt.Sprintf("vsphere config{url=%s username=%s password=%s insecure_skip_verify=%t datacenter=%q clusters=%q request_timeout=%s pool_name_prefix=%q pool_name_suffix=%q}",
+		redactURL(c.URL), c.Username, c.Password, c.InsecureSkipVerify, c.Datacenter, c.Clusters, c.RequestTimeout,
+		c.PoolNamePrefix, c.PoolNameSuffix)
 }
 
 // GoString keeps the password out of %#v.
@@ -76,6 +83,8 @@ type rawConfig struct {
 	Datacenter         string   `json:"datacenter"`
 	Clusters           []string `json:"clusters"`
 	RequestTimeout     string   `json:"request_timeout"`
+	PoolNamePrefix     string   `json:"pool_name_prefix"`
+	PoolNameSuffix     string   `json:"pool_name_suffix"`
 }
 
 // parseConfig decodes and validates a config block. Unknown fields are
@@ -97,6 +106,7 @@ func parseConfig(kind string, raw json.RawMessage) (config, error) {
 		URL: strings.TrimSpace(r.URL), Username: r.Username, Password: secret(r.Password),
 		InsecureSkipVerify: r.InsecureSkipVerify, Datacenter: r.Datacenter,
 		RequestTimeout: DefaultRequestTimeout,
+		PoolNamePrefix: r.PoolNamePrefix, PoolNameSuffix: r.PoolNameSuffix,
 	}
 	if c.URL == "" {
 		return config{}, fmt.Errorf(`%s: config "url" is required`, kind)
@@ -149,6 +159,22 @@ func redactURL(s string) string {
 	}
 	u.User = nil
 	return u.String()
+}
+
+// setupName maps a pool name to the name the provider reports (D40). With no
+// prefix and no suffix configured it is the pool's own name. Otherwise ok is
+// false for a pool that lacks the prefix or the suffix, or whose name is
+// exactly prefix plus suffix; such a pool is not reported.
+func (c config) setupName(pool string) (name string, ok bool) {
+	if c.PoolNamePrefix == "" && c.PoolNameSuffix == "" {
+		return pool, true
+	}
+	if len(pool) < len(c.PoolNamePrefix)+len(c.PoolNameSuffix) ||
+		!strings.HasPrefix(pool, c.PoolNamePrefix) || !strings.HasSuffix(pool, c.PoolNameSuffix) {
+		return "", false
+	}
+	name = pool[len(c.PoolNamePrefix) : len(pool)-len(c.PoolNameSuffix)]
+	return name, name != ""
 }
 
 // inScope reports whether a cluster name is selected by the config.

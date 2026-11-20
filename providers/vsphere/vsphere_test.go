@@ -80,11 +80,61 @@ func TestEXT3_ProviderNestedPoolsListedByOwnName(t *testing.T) {
 	f := &fakeClient{pools: seededPools()}
 	got, _ := newTestProvider(f, "C1").List(context.Background())
 	want := []hourglass.Allocation{
-		{ResourceName: "lab-01_RP", Labels: map[string]string{"cluster": "C1", "datacenter": "DC0", "parent": "Resources", "path": "/DC0/host/C1/Resources/lab-01_RP"}},
-		{ResourceName: "child_RP", Labels: map[string]string{"cluster": "C1", "datacenter": "DC0", "parent": "lab-01_RP", "path": "/DC0/host/C1/Resources/lab-01_RP/child_RP"}},
+		{ResourceName: "lab-01_RP", Labels: map[string]string{"pool": "lab-01_RP", "cluster": "C1", "datacenter": "DC0", "parent": "Resources", "path": "/DC0/host/C1/Resources/lab-01_RP"}},
+		{ResourceName: "child_RP", Labels: map[string]string{"pool": "child_RP", "cluster": "C1", "datacenter": "DC0", "parent": "lab-01_RP", "path": "/DC0/host/C1/Resources/lab-01_RP/child_RP"}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}
+
+// D40: with a prefix and/or suffix configured, only pools carrying both are
+// reported, with both stripped from ResourceName; the pool's own name stays
+// in the "pool" label. A pool named exactly prefix plus suffix is skipped.
+func TestEXT3_ProviderPoolNamePrefixAndSuffix(t *testing.T) {
+	pools := []pool{
+		{Name: "Resources", Path: "/DC0/host/C1/Resources", Cluster: "C1", Datacenter: "DC0", Root: true},
+		{Name: "lab-06_RP", Path: "/DC0/host/C1/Resources/lab-06_RP", Parent: "Resources", Cluster: "C1", Datacenter: "DC0"},
+		{Name: "hg-lab-07_RP", Path: "/DC0/host/C1/Resources/hg-lab-07_RP", Parent: "Resources", Cluster: "C1", Datacenter: "DC0"},
+		{Name: "hg-_RP", Path: "/DC0/host/C1/Resources/hg-_RP", Parent: "Resources", Cluster: "C1", Datacenter: "DC0"},
+		{Name: "_RP", Path: "/DC0/host/C1/Resources/_RP", Parent: "Resources", Cluster: "C1", Datacenter: "DC0"},
+		{Name: "hg-infra", Path: "/DC0/host/C1/Resources/hg-infra", Parent: "Resources", Cluster: "C1", Datacenter: "DC0"},
+		{Name: "lab-08", Path: "/DC0/host/C1/Resources/lab-08", Parent: "Resources", Cluster: "C1", Datacenter: "DC0"},
+	}
+	names := func(prefix, suffix string) map[string]string {
+		c := testCfg()
+		c.PoolNamePrefix, c.PoolNameSuffix = prefix, suffix
+		got, err := (&provider{cfg: c, cl: &fakeClient{pools: pools}}).List(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := map[string]string{}
+		for _, a := range got {
+			m[a.ResourceName] = a.Labels["pool"]
+		}
+		return m
+	}
+	for _, tc := range []struct {
+		prefix, suffix string
+		want           map[string]string
+	}{
+		{"", "", map[string]string{"lab-06_RP": "lab-06_RP", "hg-lab-07_RP": "hg-lab-07_RP", "hg-_RP": "hg-_RP", "_RP": "_RP", "hg-infra": "hg-infra", "lab-08": "lab-08"}},
+		{"", "_RP", map[string]string{"lab-06": "lab-06_RP", "hg-lab-07": "hg-lab-07_RP", "hg-": "hg-_RP"}},
+		{"hg-", "", map[string]string{"lab-07_RP": "hg-lab-07_RP", "_RP": "hg-_RP", "infra": "hg-infra"}},
+		{"hg-", "_RP", map[string]string{"lab-07": "hg-lab-07_RP"}},
+	} {
+		if got := names(tc.prefix, tc.suffix); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("prefix %q suffix %q: got %v, want %v", tc.prefix, tc.suffix, got, tc.want)
+		}
+	}
+}
+
+// The pressure source accepts the provider's naming keys and ignores them.
+func TestEXT3_PressureSourceAcceptsPoolNameKeys(t *testing.T) {
+	t.Setenv(PasswordEnv, "")
+	raw := rawCfg(map[string]any{"url": "https://vc.test", "username": "u", "password": "p", "pool_name_prefix": "a", "pool_name_suffix": "_RP"})
+	if _, err := NewPressureSource(raw); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -337,7 +387,8 @@ func TestEXT3_ConfigParsing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.RequestTimeout != DefaultRequestTimeout || c.InsecureSkipVerify || c.Datacenter != "" || len(c.Clusters) != 0 {
+	if c.RequestTimeout != DefaultRequestTimeout || c.InsecureSkipVerify || c.Datacenter != "" || len(c.Clusters) != 0 ||
+		c.PoolNamePrefix != "" || c.PoolNameSuffix != "" {
 		t.Fatalf("defaults: %v", c)
 	}
 	with := func(k string, v any) map[string]any {
@@ -349,8 +400,10 @@ func TestEXT3_ConfigParsing(t *testing.T) {
 		return m
 	}
 	full, err := parseConfig("x", rawCfg(map[string]any{"url": "https://vc.test", "username": "u", "password": "p",
-		"insecure_skip_verify": true, "datacenter": "DC0", "clusters": []string{"a", "b", "a"}, "request_timeout": "5s"}))
-	if err != nil || !full.InsecureSkipVerify || full.Datacenter != "DC0" || !reflect.DeepEqual(full.Clusters, []string{"a", "b"}) || full.RequestTimeout != 5*time.Second {
+		"insecure_skip_verify": true, "datacenter": "DC0", "clusters": []string{"a", "b", "a"}, "request_timeout": "5s",
+		"pool_name_prefix": "hg-", "pool_name_suffix": "_RP"}))
+	if err != nil || !full.InsecureSkipVerify || full.Datacenter != "DC0" || !reflect.DeepEqual(full.Clusters, []string{"a", "b"}) || full.RequestTimeout != 5*time.Second ||
+		full.PoolNamePrefix != "hg-" || full.PoolNameSuffix != "_RP" {
 		t.Fatalf("full: %v, %v", full, err)
 	}
 	bad := map[string]json.RawMessage{
@@ -369,6 +422,7 @@ func TestEXT3_ConfigParsing(t *testing.T) {
 		"trailing data":  json.RawMessage(string(rawCfg(good)) + `{}`),
 		"not an object":  json.RawMessage(`[1]`),
 		"timeout number": rawCfg(with("request_timeout", 5)),
+		"suffix number":  rawCfg(with("pool_name_suffix", 1)),
 	}
 	for name, raw := range bad {
 		if _, err := parseConfig("x", raw); err == nil {

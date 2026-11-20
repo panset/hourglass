@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 3 {
+	if n != 4 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -93,7 +93,7 @@ func TestSchemaColumnsMatchSpec(t *testing.T) {
 	spec := map[string][]string{
 		"users":            {"id", "auth_source", "oidc_sub", "username", "email", "name", "status", "labels_json", "password_hash", "must_change_password", "balance_mt", "created_at", "last_login_at"},
 		"user_roles":       {"user_id", "role"},
-		"setups":           {"id", "name", "resource_name_override", "details_json", "enabled"},
+		"setups":           {"id", "name", "details_json", "enabled"},
 		"setup_labels":     {"setup_id", "key", "value"},
 		"rules":            {"id", "kind", "position", "selector", "value", "updated_by", "updated_at"},
 		"holds":            {"id", "setup_id", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at", "released_by", "release_reason"},
@@ -208,7 +208,7 @@ func TestUserOIDCSubUnique(t *testing.T) {
 
 func TestSetupsRoundTripAndConstraints(t *testing.T) {
 	s := openTemp(t)
-	id, err := s.CreateSetup(ctx, Setup{Name: "alpha", ResourceNameOverride: "res-a", DetailsJSON: `{"x":1}`,
+	id, err := s.CreateSetup(ctx, Setup{Name: "alpha", DetailsJSON: `{"x":1}`,
 		Enabled: true, Labels: map[string]string{"size": "l", "site": "s1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +217,7 @@ func TestSetupsRoundTripAndConstraints(t *testing.T) {
 		t.Errorf("duplicate name: %v", err)
 	}
 	got, _ := s.GetSetup(ctx, id)
-	want := Setup{ID: id, Name: "alpha", ResourceNameOverride: "res-a", DetailsJSON: `{"x":1}`, Enabled: true,
+	want := Setup{ID: id, Name: "alpha", DetailsJSON: `{"x":1}`, Enabled: true,
 		Labels: map[string]string{"size": "l", "site": "s1"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v", got)
@@ -909,13 +909,14 @@ func TestRULE5_RulesTableTakesAnyKindWithoutSchemaChange(t *testing.T) {
 }
 
 // Migration 0003 on a database made by schema version 2 (adopted from
-// verification task 42): the version-2 schema is rebuilt by undoing 0003's
-// index changes on a populated database, then Open upgrades it. Rows, balance
+// verification task 42): the version-2 schema is built by running the
+// embedded migrations 0001-0002 only (openAtVersion) and populated, then Open
+// upgrades it. Rows, balance
 // caches and the append path survive, the old index is replaced, the file
 // passes integrity_check and a reopen runs nothing.
 func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "h.db")
-	s := must(Open(path))
+	s := openAtVersion(t, path, 2)
 	a, b := newUser(t, s, "a"), newUser(t, s, "b")
 	h := must(s.CreateHold(ctx, newSetup(t, s, "lab-01"), a.ID, t0))
 	for _, u := range []int64{a.ID, b.ID} {
@@ -924,12 +925,6 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		must(s.AppendLedger(ctx, LedgerEntry{UserID: a.ID, Period: "2026-11", Type: "debit", AmountMT: -167, HoldID: &h.ID}, "2026-11", t0))
-	}
-	for _, q := range []string{`DROP INDEX ledger_user_period_type`, `DROP INDEX ledger_hold_type`, `DROP INDEX ledger_period_type`,
-		`CREATE INDEX ledger_user_period ON ledger (user_id, period)`, `DELETE FROM schema_migrations WHERE version = 3`} {
-		if _, err := s.sqldb.Exec(q); err != nil {
-			t.Fatalf("%s: %v", q, err)
-		}
 	}
 	s.Close()
 
@@ -940,7 +935,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&rows)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 3 || rows != 14 || ic != "ok" {
+	if v != 4 || rows != 14 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d, ledger rows %d, integrity %q", v, rows, ic)
 	}
 	var idx []string
@@ -971,7 +966,34 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s = must(Open(path)) // reopen: nothing to run
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 3 {
+	if n != 4 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
 	}
+}
+
+// openAtVersion builds a database at schema version v by running only the
+// embedded migrations up to v, as an older binary would have, and returns a
+// store over it that has not run the later ones. Upgrade tests populate it
+// and then call Open.
+func openAtVersion(t *testing.T, path string, v int) *Store {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_txlock=immediate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range must(loadMigrations()) {
+		if m.version > v {
+			break
+		}
+		if _, err := db.Exec(m.sql); err != nil {
+			t.Fatalf("migration %d: %v", m.version, err)
+		}
+		if _, err := db.Exec(`INSERT INTO schema_migrations VALUES (?, ?, ?)`, m.version, m.name, FormatTime(t0)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return &Store{queries: newQueries(db), sqldb: db}
 }

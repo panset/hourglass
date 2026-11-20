@@ -33,7 +33,7 @@ The browser runs on the host; Hourglass runs in a container. The OIDC issuer is 
 - Keycloak admin console: http://keycloak.localhost:8081, `admin` / `dev-only-not-a-secret`.
 
 ## First-run admin steps
-The seed (`seed.sample.yaml`) creates `lab-01` to `lab-06` and the rate rules once. Two settings of the reference scenario are not seedable; set them in Admin > Settings (the end-to-end test does it through the API): resource name template `{{.SetupName}}_RP`, display label key `size`.
+The seed (`seed.sample.yaml`) creates `lab-01` to `lab-06` and the rate rules once. One setting of the reference scenario is not seedable; set it in Admin > Settings (the end-to-end test does it through the API): display label key `size`. The pools are named `<setup>_RP`; `pool_name_suffix: _RP` in the provider block of `config.sample.yaml` makes the provider report them under the setup names.
 
 ## Files
 `config.sample.yaml` (the reference scenario's config), `seed.sample.yaml`, `keycloak/realm-hourglass.json` (imported with `--import-realm`), `compose.bundled.yaml`, `compose.split.yaml`, `smoke.sh`; the end-to-end overrides are `../e2e/compose.bundled.yaml` and `../e2e/compose.split.yaml`. Distroless product images have no shell, so readiness is probed by two small curl containers (`deps-ready`, `stack-ready`) in the compose files.

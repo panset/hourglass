@@ -816,8 +816,7 @@ paths:
       description: |
         The body is the complete `Settings` object; unknown fields are
         rejected. The first invalid value is 400 `validation` with `field`
-        (template that does not parse or yields an empty name, negative
-        weight, bad label key, bad bands, poll interval under 1 minute, and so
+        (negative weight, bad label key, bad bands, poll interval under 1 minute, and so
         on). Applies from the next poll, never retroactively; changed keys are
         audited. Returns the same body as GET.
       x-roles: admin
@@ -1341,19 +1340,14 @@ components:
     SetupAdminFields:
       type: object
       description: Admin-only fields.
-      required: [enabled, resource_name, resource_name_override, last_seen_at, matched_rule_selector]
+      required: [enabled, last_seen_at, matched_rule_selector]
       properties:
         enabled: {type: boolean}
-        resource_name:
-          type: string
-          description: Name the provider is expected to report (template or override).
-          example: lab-01_RP
-        resource_name_override: {type: string, nullable: true}
         last_seen_at:
           type: string
           format: date-time
           nullable: true
-          description: Last time the provider reported it; null if never.
+          description: Last time the provider reported an allocation with the setup's exact name; null if never.
         matched_rule_selector:
           type: string
           nullable: true
@@ -1416,7 +1410,7 @@ components:
           description: Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`.
     SetupInput:
       type: object
-      required: [name, labels, details, enabled, resource_name_override]
+      required: [name, labels, details, enabled]
       properties:
         name: {type: string, minLength: 1, example: lab-01}
         labels: {$ref: '#/components/schemas/Labels'}
@@ -1424,10 +1418,6 @@ components:
           description: Any well-formed JSON, at most 256 KB.
           example: {note: opaque}
         enabled: {type: boolean}
-        resource_name_override:
-          type: string
-          nullable: true
-          description: Blank or null uses the template.
       additionalProperties: false
     ReleaseRequest:
       type: object
@@ -1580,12 +1570,8 @@ components:
     Settings:
       type: object
       description: Admin-editable metering settings (ADM-2); unknown fields are rejected.
-      required: [resource_name_template, default_weight, display_label_keys, bands, default_allowance, max_holds_per_user, release_requires_teardown, poll_interval, enforcement]
+      required: [default_weight, display_label_keys, bands, default_allowance, max_holds_per_user, release_requires_teardown, poll_interval, enforcement]
       properties:
-        resource_name_template:
-          type: string
-          description: Go text/template with `.SetupName` and `.Labels` (SET-4).
-          example: '{{.SetupName}}'
         default_weight: {type: number, minimum: 0, default: 1}
         display_label_keys:
           type: array
@@ -1651,7 +1637,7 @@ components:
       type: object
       required: [resource_name, first_seen_at, last_seen_at, setup, labels]
       properties:
-        resource_name: {type: string, example: lab-09_RP}
+        resource_name: {type: string, example: lab-09, description: "The name the provider reported, which is the setup's name (D40)."}
         first_seen_at: {type: string, format: date-time}
         last_seen_at: {type: string, format: date-time}
         setup:

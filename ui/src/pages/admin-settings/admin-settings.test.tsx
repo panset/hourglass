@@ -8,7 +8,6 @@ import Page from "./index";
 
 const settings: SettingsResponse = {
   settings: {
-    resource_name_template: "{{.SetupName}}_RP",
     default_weight: 1,
     display_label_keys: ["size"],
     bands: { base: 0, steps: [{ from: 0.5, multiplier: 1 }, { from: 0.75, multiplier: 2 }] },

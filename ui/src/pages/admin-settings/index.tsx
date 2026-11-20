@@ -235,13 +235,6 @@ export default function Page() {
               {(p) => <Input {...p} value={form.poll} onChange={(e) => editForm({ poll: e.target.value })} />}
             </Field>
           </section>
-
-          <section className={shared.card} aria-labelledby="tpl-h">
-            <h2 id="tpl-h">Resource name template</h2>
-            <Field label="Template" hint="Go template with .SetupName and .Labels." error={fieldError("resource_name_template")}>
-              {(p) => <Input {...p} value={form.template} onChange={(e) => editForm({ template: e.target.value })} />}
-            </Field>
-          </section>
         </div>
 
         <div className={shared.main}>

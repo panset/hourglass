@@ -263,12 +263,13 @@ func TestEXT1_SnapshotHelpers(t *testing.T) {
 	s := Snapshot{
 		Time: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC),
 		Setups: []SetupState{
-			{Setup: Setup{Name: "alpha", Labels: map[string]string{"tier": "a"}}, Weight: 2, ResourceName: "pool-alpha"},
-			{Setup: Setup{Name: "beta"}, Weight: 1, ResourceName: "pool-beta"},
+			{Setup: Setup{Name: "alpha", Labels: map[string]string{"tier": "a"}}, Weight: 2},
+			{Setup: Setup{Name: "beta"}, Weight: 1},
 			{Setup: Setup{Name: "gamma"}, Weight: 1},
 		},
 		Allocations: []Allocation{
-			{ResourceName: "pool-alpha", Labels: map[string]string{"k": "v"}},
+			{ResourceName: "alpha", Labels: map[string]string{"k": "v"}},
+			{ResourceName: "pool-beta"},
 			{ResourceName: "stray"},
 		},
 		ProviderConfigured: true,
@@ -283,7 +284,7 @@ func TestEXT1_SnapshotHelpers(t *testing.T) {
 	}
 
 	a, ok := s.AllocationFor("alpha")
-	if !ok || a.ResourceName != "pool-alpha" || a.Labels["k"] != "v" {
+	if !ok || a.ResourceName != "alpha" || a.Labels["k"] != "v" {
 		t.Fatalf("AllocationFor(alpha) = %+v, %v", a, ok)
 	}
 	for _, name := range []string{"beta", "gamma", "missing", "stray"} {

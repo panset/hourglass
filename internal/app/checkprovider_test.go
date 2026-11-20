@@ -47,7 +47,7 @@ func registerCheckFakes() {
 const checkSeed = `
 setups:
   - {name: lab-01, labels: {tier: large}}
-  - {name: lab-02, labels: {tier: small}, resource_name_override: rp_two}
+  - {name: lab-02, labels: {tier: small}}
   - {name: lab-03}
   - {name: lab-off, enabled: false}
 `
@@ -117,8 +117,9 @@ func TestEXT3_CheckProviderReport(t *testing.T) {
 	checkFake.SetAllocations(
 		hourglass.Allocation{ResourceName: "lab-01"},
 		hourglass.Allocation{ResourceName: "lab-01"}, // duplicate counts once
-		hourglass.Allocation{ResourceName: "rp_two"},
+		hourglass.Allocation{ResourceName: "lab-02"},
 		hourglass.Allocation{ResourceName: "lab-off"},
+		hourglass.Allocation{ResourceName: "lab-03-x"}, // D40: only the exact setup name matches
 		hourglass.Allocation{ResourceName: "unrelated-1"},
 		hourglass.Allocation{ResourceName: "unrelated-2"},
 	)
@@ -131,10 +132,10 @@ func TestEXT3_CheckProviderReport(t *testing.T) {
 	for _, want := range []string{
 		"setups: 4",
 		"provider: " + checkProv,
-		"matched setups (3):", "lab-01 -> lab-01", "lab-02 -> rp_two", "lab-off -> lab-off  [disabled]",
-		"expected but not reported (1):", "lab-03 -> lab-03",
+		"matched setups (3):\n  lab-01\n  lab-02\n  lab-off  [disabled]\n",
+		"enabled setups not reported (1):\n  lab-03\n",
 		"orphans (3):",
-		"ignored allocations: 2",
+		"ignored allocations: 3",
 		"raw pressure: 0.8000  multiplier: 2x",
 	} {
 		if !strings.Contains(out, want) {
@@ -193,13 +194,13 @@ func TestEXT3_CheckProviderHeldSetupIsNotAnOrphan(t *testing.T) {
 		t.Fatal(err)
 	}
 	st.Close()
-	checkFake.SetAllocations(hourglass.Allocation{ResourceName: "lab-01"}, hourglass.Allocation{ResourceName: "rp_two"})
+	checkFake.SetAllocations(hourglass.Allocation{ResourceName: "lab-01"}, hourglass.Allocation{ResourceName: "lab-02"})
 	checkPressSrc.SetValue(0)
 	out, err := runCheck(t, checkConfig(t, dir, true, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "lab-01 -> lab-01  [held]") || !strings.Contains(out, "orphans (1):\n  rp_two\n") {
+	if !strings.Contains(out, "  lab-01  [held]\n") || !strings.Contains(out, "orphans (1):\n  lab-02\n") {
 		t.Errorf("held setup handling wrong:\n%s", out)
 	}
 	if !strings.Contains(out, "multiplier: 0x") {
@@ -212,7 +213,7 @@ func TestEXT3_CheckProviderNoDatabaseUsesSeedAndCreatesNothing(t *testing.T) {
 	dir := t.TempDir()
 	seed := writeSeed(t, "seed.yaml", checkSeed)
 	cfg := checkConfig(t, dir, true, "seed: "+seed+"\n")
-	checkFake.SetAllocations(hourglass.Allocation{ResourceName: "lab-02"}) // rp_two expected, so this is ignored
+	checkFake.SetAllocations(hourglass.Allocation{ResourceName: "lab-02-x"}) // no setup has this exact name, so it is ignored
 	checkPressSrc.SetValue(0.1)
 	out, err := runCheck(t, cfg)
 	if err != nil {

@@ -38,7 +38,10 @@ learning the API: `filedir`, `busiestsite`, `businesshours`, `logfile`.
 **filedir.** `provider: {type: filedir, config: {dir: data/rigs}}`. `List`
 returns one `Allocation` per regular file (dot-files and directories are
 skipped), sorted. Creating `data/rigs/rig-a1` "deploys" the setup `rig-a1`; the
-core matches it through the resource name template. A missing directory is an
+core matches an allocation only to the setup with exactly its name. A provider
+whose backend names differ from setup names maps them itself in `List`, for
+example by returning `strings.TrimSuffix(file, ".rig")` as the `ResourceName`
+so that the file `rig-a1.rig` reports setup `rig-a1`. A missing directory is an
 error, so the core records a gap instead of charging for a lab it cannot see.
 
 **busiest-site.** `pressure: {type: busiest-site, config: {label: site}}`.

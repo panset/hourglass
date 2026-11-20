@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/panset/hourglass/internal/ledger"
-	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
 )
 
@@ -97,11 +96,6 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 		Extensions: collectorExtensions{Provider: rt.Provider, PressureSource: rt.PressureSource,
 			MeteringPolicy: rt.MeteringPolicy.Name, Hooks: rt.Hooks},
 	}
-	cfg, err := settings.Load(ctx, st)
-	if err != nil {
-		return out, err
-	}
-
 	runs, err := st.ListCollectorRuns(ctx, collectorListLimit)
 	if err != nil {
 		return out, err
@@ -152,15 +146,11 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 	if err != nil {
 		return out, err
 	}
-	byResource := map[string]store.Setup{}
+	byName := map[string]store.Setup{} // D40: a resource belongs to the setup with its exact name
 	poll := a.pollView()
 	for _, s := range setups {
-		name, err := settings.ResourceName(cfg.ResourceNameTemplate, s.Name, s.Labels, s.ResourceNameOverride)
-		if err != nil {
-			continue
-		}
-		byResource[name] = s
-		if s.Enabled && poll.OK && poll.Reported(name) {
+		byName[s.Name] = s
+		if s.Enabled && poll.OK && poll.Reported(s.Name) {
 			out.MatchedSetups++
 		}
 	}
@@ -174,7 +164,7 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 		labels := map[string]string{}
 		_ = json.Unmarshal([]byte(o.LabelsJSON), &labels) // provider-specific; non-string labels are dropped
 		x := collectorOrphanOut{ResourceName: o.ResourceName, FirstSeenAt: ts(o.FirstSeenAt), LastSeenAt: ts(o.LastSeenAt), Labels: labelsNonNil(labels)}
-		if s, ok := byResource[o.ResourceName]; ok {
+		if s, ok := byName[o.ResourceName]; ok {
 			x.Setup = &collectorOrphanSetup{ID: s.ID, Name: s.Name}
 		}
 		out.Orphans[i] = x

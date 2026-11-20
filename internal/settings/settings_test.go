@@ -36,7 +36,7 @@ var (
 
 func TestADM2_Defaults(t *testing.T) {
 	d := Defaults()
-	if d.ResourceNameTemplate != "{{.SetupName}}" || d.DefaultWeight != 1 || len(d.DisplayLabelKeys) != 0 ||
+	if d.DefaultWeight != 1 || len(d.DisplayLabelKeys) != 0 ||
 		d.DefaultAllowanceMT != 300000 || d.MaxHoldsPerUser != 2 || !d.ReleaseRequiresTeardown ||
 		d.PollInterval != 5*time.Minute || d.Enforcement {
 		t.Fatalf("unexpected defaults %+v", d)
@@ -59,9 +59,6 @@ func TestADM2_Validate(t *testing.T) {
 		mod   func(*Settings)
 		field string
 	}{
-		{"template parse", func(s *Settings) { s.ResourceNameTemplate = "{{.SetupName" }, KeyResourceNameTemplate},
-		{"template empty", func(s *Settings) { s.ResourceNameTemplate = "" }, KeyResourceNameTemplate},
-		{"template exec", func(s *Settings) { s.ResourceNameTemplate = "{{.Nope}}" }, KeyResourceNameTemplate},
 		{"weight neg", func(s *Settings) { s.DefaultWeight = -1 }, KeyDefaultWeight},
 		{"weight nan", func(s *Settings) { s.DefaultWeight = nan() }, KeyDefaultWeight},
 		{"label key bad", func(s *Settings) { s.DisplayLabelKeys = []string{"Bad Key"} }, KeyDisplayLabelKeys},
@@ -149,7 +146,6 @@ func TestADM2_JSONRoundTrip(t *testing.T) {
 	s := Defaults()
 	s.DisplayLabelKeys = []string{"team", "env"}
 	s.DefaultAllowanceMT = 1500
-	s.ResourceNameTemplate = `{{.SetupName}}_X`
 	b, err := json.Marshal(s)
 	if err != nil {
 		t.Fatal(err)
@@ -187,33 +183,6 @@ func TestADM2_JSONRejectsUnknownFields(t *testing.T) {
 		if err := json.Unmarshal([]byte(in), &s); err == nil {
 			t.Errorf("%s accepted", in)
 		}
-	}
-}
-
-func TestSET4_ResourceName(t *testing.T) {
-	labels := map[string]string{"team": "red"}
-	ok := []struct{ tmpl, setup, override, want string }{
-		{"{{.SetupName}}", "lab1", "", "lab1"},
-		{"{{.SetupName}}_X", "lab1", "", "lab1_X"},
-		{"{{.SetupName}}-{{.Labels.team}}", "lab1", "", "lab1-red"},
-		{"{{.SetupName}}-{{.Labels.gone}}", "lab1", "", "lab1-"},
-		{"{{.SetupName}}", "lab1", "custom", "custom"},
-		{"{{broken", "lab1", "custom", "custom"},
-	}
-	for _, c := range ok {
-		got, err := ResourceName(c.tmpl, c.setup, labels, c.override)
-		if err != nil || got != c.want {
-			t.Errorf("%q: got %q, %v want %q", c.tmpl, got, err, c.want)
-		}
-	}
-	for _, tmpl := range []string{"{{.SetupName", "{{.Labels.gone}}", "", "{{.Missing}}"} {
-		if got, err := ResourceName(tmpl, "lab1", labels, ""); err == nil {
-			t.Errorf("%q: expected error, got %q", tmpl, got)
-		}
-	}
-	// cached second call gives the same answer
-	if got, _ := ResourceName("{{.SetupName}}_X", "b", nil, ""); got != "b_X" {
-		t.Fatal(got)
 	}
 }
 

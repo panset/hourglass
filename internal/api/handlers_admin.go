@@ -420,22 +420,20 @@ const maxSetupNameRunes = 200
 
 // setupInput is the validated SetupInput.
 type setupInput struct {
-	name     string
-	labels   map[string]string
-	details  string
-	enabled  bool
-	override string
+	name    string
+	labels  map[string]string
+	details string
+	enabled bool
 }
 
-// parseSetupInput reads and validates a SetupInput body (SET-1..SET-4). It
+// parseSetupInput reads and validates a SetupInput body (SET-1..SET-3). It
 // writes the 400 itself and returns false on a bad body.
 func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInput, bool) {
 	var body struct {
-		Name     *string            `json:"name"`
-		Labels   *map[string]string `json:"labels"`
-		Details  json.RawMessage    `json:"details"`
-		Enabled  *bool              `json:"enabled"`
-		Override *string            `json:"resource_name_override"`
+		Name    *string            `json:"name"`
+		Labels  *map[string]string `json:"labels"`
+		Details json.RawMessage    `json:"details"`
+		Enabled *bool              `json:"enabled"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return setupInput{}, false
@@ -474,22 +472,7 @@ func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInpu
 	if body.Enabled == nil {
 		return bad("enabled", "enabled is required")
 	}
-	override := ""
-	if body.Override != nil {
-		override = strings.TrimSpace(*body.Override)
-	}
-	if utf8.RuneCountInString(override) > 255 || strings.IndexFunc(override, unicode.IsControl) >= 0 {
-		return bad("resource_name_override", "resource_name_override is not a valid resource name")
-	}
-	cfg, err := settings.Load(r.Context(), a.d.Store)
-	if err != nil {
-		a.writeError(w, r, err)
-		return setupInput{}, false
-	}
-	if _, err := settings.ResourceName(cfg.ResourceNameTemplate, name, *body.Labels, override); err != nil {
-		return bad("resource_name_override", "the resource name cannot be derived: %v", err)
-	}
-	return setupInput{name: name, labels: *body.Labels, details: string(body.Details), enabled: *body.Enabled, override: override}, true
+	return setupInput{name: name, labels: *body.Labels, details: string(body.Details), enabled: *body.Enabled}, true
 }
 
 // setupAudit is the audit snapshot of a setup. details is recorded as a size
@@ -497,13 +480,12 @@ func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInpu
 func setupAudit(s store.Setup) map[string]any {
 	sum := sha256.Sum256([]byte(s.DetailsJSON))
 	return map[string]any{"name": s.Name, "labels": s.Labels, "enabled": s.Enabled,
-		"resource_name_override": nullIfEmpty(s.ResourceNameOverride),
-		"details_bytes":          len(s.DetailsJSON), "details_sha256": hex.EncodeToString(sum[:])}
+		"details_bytes": len(s.DetailsJSON), "details_sha256": hex.EncodeToString(sum[:])}
 }
 
 const msgNameTaken = "a setup with this name already exists"
 
-// createSetup is POST /api/v1/admin/setups (SET-1..SET-4).
+// createSetup is POST /api/v1/admin/setups (SET-1..SET-3).
 func (a *API) createSetup(w http.ResponseWriter, r *http.Request) {
 	caller, ok := adminCaller(w, r)
 	if !ok {
@@ -517,7 +499,7 @@ func (a *API) createSetup(w http.ResponseWriter, r *http.Request) {
 	now := a.d.Clock.Now()
 	var id int64
 	err := a.d.Store.Tx(ctx, func(tx *store.Tx) error {
-		s := store.Setup{Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled, ResourceNameOverride: in.override}
+		s := store.Setup{Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled}
 		var err error
 		if id, err = tx.CreateSetup(ctx, s); err != nil {
 			if errors.Is(err, store.ErrConflict) {
@@ -561,7 +543,7 @@ func (a *API) updateSetup(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		s := store.Setup{ID: id, Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled, ResourceNameOverride: in.override}
+		s := store.Setup{ID: id, Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled}
 		if err := tx.UpdateSetup(ctx, s); err != nil {
 			if errors.Is(err, store.ErrConflict) {
 				return adminRefuse(apierr.Conflict, msgNameTaken)
@@ -836,7 +818,7 @@ func (a *API) writeSettings(w http.ResponseWriter, r *http.Request) {
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) { a.writeSettings(w, r) }
 
 // settingsKeys are the keys a PUT body must all carry.
-var settingsKeys = []string{settings.KeyResourceNameTemplate, settings.KeyDefaultWeight, settings.KeyDisplayLabelKeys,
+var settingsKeys = []string{settings.KeyDefaultWeight, settings.KeyDisplayLabelKeys,
 	settings.KeyBands, settings.KeyDefaultAllowance, settings.KeyMaxHoldsPerUser, settings.KeyReleaseRequiresTeardown,
 	settings.KeyPollInterval, settings.KeyEnforcement}
 

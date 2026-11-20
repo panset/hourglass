@@ -15,7 +15,7 @@ import (
 const setupPath = "/api/v1/admin/setups"
 
 func setupBody(name, details string, enabled bool) string {
-	return fmt.Sprintf(`{"name":%q,"labels":{"tier":"a","site":"x"},"details":%s,"enabled":%t,"resource_name_override":null}`, name, details, enabled)
+	return fmt.Sprintf(`{"name":%q,"labels":{"tier":"a","site":"x"},"details":%s,"enabled":%t}`, name, details, enabled)
 }
 
 func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
@@ -39,8 +39,8 @@ func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
 		t.Errorf("cost = %v", cost)
 	}
 	ad := adObjOf(t, s["admin"])
-	uWantKeys(t, "admin", ad, "enabled", "resource_name", "resource_name_override", "last_seen_at", "matched_rule_selector")
-	if ad["enabled"] != true || ad["resource_name"] != "lab-01" || ad["resource_name_override"] != nil || ad["last_seen_at"] != nil || ad["matched_rule_selector"] != "tier=a" {
+	uWantKeys(t, "admin", ad, "enabled", "last_seen_at", "matched_rule_selector")
+	if ad["enabled"] != true || ad["last_seen_at"] != nil || ad["matched_rule_selector"] != "tier=a" {
 		t.Errorf("admin = %v", ad)
 	}
 	if d := adObjOf(t, s["details"]); d["note"] != "opaque" {
@@ -131,33 +131,6 @@ func TestSET3_LabelAndFieldValidation(t *testing.T) {
 	}
 }
 
-func TestSET4_ResourceNameFromTemplateAndOverride(t *testing.T) {
-	e := newAdEnv(t)
-	if err := e.st.PutSetting(uBg, "resource_name_template", `"{{.SetupName}}_RP"`, nil, e.clk.Now()); err != nil {
-		t.Fatal(err)
-	}
-	s := uWantOK(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 201)
-	if adObjOf(t, s["admin"])["resource_name"] != "lab-01_RP" {
-		t.Errorf("admin = %v", s["admin"])
-	}
-	body := `{"name":"lab-02","labels":{},"details":{},"enabled":true,"resource_name_override":"  pool-7 "}`
-	s = uWantOK(t, e.send("POST", setupPath, body), 201)
-	ad := adObjOf(t, s["admin"])
-	if ad["resource_name"] != "pool-7" || ad["resource_name_override"] != "pool-7" {
-		t.Errorf("admin = %v", ad)
-	}
-	// A blank override falls back to the template.
-	s = uWantOK(t, e.send("POST", setupPath, `{"name":"lab-03","labels":{},"details":{},"enabled":true,"resource_name_override":""}`), 201)
-	if ad := adObjOf(t, s["admin"]); ad["resource_name"] != "lab-03_RP" || ad["resource_name_override"] != nil {
-		t.Errorf("admin = %v", ad)
-	}
-	// A template that renders empty for this setup is refused.
-	if err := e.st.PutSetting(uBg, "resource_name_template", `"{{index .Labels \"missing\"}}"`, nil, e.clk.Now()); err != nil {
-		t.Fatal(err)
-	}
-	adErr(t, e.send("POST", setupPath, setupBody("lab-04", `{}`, true)), 400, "validation")
-}
-
 func TestSET1_DuplicateNameIsConflict(t *testing.T) {
 	e := newAdEnv(t)
 	uWantOK(t, e.send("POST", setupPath, setupBody("lab-01", `{}`, true)), 201)
@@ -179,12 +152,12 @@ func TestSET1_UpdateSetup(t *testing.T) {
 	e := newAdEnv(t)
 	id := e.setup("lab-01", true, map[string]string{"old": "1"})
 	path := setupPath + "/" + uItoa(id)
-	body := `{"name":"renamed","labels":{"new":"2"},"details":{"x":[1]},"enabled":false,"resource_name_override":"pool"}`
+	body := `{"name":"renamed","labels":{"new":"2"},"details":{"x":[1]},"enabled":false}`
 	s := uWantOK(t, e.send("PUT", path, body), 200)
 	if s["name"] != "renamed" || s["state"] != "disabled" || adObjOf(t, s["labels"])["new"] != "2" || len(adObjOf(t, s["labels"])) != 1 {
 		t.Errorf("setup = %v", s)
 	}
-	if ad := adObjOf(t, s["admin"]); ad["enabled"] != false || ad["resource_name"] != "pool" {
+	if ad := adObjOf(t, s["admin"]); ad["enabled"] != false {
 		t.Errorf("admin = %v", ad)
 	}
 	rows := e.audits("setup.update")

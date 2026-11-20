@@ -322,7 +322,7 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 		return nil, fmt.Errorf("pressure history: %w", err)
 	}
 
-	// 2. Resolve weights and expected resource names.
+	// 2. Resolve weights.
 	rs := make([]rules.Rule, len(ruleRows))
 	for i, r := range ruleRows {
 		rs[i] = rules.Rule{ID: r.ID, Kind: r.Kind, Position: r.Position, Selector: r.Selector,
@@ -338,14 +338,9 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 		if !matched {
 			sel = ""
 		}
-		rn, err := settings.ResourceName(cfg.ResourceNameTemplate, s.Name, s.Labels, s.ResourceNameOverride)
-		if err != nil {
-			return nil, fmt.Errorf("setup %q: resource name: %w", s.Name, err)
-		}
 		si := &setupInfo{row: s, selector: sel, state: hourglass.SetupState{
-			Setup:        hourglass.Setup{Name: s.Name, Labels: s.Labels, Details: json.RawMessage(s.DetailsJSON)},
-			Weight:       w,
-			ResourceName: rn,
+			Setup:  hourglass.Setup{Name: s.Name, Labels: s.Labels, Details: json.RawMessage(s.DetailsJSON)},
+			Weight: w,
 		}}
 		setups = append(setups, si)
 		byID[s.ID] = si
@@ -364,11 +359,9 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 			reported[a.ResourceName] = a
 		}
 	}
+	// D40: an allocation belongs to the setup whose name equals its resource name.
 	allocationFor := func(si *setupInfo) *hourglass.Allocation {
-		if si.state.ResourceName == "" {
-			return nil
-		}
-		if a, ok := reported[si.state.ResourceName]; ok {
+		if a, ok := reported[si.state.Name]; ok {
 			return &a
 		}
 		return nil
@@ -580,13 +573,13 @@ func writeOrphans(ctx context.Context, tx *store.Tx, setups []*setupInfo, holds 
 	reported map[string]hourglass.Allocation, t time.Time) error {
 	heldNames := map[string]bool{}
 	for _, h := range holds {
-		heldNames[h.setup.state.ResourceName] = true
+		heldNames[h.setup.state.Name] = true
 	}
-	resources := make([]string, len(setups))
+	setupNames := make([]string, len(setups))
 	for i, si := range setups {
-		resources[i] = si.state.ResourceName
+		setupNames[i] = si.state.Name
 	}
-	names := OrphanNames(resources, heldNames, reported)
+	names := OrphanNames(setupNames, heldNames, reported)
 	for _, rn := range names {
 		labels := reported[rn].Labels
 		if labels == nil {

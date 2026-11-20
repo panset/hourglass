@@ -439,18 +439,25 @@ func TestHOLD2_ReleaseProceedsWhenCheckDoesNotApply(t *testing.T) {
 	}
 }
 
-func TestHOLD2_ResourceNameUsesOverride(t *testing.T) {
+// D40: the teardown check matches the provider's allocation by the setup's
+// exact name; a reported name that only resembles it does not block release.
+func TestHOLD2_ReleaseMatchesAllocationBySetupName(t *testing.T) {
 	e := newEnv(t)
-	id, err := e.st.CreateSetup(bg, store.Setup{Name: "s", Enabled: true, ResourceNameOverride: "custom-name"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	u := e.user("u", 10, store.RoleDeveloper)
-	h, err := e.svc.Acquire(bg, u, id)
+	h, err := e.svc.Acquire(bg, u, e.setup("s", true))
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.poll.reported["custom-name"] = true
+	e.poll.reported["s-other"] = true
+	e.poll.reported["S"] = true
+	if _, err := e.svc.Release(bg, u, h.ID, ReleaseOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	h, err = e.svc.Acquire(bg, u, e.setup("t", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.poll.reported["t"] = true
 	_, err = e.svc.Release(bg, u, h.ID, ReleaseOpts{})
 	wantCode(t, err, CodeStillDeployed)
 }

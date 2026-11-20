@@ -25,6 +25,10 @@ provider:
     # The simulator's certificate is self-signed. Real deployments set this
     # to false (the default) so the vCenter certificate is verified.
     insecure_skip_verify: true
+    # Setups are resource pools named <setup>_RP. The provider reports only
+    # pools with this suffix, and strips it, so pool lab-06_RP is the setup
+    # lab-06. The pressure source block does not need it.
+    pool_name_suffix: _RP
 
 pressure:
   type: vsphere

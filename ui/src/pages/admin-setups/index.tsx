@@ -99,12 +99,6 @@ export default function Page() {
               },
               { key: "weight", header: "Weight", render: (s) => s.weight },
               {
-                key: "resource",
-                header: "Resource name",
-                render: (s) =>
-                  s.admin ? `${s.admin.resource_name}${s.admin.resource_name_override ? " (override)" : ""}` : "",
-              },
-              {
                 key: "seen",
                 header: `Last seen by provider (${zoneLabel()})`,
                 nowrap: true,

@@ -26,7 +26,6 @@ export function toInput(s: Setup, over: Partial<SetupInput> = {}): SetupInput {
     labels: s.labels,
     details: s.details ?? null,
     enabled: s.admin?.enabled ?? s.state !== "disabled",
-    resource_name_override: s.admin?.resource_name_override ?? null,
     ...over,
   };
 }
@@ -43,7 +42,6 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
   const [labels, setLabels] = useState<LabelRow[]>(
     Object.entries(setup?.labels ?? {}).map(([key, value]) => ({ key, value })),
   );
-  const [override, setOverride] = useState(setup?.admin?.resource_name_override ?? "");
   const [details, setDetails] = useState(setup ? JSON.stringify(setup.details ?? null, null, 2) : "{}");
   const [enabled, setEnabled] = useState(setup?.admin?.enabled ?? true);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -69,7 +67,6 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
       labels: map,
       details: parsed.value,
       enabled,
-      resource_name_override: override.trim() === "" ? null : override.trim(),
     };
     const ok = await save.run(() => (setup ? updateSetup(setup.id, body) : createSetup(body)));
     if (ok) onSaved(setup ? `Saved ${body.name}.` : `Added ${body.name}.`);
@@ -124,13 +121,6 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
         </div>
         <p className={shared.note}>Free-form key and value; the server checks the limits on save.</p>
       </fieldset>
-
-      <Field
-        label="Resource name override"
-        hint={setup?.admin ? `Blank uses the template: ${setup.admin.resource_name}` : "Blank uses the template."}
-      >
-        {(p) => <Input {...p} value={override} onChange={(e) => setOverride(e.target.value)} />}
-      </Field>
 
       <Field
         label="Details (JSON, stored as-is, passed to hooks)"

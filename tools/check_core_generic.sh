@@ -7,6 +7,10 @@
 #   rule2: core files of any type must not mention vendor, size or provider terms (case-insensitive).
 #   rule3: vmware/govmomi may be imported only by providers/vsphere/ and deploy/ or e2e/
 #          (non-core files; core is already covered by rule1).
+#   rule4: core files of any type must not carry a resource naming rule (D40): the reference
+#          scenario's pool suffix `_RP` and the removed `resource_name_template` setting
+#          (case-insensitive). Only the migration that deletes the stored setting and its
+#          upgrade test may name it.
 # Output: path:line: rule: text. Exit 1 on any violation, 0 otherwise.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -15,6 +19,8 @@ CORE_DIRS="internal pkg/hourglass pkg/hourglasstest"
 EXT_IMPORT_RE='^github\.com/panset/hourglass/(providers|pressure|policies|hooks|examples)(/|$)'
 GOVMOMI='vmware/govmomi'
 TEXT_RE='vcenter|vsphere|govmomi|vcsim|resource pool|resourcepool|extralarge|size=|keycloak'
+NAMING_RE='_RP|resource_name_template'
+NAMING_EXEMPT='internal/store/migrations/0004_drop_resource_name_override.sql internal/store/migrate0004_test.go'
 
 violations=0
 report() {
@@ -95,6 +101,16 @@ while IFS= read -r f; do
   [ -n "$hits" ] || continue
   while IFS= read -r hit; do
     report "$f" "${hit%%:*}" "rule2" "${hit#*:}"
+  done <<< "$hits"
+done <<< "$core_files"
+
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case " $NAMING_EXEMPT " in *" $f "*) continue ;; esac
+  hits=$(grep -n -i -I -E "$NAMING_RE" "$f" || true)
+  [ -n "$hits" ] || continue
+  while IFS= read -r hit; do
+    report "$f" "${hit%%:*}" "rule4" "${hit#*:}"
   done <<< "$hits"
 done <<< "$core_files"
 

@@ -11,7 +11,7 @@ const collector = {
   orphan_count: 1,
   orphans: [
     {
-      resource_name: "setup-09_RP",
+      resource_name: "setup-09",
       first_seen_at: "2026-11-16T08:10:00Z",
       last_seen_at: "2026-11-18T08:10:00Z",
       setup: { id: 9, name: "setup-09" },
@@ -31,17 +31,15 @@ function routes(extra: Record<string, unknown> = {}) {
 beforeEach(() => setCsrfToken("csrf-admin"));
 
 describe("SET-1 setup inventory states", () => {
-  it("shows loading then rows, status pills, override suffix and orphans", async () => {
+  it("shows loading then rows, status pills and orphans", async () => {
     mockApi(routes());
     render(<Page />);
     expect(screen.getByRole("status")).toHaveTextContent("Loading setups");
     const table = await screen.findByRole("table", { name: "Setups" });
     const rows = within(table).getAllByRole("row");
     expect(rows[1]).toHaveTextContent("size=medium");
-    expect(rows[1]).toHaveTextContent("setup-04_RP");
     expect(rows[1]).toHaveTextContent("Sam Lee");
     expect(rows[1]).toHaveTextContent("Enabled");
-    expect(rows[2]).toHaveTextContent("lab7-pool (override)");
     expect(rows[2]).toHaveTextContent("Not deployed");
     expect(rows[2]).toHaveTextContent("Disabled");
     expect(await screen.findByText("setup-09 exists but nobody holds it")).toBeInTheDocument();
@@ -83,7 +81,6 @@ describe("SET-2, SET-3 add and edit", () => {
       labels: { tier: "a" },
       details: { rack: "r2" },
       enabled: true,
-      resource_name_override: null,
     });
     expect(post.headers.get("X-CSRF-Token")).toBe("csrf-admin");
   });
@@ -134,7 +131,6 @@ describe("SET-2, SET-3 add and edit", () => {
     render(<Page />);
     await userEvent.click(await screen.findByRole("button", { name: "Edit setup-04" }));
     const panel = screen.getByRole("complementary", { name: "Edit setup" });
-    await userEvent.type(within(panel).getByLabelText("Resource name override"), "pool-4");
     await userEvent.click(within(panel).getByRole("button", { name: "Save" }));
     const put = calls.find((c) => c.method === "PUT")!;
     expect(put.body).toEqual({
@@ -142,7 +138,6 @@ describe("SET-2, SET-3 add and edit", () => {
       labels: { size: "medium", site: "sjc" },
       details: { rack: "r1" },
       enabled: true,
-      resource_name_override: "pool-4",
     });
   });
 });

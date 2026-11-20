@@ -24,7 +24,7 @@ const ALICE = { user: "alice", password: "dev-only-alice" };
 const SETUP_A = "lab-03"; // size=large, weight 2 (rate rule size=large)
 const SETUP_B = "lab-04"; // size=large
 const SETUP_FREE = "lab-01"; // size=medium, stays free
-const POOL_A = `${SETUP_A}_RP`;
+const POOL_A = `${SETUP_A}_RP`; // the provider strips the suffix (pool_name_suffix in deploy/config.sample.yaml, D40)
 const POLL_WAIT = 9 * 60_000; // first poll after startup sleeps up to 5 minutes (default interval)
 
 // ---------------------------------------------------------------- reporting
@@ -230,7 +230,6 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await nav(admin!, "Settings");
     await expect(admin!.getByRole("heading", { name: "Settings" })).toBeVisible();
     const p = admin!;
-    await p.getByLabel("Template", { exact: true }).fill("{{.SetupName}}_RP");
     await p.getByLabel("Display label keys").fill("size");
     await p.getByLabel("Poll interval").fill("1m");
     const enforce = p.getByRole("checkbox", { name: "Block acquiring at zero tokens" });
@@ -247,11 +246,11 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await p.getByRole("button", { name: "Save changes" }).click();
     await expect(p.getByText("Settings saved. They apply from the next poll.")).toBeVisible();
     await p.reload();
-    await expect(p.getByLabel("Template", { exact: true })).toHaveValue("{{.SetupName}}_RP");
+    await expect(p.getByLabel("Display label keys")).toHaveValue("size");
     await expect(p.getByLabel("Poll interval")).toHaveValue("1m");
     await expect(p.getByLabel("From pressure 1 (0 to 1)", { exact: true })).toHaveValue("0.05");
     await expect(p.getByRole("checkbox", { name: "Block acquiring at zero tokens" })).toBeChecked();
-    asserted("template {{.SetupName}}_RP, label key size, poll 1m, enforcement ON, bands 1x / 2x from 0.05 saved and reloaded");
+    asserted("label key size, poll 1m, enforcement ON, bands 1x / 2x from 0.05 saved and reloaded");
     observe("bands", "base 1, from 0.05 -> 2");
     await stretchKeycloakTokenLifetime();
     observe("keycloak", "realm token and SSO session lifetimes set to 40 days (see A8)");

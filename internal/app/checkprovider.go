@@ -70,15 +70,10 @@ func CheckProvider(ctx context.Context, opts CheckOptions) error {
 	snap.Time = time.Now()
 	snap.ProviderConfigured = ext.provider != nil
 	for _, s := range setups {
-		rn, err := settings.ResourceName(set.ResourceNameTemplate, s.name, s.labels, s.override)
-		if err != nil {
-			return fmt.Errorf("setup %q: resource name: %w", s.name, err)
-		}
-		refs = append(refs, collector.SetupRef{Name: s.name, ResourceName: rn, Enabled: s.enabled, Held: holdNames[s.name]})
+		refs = append(refs, collector.SetupRef{Name: s.name, Enabled: s.enabled, Held: holdNames[s.name]})
 		if s.enabled {
 			snap.Setups = append(snap.Setups, hourglass.SetupState{
-				Setup:        hourglass.Setup{Name: s.name, Labels: s.labels, Details: s.details},
-				ResourceName: rn,
+				Setup: hourglass.Setup{Name: s.name, Labels: s.labels, Details: s.details},
 			})
 		}
 	}
@@ -119,11 +114,11 @@ func CheckProvider(ctx context.Context, opts CheckOptions) error {
 			case s.Held:
 				note = "  [held]"
 			}
-			fmt.Fprintf(w, "  %s -> %s%s\n", s.Name, s.ResourceName, note)
+			fmt.Fprintf(w, "  %s%s\n", s.Name, note)
 		}
-		fmt.Fprintf(w, "expected but not reported (%d):\n", len(rec.Missing))
+		fmt.Fprintf(w, "enabled setups not reported (%d):\n", len(rec.Missing))
 		for _, s := range rec.Missing {
-			fmt.Fprintf(w, "  %s -> %s\n", s.Name, s.ResourceName)
+			fmt.Fprintf(w, "  %s\n", s.Name)
 		}
 		fmt.Fprintf(w, "orphans (%d):\n", len(rec.Orphans))
 		for _, o := range rec.Orphans {
@@ -158,11 +153,10 @@ func buildCheckExtensions(cfg config.Config, defPressure string) (extensions, er
 }
 
 type checkSetup struct {
-	name     string
-	labels   map[string]string
-	override string
-	details  []byte
-	enabled  bool
+	name    string
+	labels  map[string]string
+	details []byte
+	enabled bool
 }
 
 // loadSetups reads setups, settings and active holds from the database
@@ -189,7 +183,7 @@ func loadSetups(ctx context.Context, cfg config.Config) (settings.Settings, []ch
 		out := make([]checkSetup, 0, len(rows))
 		for _, r := range rows {
 			names[r.ID] = r.Name
-			out = append(out, checkSetup{name: r.Name, labels: r.Labels, override: r.ResourceNameOverride,
+			out = append(out, checkSetup{name: r.Name, labels: r.Labels,
 				details: []byte(r.DetailsJSON), enabled: r.Enabled})
 		}
 		holds, err := st.ActiveHolds(ctx)
@@ -209,7 +203,7 @@ func loadSetups(ctx context.Context, cfg config.Config) (settings.Settings, []ch
 		}
 		out := make([]checkSetup, 0, len(f.Setups))
 		for _, s := range f.Setups {
-			out = append(out, checkSetup{name: s.Name, labels: s.Labels, override: s.ResourceNameOverride,
+			out = append(out, checkSetup{name: s.Name, labels: s.Labels,
 				details: s.Details, enabled: s.Enabled == nil || *s.Enabled})
 		}
 		return set, out, held, "no database yet; seed file " + cfg.Seed, nil

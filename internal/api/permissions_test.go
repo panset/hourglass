@@ -200,7 +200,7 @@ var probeOps = map[string]bool{
 	"getSettings": true, "updateSettings": true, "getCollector": true, "listAudit": true,
 }
 
-const permSettingsBody = `{"resource_name_template":"{{.SetupName}}_RP","default_weight":1,"display_label_keys":["tier"],` +
+const permSettingsBody = `{"default_weight":1,"display_label_keys":["tier"],` +
 	`"bands":{"base":0,"steps":[{"from":0.5,"multiplier":1},{"from":0.8,"multiplier":2}]},"default_allowance":250.5,` +
 	`"max_holds_per_user":50,"release_requires_teardown":false,"poll_interval":"10m","enforcement":false}`
 

@@ -559,8 +559,7 @@ export interface paths {
          * Replace the metering settings
          * @description The body is the complete `Settings` object; unknown fields are
          *     rejected. The first invalid value is 400 `validation` with `field`
-         *     (template that does not parse or yields an empty name, negative
-         *     weight, bad label key, bad bands, poll interval under 1 minute, and so
+         *     (negative weight, bad label key, bad bands, poll interval under 1 minute, and so
          *     on). Applies from the next poll, never retroactively; changed keys are
          *     audited. Returns the same body as GET.
          *
@@ -908,14 +907,8 @@ export interface components {
         SetupAdminFields: {
             enabled: boolean;
             /**
-             * @description Name the provider is expected to report (template or override).
-             * @example lab-01_RP
-             */
-            resource_name: string;
-            resource_name_override: string | null;
-            /**
              * Format: date-time
-             * @description Last time the provider reported it; null if never.
+             * @description Last time the provider reported an allocation with the setup's exact name; null if never.
              */
             last_seen_at: string | null;
             /** @description Selector of the rate rule that set the weight; null for the default weight. */
@@ -979,8 +972,6 @@ export interface components {
              */
             details: unknown;
             enabled: boolean;
-            /** @description Blank or null uses the template. */
-            resource_name_override: string | null;
         };
         ReleaseRequest: {
             /**
@@ -1095,11 +1086,6 @@ export interface components {
         };
         /** @description Admin-editable metering settings (ADM-2); unknown fields are rejected. */
         Settings: {
-            /**
-             * @description Go text/template with `.SetupName` and `.Labels` (SET-4).
-             * @example {{.SetupName}}
-             */
-            resource_name_template: string;
             /** @default 1 */
             default_weight: number;
             /** @example [
@@ -1167,7 +1153,10 @@ export interface components {
             duration_minutes: number;
         };
         Orphan: {
-            /** @example lab-09_RP */
+            /**
+             * @description The name the provider reported, which is the setup's name (D40).
+             * @example lab-09
+             */
             resource_name: string;
             /** Format: date-time */
             first_seen_at: string;

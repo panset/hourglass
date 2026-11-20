@@ -457,12 +457,7 @@ func (a *API) getPressure(w http.ResponseWriter, r *http.Request) {
 	}
 	deployed := 0
 	for _, s := range setups {
-		rep, err := l.reported(s)
-		if err != nil {
-			a.writeError(w, r, err)
-			return
-		}
-		if rep {
+		if l.reported(s) {
 			deployed++
 		}
 	}
@@ -482,11 +477,9 @@ type holderJSON struct {
 }
 
 type setupAdminJSON struct {
-	Enabled      bool    `json:"enabled"`
-	ResourceName string  `json:"resource_name"`
-	Override     *string `json:"resource_name_override"`
-	LastSeenAt   *string `json:"last_seen_at"`
-	MatchedRule  *string `json:"matched_rule_selector"`
+	Enabled     bool    `json:"enabled"`
+	LastSeenAt  *string `json:"last_seen_at"`
+	MatchedRule *string `json:"matched_rule_selector"`
 }
 
 type setupJSON struct {
@@ -555,11 +548,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 	var summary struct{ Enabled, Deployed, Free int }
 	list := make([]setupJSON, 0, len(rows))
 	for _, s := range rows {
-		rep, err := l.reported(s)
-		if err != nil {
-			a.writeError(w, r, err)
-			return
-		}
+		rep := l.reported(s)
 		h, held := holdOf[s.ID]
 		if s.Enabled {
 			summary.Enabled++
@@ -593,13 +582,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 			v.State = "disabled"
 		}
 		if isAdmin {
-			res, err := l.resourceName(s)
-			if err != nil {
-				a.writeError(w, r, err)
-				return
-			}
-			adm := &setupAdminJSON{Enabled: s.Enabled, ResourceName: res, Override: nullIfEmpty(s.ResourceNameOverride),
-				MatchedRule: nullIfEmpty(matched)}
+			adm := &setupAdminJSON{Enabled: s.Enabled, MatchedRule: nullIfEmpty(matched)}
 			if t, ok := l.view.LastSeen[s.Name]; ok {
 				adm.LastSeenAt = tsPtr(&t)
 			}

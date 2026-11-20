@@ -4,32 +4,29 @@ package store
 
 import (
 	"context"
-	"database/sql"
 )
 
 // Setup is a row of setups with its labels.
 type Setup struct {
-	ID                   int64
-	Name                 string
-	ResourceNameOverride string
-	DetailsJSON          string
-	Enabled              bool
-	Labels               map[string]string
+	ID          int64
+	Name        string
+	DetailsJSON string
+	Enabled     bool
+	Labels      map[string]string
 }
 
 func scanSetup(r rowScanner) (Setup, error) {
 	var (
 		s  Setup
-		ov sql.NullString
 		en int
 	)
-	err := r.Scan(&s.ID, &s.Name, &ov, &s.DetailsJSON, &en)
-	s.ResourceNameOverride, s.Enabled = ov.String, en != 0
+	err := r.Scan(&s.ID, &s.Name, &s.DetailsJSON, &en)
+	s.Enabled = en != 0
 	s.Labels = map[string]string{}
 	return s, err
 }
 
-const setupCols = `id, name, resource_name_override, details_json, enabled`
+const setupCols = `id, name, details_json, enabled`
 
 func (q *queries) loadLabels(ctx context.Context, setups []Setup) error {
 	if len(setups) == 0 {
@@ -78,8 +75,8 @@ func (q *queries) CreateSetup(ctx context.Context, s Setup) (int64, error) {
 		if details == "" {
 			details = "{}"
 		}
-		res, err := q.db.ExecContext(ctx, `INSERT INTO setups (name, resource_name_override, details_json, enabled)
-			VALUES (?, ?, ?, ?)`, s.Name, nullStr(s.ResourceNameOverride), details, boolInt(s.Enabled))
+		res, err := q.db.ExecContext(ctx, `INSERT INTO setups (name, details_json, enabled)
+			VALUES (?, ?, ?)`, s.Name, details, boolInt(s.Enabled))
 		if err != nil {
 			return mapErr(err)
 		}
@@ -96,9 +93,9 @@ func (q *queries) UpdateSetup(ctx context.Context, s Setup) error {
 		if details == "" {
 			details = "{}"
 		}
-		res, err := q.db.ExecContext(ctx, `UPDATE setups SET name = ?, resource_name_override = ?,
+		res, err := q.db.ExecContext(ctx, `UPDATE setups SET name = ?,
 			details_json = ?, enabled = ? WHERE id = ?`,
-			s.Name, nullStr(s.ResourceNameOverride), details, boolInt(s.Enabled), s.ID)
+			s.Name, details, boolInt(s.Enabled), s.ID)
 		if err != nil {
 			return mapErr(err)
 		}

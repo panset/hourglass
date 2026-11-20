@@ -23,13 +23,13 @@ func DedupAllocations(list []hourglass.Allocation) []hourglass.Allocation {
 	return out
 }
 
-// OrphanNames returns, sorted, the reported resource names that match one of
-// the setups' expected resource names while no active hold is on a setup with
-// that name (HOLD-4). Allocations matching no setup are not orphans.
-func OrphanNames(setupResources []string, held map[string]bool, reported map[string]hourglass.Allocation) []string {
+// OrphanNames returns, sorted, the reported resource names that equal the name
+// of one of the setups while no active hold is on that setup (HOLD-4, D40).
+// Allocations matching no setup are not orphans.
+func OrphanNames(setupNames []string, held map[string]bool, reported map[string]hourglass.Allocation) []string {
 	var names []string
 	seen := map[string]bool{}
-	for _, rn := range setupResources {
+	for _, rn := range setupNames {
 		if _, ok := reported[rn]; ok && rn != "" && !held[rn] && !seen[rn] {
 			seen[rn] = true
 			names = append(names, rn)
@@ -41,10 +41,9 @@ func OrphanNames(setupResources []string, held map[string]bool, reported map[str
 
 // SetupRef is a setup as seen by Reconcile.
 type SetupRef struct {
-	Name         string
-	ResourceName string // expected resource name; empty never matches
-	Enabled      bool
-	Held         bool // has an active hold
+	Name    string // an allocation with exactly this resource name is the setup's (D40)
+	Enabled bool
+	Held    bool // has an active hold
 }
 
 // Reconciliation is how a provider's allocations line up with the setups.
@@ -66,26 +65,26 @@ func Reconcile(setups []SetupRef, allocs []hourglass.Allocation) Reconciliation 
 		reported[a.ResourceName] = a
 	}
 	var r Reconciliation
-	expected := make([]string, 0, len(setups))
+	names := make([]string, 0, len(setups))
 	held := map[string]bool{}
 	known := map[string]bool{}
 	for _, s := range setups {
-		expected = append(expected, s.ResourceName)
+		names = append(names, s.Name)
 		if s.Held {
-			held[s.ResourceName] = true
+			held[s.Name] = true
 		}
-		if s.ResourceName != "" {
-			known[s.ResourceName] = true
+		if s.Name != "" {
+			known[s.Name] = true
 		}
-		_, ok := reported[s.ResourceName]
+		_, ok := reported[s.Name]
 		switch {
-		case ok && s.ResourceName != "":
+		case ok && s.Name != "":
 			r.Matched = append(r.Matched, s)
 		case s.Enabled:
 			r.Missing = append(r.Missing, s)
 		}
 	}
-	r.Orphans = OrphanNames(expected, held, reported)
+	r.Orphans = OrphanNames(names, held, reported)
 	for name := range reported {
 		if !known[name] {
 			r.Ignored++

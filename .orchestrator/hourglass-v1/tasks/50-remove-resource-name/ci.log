@@ -1,0 +1,101 @@
+core-genericity: OK (138 core files, 153 Go files checked, no violations)
+license check ok: 25 Go modules, 267 npm packages
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+Analyzing: target //:gazelle (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //:gazelle (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+Target //:gazelle up-to-date:
+  bazel-bin/gazelle-runner.bash
+  bazel-bin/gazelle
+INFO: Elapsed time: 0.393s, Critical Path: 0.00s
+INFO: 1 process: 1 internal.
+INFO: Build completed successfully, 1 total action
+INFO: Running command line: bazel-bin/gazelle update '-mode=diff' '-build_file_name=BUILD.bazel'
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (2 packages loaded, 0 targets configured)
+Analyzing: 254 targets (2 packages loaded, 0 targets configured)
+
+INFO: Analyzed 254 targets (2 packages loaded, 198 targets configured).
+[56 / 211] Vite ui/dist; 0s darwin-sandbox ... (8 actions, 7 running)
+[95 / 261] Vite ui/dist; 1s darwin-sandbox ... (8 actions, 7 running)
+[128 / 284] Vite ui/dist; 2s darwin-sandbox ... (8 actions, 7 running)
+[185 / 349] Vite ui/dist; 3s darwin-sandbox ... (8 actions, 7 running)
+[219 / 396] Vite ui/dist; 4s darwin-sandbox ... (8 actions, 7 running)
+[249 / 414] Vite ui/dist; 5s darwin-sandbox ... (8 actions, 7 running)
+[289 / 432] Vite ui/dist; 6s darwin-sandbox ... (8 actions, 7 running)
+[305 / 432] Vite ui/dist; 8s darwin-sandbox ... (8 actions, 7 running)
+[337 / 441] Vite ui/dist; 9s darwin-sandbox ... (8 actions, 7 running)
+[363 / 445] GoLink deploy/images/hourglass_bin_arm64_/hourglass_bin_arm64; 1s darwin-sandbox ... (8 actions, 7 running)
+[385 / 449] GoLink deploy/images/hourglass-e2e_bin_amd64_/hourglass-e2e_bin_amd64; 0s darwin-sandbox ... (8 actions, 7 running)
+[421 / 463] GoLink e2e/hourglassd-e2e/hourglassd-api-e2e_/hourglassd-api-e2e; 0s darwin-sandbox ... (8 actions, 7 running)
+[439 / 463] GoLink e2e/hourglassd-e2e/hourglassd-e2e_test_/hourglassd-e2e_test; 0s darwin-sandbox ... (5 actions, 4 running)
+[452 / 463] OCI Image //deploy/images:hourglass_amd64; 0s darwin-sandbox ... (3 actions, 2 running)
+INFO: Found 254 targets...
+INFO: Elapsed time: 15.154s, Critical Path: 13.59s
+INFO: 336 processes: 2 internal, 295 darwin-sandbox, 39 local.
+INFO: Build completed successfully, 336 total actions
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+Analyzing: 254 targets (0 packages loaded, 0 targets configured)
+[0 / 1] checking cached actions
+INFO: Analyzed 254 targets (0 packages loaded, 0 targets configured).
+[96 / 118] 14 / 35 tests; Testing //e2e/simulator:simulator_test; 1s darwin-sandbox ... (8 actions running)
+[109 / 123] 22 / 35 tests; Testing //internal/api:api_test; 2s darwin-sandbox ... (8 actions running)
+[116 / 123] 28 / 35 tests; Testing //internal/api:api_test; 3s darwin-sandbox ... (7 actions running)
+[118 / 123] 30 / 35 tests; Testing //internal/api:api_test; 4s darwin-sandbox ... (5 actions running)
+[118 / 123] 31 / 35 tests; Testing //internal/api:api_test; 6s darwin-sandbox ... (5 actions running)
+[119 / 123] 31 / 35 tests; Testing //internal/api:api_test; 7s darwin-sandbox ... (4 actions running)
+[119 / 123] 31 / 35 tests; Testing //internal/api:api_test; 11s darwin-sandbox ... (4 actions running)
+[120 / 123] 32 / 35 tests; Testing //internal/api:api_test; 12s darwin-sandbox ... (3 actions running)
+[122 / 123] 34 / 35 tests; Testing //internal/api:api_test; 13s darwin-sandbox
+[122 / 123] 35 / 35 tests; Testing //internal/api:api_test; 19s darwin-sandbox
+INFO: Found 219 targets and 35 test targets...
+INFO: Elapsed time: 19.575s, Critical Path: 19.22s
+INFO: 27 processes: 28 darwin-sandbox, 2 local.
+INFO: Build completed successfully, 27 total actions
+//cmd/hourglass-ui:hourglass-ui_test                            (cached) PASSED in 0.5s
+//examples/custom/logfile:logfile_test                          (cached) PASSED in 0.2s
+//hooks/webhook:webhook_test                                    (cached) PASSED in 0.6s
+//internal/api/apierr:apierr_test                               (cached) PASSED in 0.2s
+//internal/config:config_test                                   (cached) PASSED in 0.4s
+//internal/metering:metering_test                               (cached) PASSED in 0.2s
+//internal/rules:rules_test                                     (cached) PASSED in 0.3s
+//internal/uiserve:uiserve_test                                 (cached) PASSED in 0.3s
+//internal/version:version_test                                 (cached) PASSED in 0.2s
+//cmd/hourglassd:ui_modes_test                                           PASSED in 2.2s
+//e2e/hourglassd-e2e:hourglassd-e2e_test                                 PASSED in 0.5s
+//e2e/simulator:simulator_test                                           PASSED in 1.5s
+//examples/custom/busiestsite:busiestsite_test                           PASSED in 0.3s
+//examples/custom/businesshours:businesshours_test                       PASSED in 0.3s
+//examples/custom/cmd/labd:labd_test                                     PASSED in 0.7s
+//examples/custom/filedir:filedir_test                                   PASSED in 0.3s
+//internal/api:api_test                                                  PASSED in 19.2s
+//internal/app:app_test                                                  PASSED in 4.0s
+//internal/auth:auth_test                                                PASSED in 13.2s
+//internal/collector:collector_test                                      PASSED in 2.1s
+//internal/events:events_test                                            PASSED in 0.6s
+//internal/holds:holds_test                                              PASSED in 0.5s
+//internal/ledger:ledger_test                                            PASSED in 0.7s
+//internal/settings:settings_test                                        PASSED in 0.4s
+//internal/store:store_test                                              PASSED in 1.8s
+//internal/uiserve:uiserve_ui_test                                       PASSED in 0.4s
+//pkg/hourglass:hourglass_test                                           PASSED in 0.2s
+//pkg/hourglasstest:hourglasstest_test                                   PASSED in 1.4s
+//policies/default:default_test                                          PASSED in 0.3s
+//pressure/inventory:inventory_test                                      PASSED in 0.3s
+//providers/static:static_test                                           PASSED in 0.3s
+//providers/vsphere:vsphere_test                                         PASSED in 3.9s
+//ui:api_schema_drift_test                                               PASSED in 0.1s
+//ui:test                                                                PASSED in 9.4s
+//ui:typecheck                                                           PASSED in 7.1s
+
+Executed 26 out of 35 tests: 35 tests pass.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.

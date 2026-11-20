@@ -465,16 +465,16 @@ func TestFakesConcurrentUse(t *testing.T) {
 func TestSnapshotBuilder(t *testing.T) {
 	at := time.Date(2031, 1, 2, 3, 4, 5, 0, time.UTC)
 	s := NewSnapshot().At(at).
-		Setup("s1", Label("tier", "a"), Weight(2), Resource("pool-1")).
+		Setup("s1", Label("tier", "a"), Weight(2)).
 		Setup("s2").
 		Hold("s1", 9, Metering(at), Deployed(at)).
 		Hold("s2", 9, Released(at)).
-		Allocation("pool-1", "tier", "a").
+		Allocation("s1", "tier", "a").
 		ProviderConfigured(false).Build()
 	if !s.Time.Equal(at) || s.ProviderConfigured || len(s.Setups) != 2 || len(s.Holds) != 2 {
 		t.Fatalf("snapshot = %+v", s)
 	}
-	if s.Setups[0].Weight != 2 || s.Setups[1].Weight != 1 || s.Setups[1].ResourceName != "s2" {
+	if s.Setups[0].Weight != 2 || s.Setups[1].Weight != 1 {
 		t.Fatalf("setups = %+v", s.Setups)
 	}
 	if s.Holds[0].ID != 1 || s.Holds[1].ID != 2 || s.Holds[0].MeteringStartedAt == nil || s.Holds[1].ReleasedAt == nil {

@@ -383,7 +383,7 @@ func idpServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-const contractSettingsBody = `{"resource_name_template":"{{.SetupName}}","default_weight":1,"display_label_keys":["tier","site"],` +
+const contractSettingsBody = `{"default_weight":1,"display_label_keys":["tier","site"],` +
 	`"bands":{"base":0,"steps":[{"from":0.5,"multiplier":1},{"from":0.75,"multiplier":2},{"from":0.9,"multiplier":3}]},"default_allowance":300,` +
 	`"max_holds_per_user":2,"release_requires_teardown":true,"poll_interval":"5m","enforcement":true}`
 
@@ -410,7 +410,7 @@ func newWorld(t *testing.T) *world {
 	w.must(200, "PUT", "/api/v1/admin/rules", &w.adm, `{"rules":[{"selector":"tier=a","weight":2},{"selector":"","weight":1}]}`)
 	mk := func(name string, enabled bool, labels string) int64 {
 		m := w.must(201, "POST", "/api/v1/admin/setups", &w.adm, fmt.Sprintf(
-			`{"name":%q,"labels":%s,"details":{"console":"https://example.test/%s","n":[1,2]},"enabled":%t,"resource_name_override":null}`, name, labels, name, enabled))
+			`{"name":%q,"labels":%s,"details":{"console":"https://example.test/%s","n":[1,2]},"enabled":%t}`, name, labels, name, enabled))
 		return int64(m["id"].(float64))
 	}
 	w.setupA = mk("lab-01", true, `{"tier":"a","site":"x"}`)
@@ -471,7 +471,7 @@ func newWorld(t *testing.T) *world {
 	w.must(200, "PUT", "/api/v1/admin/users/"+uid(demoted)+"/roles", &w.adm, `{"roles":[]}`)
 	extra := mk("lab-05", true, `{"tier":"a"}`)
 	w.must(200, "PUT", fmt.Sprintf("/api/v1/admin/setups/%d", extra), &w.adm,
-		`{"name":"lab-05","labels":{"tier":"a"},"details":{"edited":true},"enabled":true,"resource_name_override":"LAB05"}`)
+		`{"name":"lab-05","labels":{"tier":"a"},"details":{"edited":true},"enabled":true}`)
 	w.must(204, "DELETE", fmt.Sprintf("/api/v1/admin/setups/%d", extra), &w.adm, "")
 	// devB's hold is force-released; devB then acquires again so there is a released and an active hold.
 	w.must(200, "POST", fmt.Sprintf("/api/v1/holds/%d/release", w.holdB), &w.adm, `{"force":true,"reason":"maintenance window"}`)
@@ -586,9 +586,9 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		{400, "POST", "/api/v1/admin/users/" + fmt.Sprint(w.devA.user.ID) + "/grants", &w.adm, `{"amount_tokens":1}`},
 		{404, "POST", "/api/v1/admin/users/99999/grants", &w.adm, `{"amount_tokens":1,"reason":"x"}`},
 		{400, "POST", "/api/v1/admin/users/" + fmt.Sprint(w.devA.user.ID) + "/reset", &w.adm, `{}`},
-		{400, "POST", "/api/v1/admin/setups", &w.adm, `{"name":"","labels":{},"details":{},"enabled":true,"resource_name_override":null}`},
-		{409, "POST", "/api/v1/admin/setups", &w.adm, `{"name":"lab-01","labels":{},"details":{},"enabled":true,"resource_name_override":null}`},
-		{404, "PUT", "/api/v1/admin/setups/99999", &w.adm, `{"name":"zz","labels":{},"details":{},"enabled":true,"resource_name_override":null}`},
+		{400, "POST", "/api/v1/admin/setups", &w.adm, `{"name":"","labels":{},"details":{},"enabled":true}`},
+		{409, "POST", "/api/v1/admin/setups", &w.adm, `{"name":"lab-01","labels":{},"details":{},"enabled":true}`},
+		{404, "PUT", "/api/v1/admin/setups/99999", &w.adm, `{"name":"zz","labels":{},"details":{},"enabled":true}`},
 		{409, "DELETE", fmt.Sprintf("/api/v1/admin/setups/%d", w.setupA), &w.adm, ""},
 		{404, "DELETE", "/api/v1/admin/setups/99999", &w.adm, ""},
 		{400, "PUT", "/api/v1/admin/rules", &w.adm, `{"rules":[{"selector":"tier in (a","weight":2}]}`},

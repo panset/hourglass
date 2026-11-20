@@ -120,7 +120,7 @@ func TestRULE3_InvalidSelectorRejectsWholeRequest(t *testing.T) {
 const settingsPath = "/api/v1/admin/settings"
 
 func fullSettings(mod string) string {
-	s := `{"resource_name_template":"{{.SetupName}}_RP","default_weight":1,"display_label_keys":["tier"],` +
+	s := `{"default_weight":1,"display_label_keys":["tier"],` +
 		`"bands":{"base":0,"steps":[{"from":0.5,"multiplier":1},{"from":0.8,"multiplier":2}]},"default_allowance":250.5,` +
 		`"max_holds_per_user":3,"release_requires_teardown":true,"poll_interval":"10m","enforcement":true}`
 	for _, kv := range strings.Split(mod, "|") {
@@ -156,10 +156,10 @@ func TestADM2_GetSettingsShapeAndRuntime(t *testing.T) {
 	e := newAdEnv(t)
 	b := uWantOK(t, e.get(settingsPath), 200)
 	uWantKeys(t, "response", b, "settings", "runtime")
-	uWantKeys(t, "settings", adObjOf(t, b["settings"]), "resource_name_template", "default_weight", "display_label_keys", "bands", "default_allowance",
+	uWantKeys(t, "settings", adObjOf(t, b["settings"]), "default_weight", "display_label_keys", "bands", "default_allowance",
 		"max_holds_per_user", "release_requires_teardown", "poll_interval", "enforcement")
 	st := adObjOf(t, b["settings"])
-	if st["resource_name_template"] != "{{.SetupName}}" || uNum(t, st, "default_allowance") != 300 || st["poll_interval"] != "5m" || st["enforcement"] != false {
+	if uNum(t, st, "default_allowance") != 300 || st["poll_interval"] != "5m" || st["enforcement"] != false {
 		t.Errorf("settings = %v", st)
 	}
 	rt := adObjOf(t, b["runtime"])
@@ -192,7 +192,7 @@ func TestADM2_PutSettingsSavesAndAuditsChangedKeys(t *testing.T) {
 	e := newAdEnv(t)
 	b := uWantOK(t, e.send("PUT", settingsPath, fullSettings("")), 200)
 	st := adObjOf(t, b["settings"])
-	if st["resource_name_template"] != "{{.SetupName}}_RP" || uNum(t, st, "default_allowance") != 250.5 || uNum(t, st, "max_holds_per_user") != 3 || st["poll_interval"] != "10m" || st["enforcement"] != true {
+	if uNum(t, st, "default_allowance") != 250.5 || uNum(t, st, "max_holds_per_user") != 3 || st["poll_interval"] != "10m" || st["enforcement"] != true {
 		t.Errorf("returned settings = %v", st)
 	}
 	if adObjOf(t, b["runtime"])["provider"] != "fake-provider" {
@@ -206,7 +206,7 @@ func TestADM2_PutSettingsSavesAndAuditsChangedKeys(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("audit rows = %d", len(rows))
 	}
-	for _, key := range []string{"resource_name_template", "display_label_keys", "bands", "default_allowance", "max_holds_per_user", "poll_interval", "enforcement"} {
+	for _, key := range []string{"display_label_keys", "bands", "default_allowance", "max_holds_per_user", "poll_interval", "enforcement"} {
 		if !strings.Contains(rows[0].AfterJSON, `"`+key+`"`) || !strings.Contains(rows[0].BeforeJSON, `"`+key+`"`) {
 			t.Errorf("audit lacks changed key %s: %+v", key, rows[0])
 		}
@@ -234,16 +234,14 @@ func TestADM2_PutSettingsValidation(t *testing.T) {
 		{"poll interval too short", fullSettings(`poll_interval="30s"`), "poll_interval"},
 		{"poll interval unparsable", fullSettings(`poll_interval="soon"`), "poll_interval"},
 		{"negative weight", fullSettings(`default_weight=-1`), "default_weight"},
-		{"bad template", fullSettings(`resource_name_template="{{.Nope"`), "resource_name_template"},
-		{"empty name", fullSettings(`resource_name_template=""`), "resource_name_template"},
 		{"bad label key", fullSettings(`display_label_keys=["Bad Key"]`), "display_label_keys"},
 		{"duplicate label key", fullSettings(`display_label_keys=["a","a"]`), "display_label_keys"},
 		{"bad bands", fullSettings(`bands={"base":0,"steps":[{"from":0.9,"multiplier":1},{"from":0.5,"multiplier":2}]}`), "bands"},
 		{"negative allowance", fullSettings(`default_allowance=-5`), "default_allowance"},
 		{"negative holds", fullSettings(`max_holds_per_user=-1`), "max_holds_per_user"},
 		{"wrong type", fullSettings(`enforcement="yes"`), "enforcement"},
-		{"unknown field", strings.Replace(fullSettings(""), `{"resource`, `{"bogus":1,"resource`, 1), "bogus"},
-		{"missing field", `{"resource_name_template":"{{.SetupName}}"}`, "default_weight"},
+		{"unknown field", strings.Replace(fullSettings(""), `{"default`, `{"bogus":1,"default`, 1), "bogus"},
+		{"missing field", `{"enforcement":true}`, "default_weight"},
 	}
 	for _, c := range cases {
 		if f, _ := adErr(t, e.send("PUT", settingsPath, c.body), 400, "validation"); f != c.field {
@@ -467,7 +465,7 @@ func TestADM3_EveryAuditActionCarriesBeforeAndAfter(t *testing.T) {
 	p := e.user("pend", store.StatusPending)
 	id := e.setup("s1", true, map[string]string{"tier": "a"})
 	sp := setupPath + "/" + uItoa(id)
-	uWantOK(t, e.send("PUT", sp, `{"name":"s1","labels":{"tier":"b"},"details":{},"enabled":true,"resource_name_override":null}`), 200)
+	uWantOK(t, e.send("PUT", sp, `{"name":"s1","labels":{"tier":"b"},"details":{},"enabled":true}`), 200)
 	uWantOK(t, e.send("PUT", settingsPath, fullSettings("default_allowance=1")), 200)
 	uWantOK(t, e.send("POST", "/api/v1/admin/users/"+uItoa(d.user.ID)+"/grants", `{"amount_tokens":1,"reason":"one"}`), 201)
 	uWantOK(t, e.send("POST", "/api/v1/admin/users/"+uItoa(p.user.ID)+"/reject", ""), 200)

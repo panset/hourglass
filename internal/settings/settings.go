@@ -2,7 +2,7 @@
 
 // Package settings holds the admin-editable metering settings (ADM-2): typed
 // values with defaults and validation, one JSON value per key in the settings
-// table, a stable API JSON form, and the resource-name template (SET-4).
+// table and a stable API JSON form.
 package settings
 
 import (
@@ -21,7 +21,6 @@ import (
 
 // Setting keys as stored in the settings table and used in the API JSON.
 const (
-	KeyResourceNameTemplate    = "resource_name_template"
 	KeyDefaultWeight           = "default_weight"
 	KeyDisplayLabelKeys        = "display_label_keys"
 	KeyBands                   = "bands"
@@ -34,7 +33,7 @@ const (
 
 // keyOrder is the fixed order of all keys.
 var keyOrder = []string{
-	KeyResourceNameTemplate, KeyDefaultWeight, KeyDisplayLabelKeys, KeyBands,
+	KeyDefaultWeight, KeyDisplayLabelKeys, KeyBands,
 	KeyDefaultAllowance, KeyMaxHoldsPerUser, KeyReleaseRequiresTeardown,
 	KeyPollInterval, KeyEnforcement,
 }
@@ -47,7 +46,6 @@ const MaxDisplayLabelKeys = rules.MaxLabels
 
 // Settings is the full set of admin-editable metering settings.
 type Settings struct {
-	ResourceNameTemplate    string // SET-4
 	DefaultWeight           float64
 	DisplayLabelKeys        []string // SET-6
 	Bands                   metering.Bands
@@ -61,7 +59,6 @@ type Settings struct {
 // Defaults returns the spec defaults.
 func Defaults() Settings {
 	return Settings{
-		ResourceNameTemplate:    "{{.SetupName}}",
 		DefaultWeight:           1,
 		DisplayLabelKeys:        []string{},
 		Bands:                   metering.DefaultBands(),
@@ -87,9 +84,6 @@ func fieldErr(field, format string, args ...any) error {
 
 // Validate returns a *FieldError for the first problem found, or nil.
 func (s Settings) Validate() error {
-	if _, err := ResourceName(s.ResourceNameTemplate, sampleSetup, nil, ""); err != nil {
-		return fieldErr(KeyResourceNameTemplate, "%v", err)
-	}
 	if math.IsNaN(s.DefaultWeight) || math.IsInf(s.DefaultWeight, 0) || s.DefaultWeight < 0 {
 		return fieldErr(KeyDefaultWeight, "must be finite and >= 0")
 	}
@@ -148,8 +142,6 @@ func formatDuration(d time.Duration) string {
 func (s Settings) encodeKey(key string) (json.RawMessage, error) {
 	var v any
 	switch key {
-	case KeyResourceNameTemplate:
-		v = s.ResourceNameTemplate
 	case KeyDefaultWeight:
 		v = s.DefaultWeight
 	case KeyDisplayLabelKeys:
@@ -200,8 +192,6 @@ func strictDecode(raw json.RawMessage, v any) error {
 func (s *Settings) decodeKey(key string, raw json.RawMessage) error {
 	var err error
 	switch key {
-	case KeyResourceNameTemplate:
-		err = strictDecode(raw, &s.ResourceNameTemplate)
 	case KeyDefaultWeight:
 		err = strictDecode(raw, &s.DefaultWeight)
 	case KeyDisplayLabelKeys:
@@ -350,11 +340,6 @@ func Load(ctx context.Context, r Reader) (Settings, error) {
 		if err := s.decodeKey(row.Key, json.RawMessage(row.ValueJSON)); err != nil {
 			return Settings{}, fmt.Errorf("stored setting %q: %w", row.Key, err)
 		}
-	}
-	// A stored template that breaks the SET-4 restrictions (for example one
-	// written before they existed) fails the load, hence the poll, with a clear error.
-	if err := ValidateTemplate(s.ResourceNameTemplate); err != nil {
-		return Settings{}, fmt.Errorf("stored setting %q: %w", KeyResourceNameTemplate, err)
 	}
 	return s, nil
 }

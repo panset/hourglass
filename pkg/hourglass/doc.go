@@ -25,8 +25,8 @@
 // name fails startup with the list of registered names (EXT-2).
 //
 // Extensions never touch the database. On every poll the core builds a
-// Snapshot with the enabled setups (labels, details, resolved weight and
-// expected resource name), the active holds and the provider's allocations,
+// Snapshot with the enabled setups (labels, details and resolved weight), the
+// active holds and the provider's allocations,
 // and passes it to the pressure source and the metering policy. Setup,
 // User and Hold are plain structs that mirror the data model. Extensions
 // should read the time of a poll from Snapshot.Time, not the wall clock, so

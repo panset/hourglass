@@ -126,8 +126,6 @@ export const setup04: Setup = {
   details: { rack: "r1" },
   admin: {
     enabled: true,
-    resource_name: "setup-04_RP",
-    resource_name_override: null,
     last_seen_at: "2026-11-18T17:28:00Z",
     matched_rule_selector: null,
   },
@@ -146,8 +144,6 @@ export const setup07: Setup = {
   details: null,
   admin: {
     enabled: false,
-    resource_name: "lab7-pool",
-    resource_name_override: "lab7-pool",
     last_seen_at: null,
     matched_rule_selector: "size=large",
   },

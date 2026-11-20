@@ -48,19 +48,14 @@ func Label(key, value string) SetupOption {
 // Weight sets the setup's resolved weight.
 func Weight(w float64) SetupOption { return func(s *hourglass.SetupState) { s.Weight = w } }
 
-// Resource sets the setup's expected resource name.
-func Resource(name string) SetupOption {
-	return func(s *hourglass.SetupState) { s.ResourceName = name }
-}
-
 // Details sets the setup's raw details JSON.
 func Details(raw string) SetupOption {
 	return func(s *hourglass.SetupState) { s.Details = json.RawMessage(raw) }
 }
 
-// Setup adds a setup. Weight defaults to 1 and ResourceName to the setup name.
+// Setup adds a setup. Weight defaults to 1.
 func (b *SnapshotBuilder) Setup(name string, opts ...SetupOption) *SnapshotBuilder {
-	s := hourglass.SetupState{Setup: hourglass.Setup{Name: name}, Weight: 1, ResourceName: name}
+	s := hourglass.SetupState{Setup: hourglass.Setup{Name: name}, Weight: 1}
 	for _, o := range opts {
 		o(&s)
 	}

@@ -62,7 +62,7 @@ const setups: Setup[] = [
   {
     ...base, id: 6, name: "setup-06", labels: { size: "large" }, weight: 2, state: "disabled",
     cost_per_hour_tokens: { now: 4, at_peak: 6 },
-    admin: { enabled: false, resource_name: "setup-06_RP", resource_name_override: null, last_seen_at: null, matched_rule_selector: null },
+    admin: { enabled: false, last_seen_at: null, matched_rule_selector: null },
   },
 ];
 

@@ -43,7 +43,6 @@ setups:
   - name: lab-02
     labels: {tier: small}
     enabled: false
-    resource_name_override: custom_rp
 rate_rules:
   - {selector: "tier=large", weight: 2}
   - {selector: "tier in (small)", weight: 0.5}
@@ -68,7 +67,7 @@ func TestSET7_SeedAppliedOnEmptyDatabase(t *testing.T) {
 	if !a.Enabled || a.Labels["tier"] != "large" || a.Labels["rack"] != "r1" || a.DetailsJSON != `{"cpu":8,"tags":["a","b"]}` {
 		t.Errorf("lab-01 %+v", a)
 	}
-	if b.Enabled || b.ResourceNameOverride != "custom_rp" || b.DetailsJSON != "{}" {
+	if b.Enabled || b.DetailsJSON != "{}" {
 		t.Errorf("lab-02 %+v", b)
 	}
 	rs, _ := st.ListRules(ctx, "rate")
@@ -166,6 +165,27 @@ func TestSET7_InvalidSeedRejectedAtomically(t *testing.T) {
 				t.Fatalf("partial rules: %+v", r)
 			}
 		})
+	}
+}
+
+// D40: a seed written for the removed per-setup override is rejected with a
+// message that names the key and says why, whatever its value.
+func TestSET7_SeedWithRemovedOverrideKeyRejected(t *testing.T) {
+	for _, body := range []string{
+		"setups: [{name: a, resource_name_override: other}]\n",
+		"setups: [{name: a, resource_name_override: }]\n",
+		`{"setups":[{"name":"a","resource_name_override":null}]}`,
+	} {
+		ctx := context.Background()
+		st := openStore(t)
+		ok, err := ImportSeed(ctx, st, writeSeed(t, "s.yaml", body), time.Now())
+		var se *SeedError
+		if ok || !errors.As(err, &se) || !strings.Contains(err.Error(), "resource_name_override is no longer supported") {
+			t.Fatalf("%q: ok=%v err=%v", body, ok, err)
+		}
+		if s, _ := st.ListSetups(ctx, false); len(s) != 0 {
+			t.Fatalf("partial import: %+v", s)
+		}
 	}
 }
 

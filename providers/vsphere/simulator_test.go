@@ -124,8 +124,8 @@ func TestEXT3_SimulatorProviderListsPools(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %+v", got)
 	}
-	wantLab := map[string]string{"cluster": "DC0_C0", "datacenter": "DC0", "parent": "Resources", "path": "/DC0/host/DC0_C0/Resources/lab-01_RP"}
-	wantChild := map[string]string{"cluster": "DC0_C0", "datacenter": "DC0", "parent": "lab-01_RP", "path": "/DC0/host/DC0_C0/Resources/lab-01_RP/child_RP"}
+	wantLab := map[string]string{"pool": "lab-01_RP", "cluster": "DC0_C0", "datacenter": "DC0", "parent": "Resources", "path": "/DC0/host/DC0_C0/Resources/lab-01_RP"}
+	wantChild := map[string]string{"pool": "child_RP", "cluster": "DC0_C0", "datacenter": "DC0", "parent": "lab-01_RP", "path": "/DC0/host/DC0_C0/Resources/lab-01_RP/child_RP"}
 	if !reflect.DeepEqual(got["lab-01_RP"].Labels, wantLab) {
 		t.Errorf("lab labels %v", got["lab-01_RP"].Labels)
 	}
@@ -147,6 +147,24 @@ func TestEXT3_SimulatorProviderListsPools(t *testing.T) {
 	got = listNames(t, p)
 	if _, ok := got["child_RP"]; ok || len(got) != 1 {
 		t.Fatalf("after destroy: %+v", got)
+	}
+}
+
+// D40 at layer 3: with pool_name_suffix "_RP" the provider reports pool
+// lab-06_RP as lab-06 and leaves out pools without the suffix.
+func TestEXT3_SimulatorPoolNameSuffix(t *testing.T) {
+	s := startSim(t, false)
+	s.createPool(t, s.root, "lab-06_RP")
+	s.createPool(t, s.root, "infra")
+	s.createPool(t, s.root, "_RP")
+	p, err := NewProvider(s.cfgJSON(map[string]any{"pool_name_suffix": "_RP"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.(*provider).cl.Close(context.Background()) })
+	got := listNames(t, p)
+	if len(got) != 1 || got["lab-06"].Labels["pool"] != "lab-06_RP" {
+		t.Fatalf("got %+v", got)
 	}
 }
 

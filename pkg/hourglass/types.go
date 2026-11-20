@@ -25,7 +25,7 @@ type ResourceProvider interface {
 
 // Allocation is one deployed resource as reported by a ResourceProvider.
 type Allocation struct {
-	ResourceName string            // matched to a setup by the name template
+	ResourceName string            // belongs to the setup with exactly this name
 	Labels       map[string]string // provider-specific, shown to admins
 }
 
@@ -94,9 +94,6 @@ type SetupState struct {
 	// Weight is the weight resolved from the rate rules, or the default
 	// weight when no rule matches.
 	Weight float64
-	// ResourceName is the name a provider is expected to report for this
-	// setup, from the resource name template or the setup's override.
-	ResourceName string
 }
 
 // Snapshot is the read-only view of the lab for one poll. Extensions need
@@ -135,16 +132,15 @@ func (s Snapshot) SetupByName(name string) (SetupState, bool) {
 	return SetupState{}, false
 }
 
-// AllocationFor returns the allocation whose ResourceName equals the
-// expected resource name of the named setup. It reports false when the
-// setup is not enabled or the provider does not report it.
+// AllocationFor returns the allocation whose ResourceName equals the name
+// of the named setup (D40). It reports false when the setup is not enabled
+// or the provider does not report it.
 func (s Snapshot) AllocationFor(setupName string) (Allocation, bool) {
-	st, ok := s.SetupByName(setupName)
-	if !ok || st.ResourceName == "" {
+	if _, ok := s.SetupByName(setupName); !ok {
 		return Allocation{}, false
 	}
 	for _, a := range s.Allocations {
-		if a.ResourceName == st.ResourceName {
+		if a.ResourceName == setupName {
 			return a, true
 		}
 	}

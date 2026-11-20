@@ -131,7 +131,6 @@ An admin edits these in the UI (Admin, Settings), or with `GET` and `PUT /api/v1
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `resource_name_template` | `{{.SetupName}}` | Go template giving the resource name a provider must report for a setup. `.SetupName` and `.Labels` are available (`{{.Labels.size}}`). A missing label renders empty, and an empty result is an error. Only text, `.SetupName`, `.Labels`, `.Labels.key`, `index`, `print`, `printf` (plain `%v %s %d %q` verbs), `if` and `with .Labels` are allowed; `range`, `define`, `template`, `block` and other functions are rejected, the template is at most 1 KB and the rendered name at most 253 characters. A setup's own override wins |
 | `default_weight` | `1` | Weight of a setup that no rate rule matches |
 | `display_label_keys` | `[]` | Label keys shown as columns and filters on the Setups page |
 | `bands` | base `0`; from 0.50 give 1, from 0.75 give 2, from 0.90 give 3 | Pressure bands and multipliers. Lower bounds are inclusive |
@@ -210,6 +209,7 @@ provider:
     url: https://vcenter.example.com/sdk
     username: hourglass-ro@vsphere.local
     clusters: [prod-cluster-1]
+    pool_name_suffix: _RP      # pool lab-06_RP is reported as setup lab-06
 pressure:
   type: vsphere
   config:
@@ -218,7 +218,7 @@ pressure:
     clusters: [prod-cluster-1]
 ```
 
-Set the password with `HOURGLASS_VSPHERE_PASSWORD`, and the resource name template to `{{.SetupName}}_RP` in Admin, Settings. Leave `insecure_skip_verify` at `false` against a real vCenter. Hourglass uses Go's default trust store, so a vCenter signed by a private certificate authority needs that authority trusted where Hourglass runs (this is untested). Give both blocks the same values so that they share one vCenter session.
+Set the password with `HOURGLASS_VSPHERE_PASSWORD`. Hourglass matches a reported allocation only to the setup with exactly its name, so the provider maps pool names to setup names: with `pool_name_suffix: _RP` it reports only pools ending in `_RP`, with the suffix stripped (`pool_name_prefix` works the same way at the start of the name). The pool's own name stays in the allocation's `pool` label. Leave `insecure_skip_verify` at `false` against a real vCenter. Hourglass uses Go's default trust store, so a vCenter signed by a private certificate authority needs that authority trusted where Hourglass runs (this is untested). Give both blocks the same connection values so that they share one vCenter session; the naming keys do not matter to the pressure source, which accepts and ignores them.
 
 ### Read-only role and privileges
 
@@ -252,7 +252,7 @@ For each cluster in scope, the highest of three ratios: the root resource pool's
 Mocks cannot confirm these. Work through them before enforcement is turned on, with `hourglassd check-provider -config your.yaml` (see [Check a provider](extending.md#check-a-provider)), which writes nothing.
 
 - [ ] The read-only vCenter role has every privilege the provider needs. Confirm in particular that the `runtime` property of each cluster's root resource pool is readable with that role.
-- [ ] The real resource pool layout (folders, nesting, naming) matches the template. The `matched setups` and `expected but not reported` sections tell you.
+- [ ] The real resource pool layout (folders, nesting, naming) matches the setup names after `pool_name_prefix` and `pool_name_suffix` are stripped. The `matched setups` and `enabled setups not reported` sections tell you.
 - [ ] The pressure source's cluster numbers agree with what vCenter shows. Compare `raw pressure` with the cluster's reservation and datastore figures.
 - [ ] TLS and certificate settings work against the real endpoint, with `insecure_skip_verify` left `false`.
 - [ ] A poll finishes well inside the poll interval at real inventory size. The collector page shows each run's start and finish, and `hourglass_poll_duration_seconds` records the last one.
@@ -270,14 +270,13 @@ setups:
     labels: {size: medium}
     details: {note: "free-form JSON"}
     enabled: true            # optional, default true
-    resource_name_override: ""   # optional
 rate_rules:
   - {selector: "size=large", weight: 2}
 ```
 
-A `.json` file is read as JSON, anything else as YAML. Unknown keys are rejected. The seed is validated like the admin API: unique non-empty names, labels within the limits (at most 32 per setup, 63-character values), `details` valid JSON of at most 256 KB, a derivable resource name, a valid selector, finite non-negative weights. An invalid seed stops startup and writes nothing. `deploy/seed.sample.yaml` is the reference scenario's seed.
+A `.json` file is read as JSON, anything else as YAML. Unknown keys are rejected; a seed written for an earlier version that still has a per-setup `resource_name_override` fails with a message saying the key is no longer supported. The seed is validated like the admin API: unique non-empty names, labels within the limits (at most 32 per setup, 63-character values), `details` valid JSON of at most 256 KB, a valid selector, finite non-negative weights. An invalid seed stops startup and writes nothing. `deploy/seed.sample.yaml` is the reference scenario's seed.
 
-Two settings are not seedable and an admin sets them on first run: the resource name template and the display label keys.
+One setting is not seedable and an admin sets it on first run: the display label keys.
 
 ## Roll out in shadow mode
 

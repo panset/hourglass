@@ -24,7 +24,7 @@ This starts Hourglass, Keycloak as the login provider, and a simulator standing 
 
 3. Open <http://localhost:8080>.
 4. Sign in as the local admin: username `admin`, password `dev-only-not-a-secret`. That password comes from `HOURGLASS_ADMIN_PASSWORD` in the compose file and is read only when the account is first created. Hourglass makes you choose a new password of at least 12 characters before it shows anything else. Without that variable, Hourglass generates a password and prints it once in its log.
-5. Open Admin, Settings and set two things the seed file cannot set: the resource name template to `{{.SetupName}}_RP` and the display label keys to `size`.
+5. Open Admin, Settings and set the one thing the seed file cannot set: the display label keys to `size`.
 6. Sign in as a realm user. Open a private window at <http://localhost:8080>, choose Sign in with SSO and use `alice` with password `dev-only-alice` (`bob` and `carol` work too). Alice sees "You are not authorized to use Hourglass." That is correct: new users have no role. Use a private window because signing out of Hourglass does not end the Keycloak session.
 7. Approve her. In the admin window open Admin, Users. Alice is listed under pending requests. Give her the `developer` role.
 8. Acquire a setup. In Alice's window reload, open Setups and acquire `lab-03`. Metering starts when the provider reports the setup's resource pool, or after 2 hours. To start it now, create the pool in the simulator and wait for the next poll (polls run every 5 minutes). Release is refused while the pool exists, so delete it and wait for another poll before Alice releases:

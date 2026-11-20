@@ -32,11 +32,13 @@ type seedFile struct {
 }
 
 type seedSetup struct {
-	Name                 string            `json:"name"`
-	Labels               map[string]string `json:"labels"`
-	Details              json.RawMessage   `json:"details"`
-	Enabled              *bool             `json:"enabled"` // default true
-	ResourceNameOverride string            `json:"resource_name_override"`
+	Name    string            `json:"name"`
+	Labels  map[string]string `json:"labels"`
+	Details json.RawMessage   `json:"details"`
+	Enabled *bool             `json:"enabled"` // default true
+	// RemovedOverride catches the key that D40 removed, so an old seed
+	// fails with a message saying why rather than a bare "unknown field".
+	RemovedOverride json.RawMessage `json:"resource_name_override"`
 }
 
 type seedRule struct {
@@ -97,8 +99,8 @@ func (f *seedFile) validate() error {
 		if len(s.Details) > 0 && !json.Valid(s.Details) {
 			return seedErrf("%s (%s): details are not valid JSON", where, s.Name)
 		}
-		if _, err := settings.ResourceName(settings.Defaults().ResourceNameTemplate, s.Name, s.Labels, s.ResourceNameOverride); err != nil {
-			return seedErrf("%s (%s): resource name: %v", where, s.Name, err)
+		if s.RemovedOverride != nil {
+			return seedErrf("%s (%s): resource_name_override is no longer supported: a provider reports a setup under the setup's exact name, so rename the setup or configure the provider's own name mapping", where, s.Name)
 		}
 	}
 	for i, r := range f.RateRules {
@@ -244,7 +246,7 @@ func applySeed(ctx context.Context, tx *store.Tx, f *seedFile, now time.Time) er
 		}
 		enabled := s.Enabled == nil || *s.Enabled
 		if _, err := tx.CreateSetup(ctx, store.Setup{Name: s.Name, Labels: s.Labels, DetailsJSON: details,
-			Enabled: enabled, ResourceNameOverride: s.ResourceNameOverride}); err != nil {
+			Enabled: enabled}); err != nil {
 			return fmt.Errorf("setup %q: %w", s.Name, err)
 		}
 	}

@@ -275,11 +275,9 @@ type costView struct {
 }
 
 type setupAdminView struct {
-	Enabled              bool    `json:"enabled"`
-	ResourceName         string  `json:"resource_name"`
-	ResourceNameOverride *string `json:"resource_name_override"`
-	LastSeenAt           *string `json:"last_seen_at"`
-	MatchedRuleSelector  *string `json:"matched_rule_selector"`
+	Enabled             bool    `json:"enabled"`
+	LastSeenAt          *string `json:"last_seen_at"`
+	MatchedRuleSelector *string `json:"matched_rule_selector"`
 }
 
 type adminSetupView struct {
@@ -300,19 +298,15 @@ type adminSetupView struct {
 // setupView builds the admin view of a setup. callerID marks "is_you".
 func (a *API) setupView(ctx context.Context, s *adminState, x store.Setup, callerID int64) (adminSetupView, error) {
 	w, sel := s.weight(x)
-	resName, err := settings.ResourceName(s.cfg.ResourceNameTemplate, x.Name, x.Labels, x.ResourceNameOverride)
-	if err != nil {
-		resName = ""
-	}
 	labels := labelsNonNil(x.Labels)
 	v := adminSetupView{
 		ID: x.ID, Name: x.Name, Labels: labels, Weight: w, State: "free",
 		Cost:    costView{Now: tokens(metering.HourlyCostMT(w, s.multiplier)), AtPeak: tokens(metering.HourlyCostMT(w, s.cfg.Bands.Max()))},
 		Details: json.RawMessage(x.DetailsJSON),
-		Admin:   &setupAdminView{Enabled: x.Enabled, ResourceName: resName, ResourceNameOverride: nullIfEmpty(x.ResourceNameOverride), MatchedRuleSelector: nullIfEmpty(sel)},
+		Admin:   &setupAdminView{Enabled: x.Enabled, MatchedRuleSelector: nullIfEmpty(sel)},
 	}
-	if resName != "" && s.poll.OK {
-		v.Deployed = s.poll.Reported(resName)
+	if s.poll.OK {
+		v.Deployed = s.poll.Reported(x.Name) // D40: reported under the setup's exact name
 	}
 	if t, ok := s.poll.LastSeen[x.Name]; ok {
 		v.Admin.LastSeenAt = nullIfEmpty(ts(t))

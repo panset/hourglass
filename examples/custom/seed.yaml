@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 #
-# Seed for the labd example: four GPU rigs at two sites. The resource name
-# the provider must report defaults to the setup name, so the file
-# data/rigs/rig-a1 "deploys" the setup rig-a1.
+# Seed for the labd example: four GPU rigs at two sites. The provider must
+# report a setup under the setup's exact name, so the file data/rigs/rig-a1
+# "deploys" the setup rig-a1.
 default_weight: 1
 
 setups:

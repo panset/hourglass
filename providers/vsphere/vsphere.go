@@ -17,8 +17,19 @@
 //	  "insecure_skip_verify": false,
 //	  "datacenter": "",                // optional
 //	  "clusters": [],                  // empty: every cluster in scope
-//	  "request_timeout": "20s"
+//	  "request_timeout": "20s",
+//	  "pool_name_prefix": "",          // provider only, see below
+//	  "pool_name_suffix": ""           // provider only, see below
 //	}
+//
+// The core matches an allocation to the setup whose name equals its
+// ResourceName (D40), so turning pool names into setup names is this
+// provider's job. With pool_name_prefix and pool_name_suffix both empty,
+// every pool is reported under its own name. When either is set, only pools
+// whose name has that prefix and suffix are reported, with both stripped
+// (suffix "_RP" reports pool "lab-06_RP" as "lab-06"); other pools, and a
+// pool named exactly prefix plus suffix, are not reported at all. The
+// pressure source accepts and ignores both keys.
 //
 // Only govmomi.go imports govmomi; all logic is written against the small
 // client interface in client.go.
@@ -94,8 +105,10 @@ type provider struct {
 func (p *provider) Name() string { return Name }
 
 // List returns one Allocation per resource pool in scope, except each
-// cluster's hidden root pool. ResourceName is the pool's own name; labels
-// carry cluster, datacenter, parent and path.
+// cluster's hidden root pool and pools that the configured prefix and suffix
+// exclude. ResourceName is the pool's name with the prefix and suffix
+// stripped; labels carry pool (the pool's own name), cluster, datacenter,
+// parent and path.
 func (p *provider) List(ctx context.Context) ([]hourglass.Allocation, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -122,9 +135,14 @@ func (p *provider) List(ctx context.Context) ([]hourglass.Allocation, error) {
 		if rp.Root || !p.cfg.inScope(rp.Cluster) {
 			continue
 		}
+		name, ok := p.cfg.setupName(rp.Name)
+		if !ok {
+			continue
+		}
 		out = append(out, hourglass.Allocation{
-			ResourceName: rp.Name,
+			ResourceName: name,
 			Labels: map[string]string{
+				"pool":       rp.Name,
 				"cluster":    rp.Cluster,
 				"datacenter": rp.Datacenter,
 				"parent":     rp.Parent,
