@@ -29,6 +29,7 @@ import (
 	"github.com/panset/hourglass/internal/events"
 	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/store"
 )
 
@@ -44,6 +45,11 @@ type Runtime struct {
 	MeteringPolicy string
 	Hooks          []string
 	OIDCIssuer     string // the issuer URL (not a secret); empty when OIDC is not configured
+	// ReportedProviderMaxAge and ReportedPressureMaxAge are the max_age of
+	// the `reported` provider and pressure source; zero means that extension
+	// is not the configured one, and its report route answers not_configured.
+	ReportedProviderMaxAge time.Duration
+	ReportedPressureMaxAge time.Duration
 }
 
 // Deps is everything a handler may use. Handlers read it through the *API
@@ -66,7 +72,10 @@ type Deps struct {
 }
 
 // API holds the dependencies; handler methods hang off it.
-type API struct{ d Deps }
+type API struct {
+	d        Deps
+	reported *reported.Service
+}
 
 // New builds the router. It panics when a route of the table has no handler
 // (a programming error, caught by the tests).
@@ -102,7 +111,7 @@ func build(d Deps) (http.Handler, *registrar) {
 	if d.Location == nil {
 		d.Location = time.UTC
 	}
-	a := &API{d: d}
+	a := &API{d: d, reported: reported.New(d.Store, d.Clock)}
 	reg := &registrar{mux: http.NewServeMux()}
 	d.Auth.Register(reg.register)
 	hs := a.handlers()

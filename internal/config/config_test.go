@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
@@ -243,5 +244,29 @@ func TestCFG_WholeConfigurationValidatedAtLoad(t *testing.T) {
 		"cors: {allowed_origins: ['http://dev.example:5173', 'https://a.example.com/']}\n"
 	if _, err := Load(writeFile(t, ok), env(nil)); err != nil {
 		t.Errorf("valid configuration rejected: %v", err)
+	}
+}
+
+func TestReportedMaxAge(t *testing.T) {
+	ext := func(typ, cfg string) *Extension { return &Extension{Type: typ, Config: json.RawMessage(cfg)} }
+	for _, c := range []struct {
+		name string
+		e    *Extension
+		want time.Duration
+		sel  bool
+		bad  bool
+	}{
+		{"nil", nil, 0, false, false},
+		{"other type", ext("other", `{"max_age":"1s"}`), 0, false, false},
+		{"default", ext("reported", ``), 10 * time.Minute, true, false},
+		{"set", ext("reported", `{"max_age":"30m"}`), 30 * time.Minute, true, false},
+		{"minimum", ext("reported", `{"max_age":"1m"}`), time.Minute, true, false},
+		{"below minimum", ext("reported", `{"max_age":"59s"}`), 0, false, true},
+		{"not a duration", ext("reported", `{"max_age":"soon"}`), 0, false, true},
+	} {
+		got, sel, err := ReportedMaxAge(c.e)
+		if (err != nil) != c.bad || sel != c.sel || got != c.want {
+			t.Errorf("%s: got %v %v %v", c.name, got, sel, err)
+		}
 	}
 }

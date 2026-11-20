@@ -19,6 +19,7 @@ import (
 	"github.com/panset/hourglass/internal/events"
 	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
+	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
 )
@@ -150,7 +151,15 @@ func classify(err error) (code, msg, field string) {
 		ve *events.VetoError
 		fe *settings.FieldError
 	)
+	var (
+		se *reported.StaleError
+		re *reported.ValidationError
+	)
 	switch {
+	case errors.As(err, &se):
+		return apierr.StaleReport, se.Error(), ""
+	case errors.As(err, &re):
+		return apierr.Validation, re.Message, ""
 	case errors.As(err, &he):
 		return he.Code, he.Message, ""
 	case errors.As(err, &ve):

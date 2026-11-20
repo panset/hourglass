@@ -3,7 +3,8 @@
 // Package config loads the process configuration (spec "Configuration"): a
 // YAML file, overridden by HOURGLASS_* environment variables. Extension
 // config blocks stay opaque: each is converted to JSON and handed to its
-// factory untouched. Nothing here names a concrete extension.
+// factory untouched. The one exception is the type name `reported` and its
+// max_age (ReportedMaxAge), which the integration API needs from the config alone.
 package config
 
 import (
@@ -230,7 +231,54 @@ func (c Config) Validate() error {
 	if c.Provider != nil && c.Provider.Type == "" && len(c.Provider.Config) > 0 {
 		return errors.New("config: provider has a config block but no type")
 	}
+	if _, _, err := ReportedMaxAge(c.Provider); err != nil {
+		return fmt.Errorf("config: provider: %w", err)
+	}
+	if _, _, err := ReportedMaxAge(&c.Pressure); err != nil {
+		return fmt.Errorf("config: pressure: %w", err)
+	}
 	return nil
+}
+
+// ReportedType is the type name of the bundled extensions whose data the
+// integration API stores (docs/design/integration-api.md). The core only
+// compares the name; it never imports the extension package.
+const ReportedType = "reported"
+
+// Bounds of the reported extensions' max_age setting.
+const (
+	DefaultReportedMaxAge = 10 * time.Minute
+	MinReportedMaxAge     = time.Minute
+)
+
+// ReportedMaxAge reports whether the extension block e selects the reported
+// type and, if so, its max_age (default 10m, minimum 1m). A nil block, or any
+// other type, is not selected. The API uses it to answer not_configured and to
+// compute expires_at without knowing the extension's code.
+func ReportedMaxAge(e *Extension) (maxAge time.Duration, selected bool, err error) {
+	if e == nil || e.Type != ReportedType {
+		return 0, false, nil
+	}
+	maxAge = DefaultReportedMaxAge
+	if len(e.Config) > 0 {
+		var blk struct {
+			MaxAge *string `json:"max_age"`
+		}
+		if err := json.Unmarshal(e.Config, &blk); err != nil {
+			return 0, false, fmt.Errorf("config: %v", err)
+		}
+		if blk.MaxAge != nil {
+			d, err := time.ParseDuration(*blk.MaxAge)
+			if err != nil {
+				return 0, false, fmt.Errorf("max_age %q is not a duration (for example 10m)", *blk.MaxAge)
+			}
+			maxAge = d
+		}
+	}
+	if maxAge < MinReportedMaxAge {
+		return 0, false, fmt.Errorf("max_age must be at least %s", MinReportedMaxAge)
+	}
+	return maxAge, true, nil
 }
 
 // MinSessionKeyBytes is the shortest session key accepted; internal/auth

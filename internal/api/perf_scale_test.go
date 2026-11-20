@@ -21,11 +21,13 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/store"
 )
 
@@ -43,7 +45,8 @@ type scaleEnv struct {
 	devs   []sess
 	hold   sess // a developer who holds setups
 	admin  sess
-	free   sess // a developer with no hold
+	free   sess   // a developer with no hold
+	svc    string // a service token with every scope
 	polls  int
 	seeded time.Duration
 }
@@ -55,7 +58,8 @@ func seedScale(t *testing.T, sh scaleShape) *scaleEnv {
 	t.Helper()
 	start := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	now := start.Add(time.Duration(sh.days) * 24 * time.Hour)
-	b := newBackend(t, backendOpts{start: now})
+	b := newBackend(t, backendOpts{start: now,
+		runtime: Runtime{ReportedProviderMaxAge: 10 * time.Minute, ReportedPressureMaxAge: 10 * time.Minute}})
 	ctx := context.Background()
 	t0 := time.Now()
 	e := &scaleEnv{b: b}
@@ -130,13 +134,27 @@ func seedScale(t *testing.T, sh scaleShape) *scaleEnv {
 	}
 	e.seeded = time.Since(t0)
 	e.hold, e.admin, e.free = e.devs[1], e.devs[0], e.devs[len(e.devs)-1]
+	// A stored pressure report and a deployment report naming every other setup.
+	e.svc = b.mintServiceAccount("scale-svc", allScopes()...).token
+	rep := reported.New(b.st, b.clk)
+	var dep []reported.Deployment
+	for i := 0; i < sh.setups; i += 2 {
+		dep = append(dep, reported.Deployment{Setup: fmt.Sprintf("lab-%03d", i), Labels: map[string]string{"cluster": "c1"}})
+	}
+	if _, err := rep.SubmitDeployments(ctx, "scale-svc", nil, dep); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rep.SubmitPressure(ctx, "scale-svc", 0.8, nil); err != nil {
+		t.Fatal(err)
+	}
 	return e
 }
 
 type scaleRoute struct {
-	who  string
-	s    *sess
-	path string
+	who   string
+	s     *sess
+	path  string
+	token string // a service token, for the integration routes
 }
 
 // scaleRoutes is every GET route of the route table, each with the caller its
@@ -147,10 +165,9 @@ func (e *scaleEnv) scaleRoutes() []scaleRoute {
 		if r.Method != "GET" {
 			continue
 		}
-		// Integration routes take a service token, not a session; GET state
-		// is still a 501 stub. Remove this skip when it is implemented and
-		// time it with a state:read token.
+		// Integration routes take a service token, not a session.
 		if r.Access == AccessService {
+			out = append(out, scaleRoute{who: "svc", path: r.Pattern, token: e.svc})
 			continue
 		}
 		path := r.Pattern
@@ -165,12 +182,12 @@ func (e *scaleEnv) scaleRoutes() []scaleRoute {
 		case AccessPublic:
 			who, s = "none", nil
 		}
-		out = append(out, scaleRoute{who, s, path})
+		out = append(out, scaleRoute{who: who, s: s, path: path})
 		switch path {
 		case "/api/v1/setups":
-			out = append(out, scaleRoute{who, s, path + "?selector=tier%3Dt2"}, scaleRoute{"admin", &e.admin, path})
+			out = append(out, scaleRoute{who: who, s: s, path: path + "?selector=tier%3Dt2"}, scaleRoute{who: "admin", s: &e.admin, path: path})
 		case "/api/v1/admin/users":
-			out = append(out, scaleRoute{who, s, path + "?status=pending"})
+			out = append(out, scaleRoute{who: who, s: s, path: path + "?status=pending"})
 		}
 	}
 	return out
@@ -182,7 +199,12 @@ func (e *scaleEnv) timeRoute(r scaleRoute, n int) (ds []time.Duration, code, siz
 	for i := 0; i < n; i++ {
 		before := e.b.st.StatementCount()
 		t1 := time.Now()
-		rec := e.b.serve("GET", r.path, r.s, false, "")
+		var rec *httptest.ResponseRecorder
+		if r.token != "" {
+			rec = e.b.serveService("GET", r.path, r.token, "")
+		} else {
+			rec = e.b.serve("GET", r.path, r.s, false, "")
+		}
 		ds = append(ds, time.Since(t1))
 		code, size, stmts = rec.Code, rec.Body.Len(), e.b.st.StatementCount()-before
 	}

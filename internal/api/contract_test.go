@@ -438,7 +438,8 @@ func newWorld(t *testing.T) *world {
 	idp := idpServer(t)
 	b := newBackend(t, backendOpts{start: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC), startEvents: true, oidcIssuer: idp.URL,
 		runtime: Runtime{Provider: "fake-provider", PressureSource: "fake-pressure", MeteringPolicy: "fake-policy",
-			Hooks: []string{"fake-hook"}, OIDCIssuer: idp.URL}})
+			Hooks: []string{"fake-hook"}, OIDCIssuer: idp.URL,
+			ReportedProviderMaxAge: 10 * time.Minute, ReportedPressureMaxAge: 10 * time.Minute}})
 	b.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "lab is busy"})
 	w := &world{backend: b, c: newContract(t), idp: idp}
 	ctx := context.Background()
@@ -666,7 +667,7 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 	w.must(200, "PUT", "/api/v1/admin/service-accounts/"+aid, &w.adm, `{"description":"lab automation","scopes":["state:read"],"enabled":true}`)
 	// A use records last_used_at, so the listing has every timestamp filled.
 	tok := second["token"].(string)
-	w.status(c.callBearer(w.backend, "GET", "/api/v1/integration/state", tok, ""), http.StatusNotImplemented)
+	w.status(c.callBearer(w.backend, "GET", "/api/v1/integration/state", tok, ""), 200) // before any report
 	w.status(w.get("/api/v1/admin/service-accounts", &w.adm), 200)
 	for _, tc := range []struct {
 		status       int
@@ -697,6 +698,24 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		path := strings.ReplaceAll(r.Pattern, "{id}", fmt.Sprint(w.holdA))
 		w.status(c.callBearer(w.backend, r.Method, path, weak.token, "{}"), 403)
 		w.status(c.callBearer(w.backend, r.Method, path, tok, "{}"), 401)
+	}
+	// Integration routes with a token that has every scope: the two reports,
+	// their refusals, and the state with holds, a report and a free setup.
+	rep := w.mintServiceAccount("reporter", allScopes()...)
+	for _, tc := range []struct {
+		status       int
+		method, path string
+		body         string
+	}{
+		{200, "PUT", "/api/v1/integration/pressure", `{"value":0.4,"observed_at":"2026-11-19T09:00:00Z"}`},
+		{200, "PUT", "/api/v1/integration/deployments", `{"observed_at":"2026-11-19T09:00:00Z","deployments":[{"setup":"` + setupNameOf(t, w.backend, w.setupA) + `","labels":{"cluster":"c1"}},{"setup":"no-such-setup"}]}`},
+		{400, "PUT", "/api/v1/integration/pressure", `{"value":2}`},
+		{400, "PUT", "/api/v1/integration/deployments", `{"deployments":[{"setup":"a"},{"setup":"a"}]}`},
+		{409, "PUT", "/api/v1/integration/pressure", `{"value":0.4,"observed_at":"2026-11-19T08:00:00Z"}`},
+		{409, "PUT", "/api/v1/integration/deployments", `{"observed_at":"2026-11-19T08:00:00Z","deployments":[]}`},
+		{200, "GET", "/api/v1/integration/state", ""},
+	} {
+		w.status(c.callBearer(w.backend, tc.method, tc.path, rep.token, tc.body), tc.status)
 	}
 
 	// The password change and the sign-out come last: they end sessions.
@@ -818,4 +837,20 @@ func TestContract_EveryTimestampIsRFC3339UTCWithMilliseconds(t *testing.T) {
 	if len(found) < 30 {
 		t.Errorf("only %d timestamps found across the routes", len(found))
 	}
+}
+
+// setupNameOf is the name of a setup, read from the store.
+func setupNameOf(t *testing.T, b *backend, id int64) string {
+	t.Helper()
+	list, err := b.st.ListSetups(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range list {
+		if s.ID == id {
+			return s.Name
+		}
+	}
+	t.Fatalf("no setup %d", id)
+	return ""
 }

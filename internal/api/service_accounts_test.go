@@ -104,7 +104,7 @@ func TestSVC1_ServiceTokenIsAnonymousOutsideIntegrationRoutes(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		f.serve("GET", "/api/v1/me", nil, false, "", bearer("hgsa_1_"+strings.Repeat("0", 64))...)
 	}
-	if rec := f.serveService("GET", "/api/v1/integration/state", fresh.token, ""); rec.Code != http.StatusNotImplemented {
+	if rec := f.serveService("GET", "/api/v1/integration/state", fresh.token, ""); rec.Code != http.StatusOK {
 		t.Errorf("valid token on an integration route after ignored attempts: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -131,7 +131,7 @@ func TestSVC2_SessionCookieDoesNotAuthenticateOnIntegrationRoutes(t *testing.T) 
 		// No CSRF token needed: the token alone reaches the handler.
 		p := f.probe(r.OperationID, f.actor(actSvcScoped), modeDefault)
 		rec := f.serveService(p.method, p.path, f.svcAll.token, p.body)
-		if rec.Code != http.StatusNotImplemented {
+		if !reachedHandler(rec) {
 			t.Errorf("%s %s with the token and no CSRF: %d %s", r.Method, r.Pattern, rec.Code, rec.Body)
 		}
 		if r.StateChanging() {
@@ -169,7 +169,7 @@ func TestSVC3_EachIntegrationRouteRequiresItsScope(t *testing.T) {
 		}
 		// Only the route's own scope opens it.
 		only := f.mintServiceAccount("svc3-only-"+r.OperationID, r.Scope)
-		if rec := f.serveService(p.method, p.path, only.token, p.body); rec.Code != http.StatusNotImplemented {
+		if rec := f.serveService(p.method, p.path, only.token, p.body); !reachedHandler(rec) {
 			t.Errorf("%s %s with only %s: %d %s", r.Method, r.Pattern, r.Scope, rec.Code, rec.Body)
 		}
 	}
@@ -233,7 +233,7 @@ func TestSVC4_TokenIsShownOnceAndNeverLoggedOrAudited(t *testing.T) {
 
 	// Use: accepted, refused with a wrong secret, ignored outside the
 	// integration routes, refused after revocation.
-	if rec := b.serveService("GET", "/api/v1/integration/state", token, ""); rec.Code != http.StatusNotImplemented {
+	if rec := b.serveService("GET", "/api/v1/integration/state", token, ""); rec.Code != http.StatusOK {
 		t.Fatalf("use: %d %s", rec.Code, rec.Body)
 	}
 	wrong := token[:len(token)-1] + map[bool]string{true: "1", false: "0"}[strings.HasSuffix(token, "0")]
@@ -290,7 +290,7 @@ func TestSVC5_RevokedExpiredDisabledOrDeletedTokenIsRefused(t *testing.T) {
 		t.Helper()
 		rec := b.serveService("GET", "/api/v1/integration/state", token, "")
 		switch rec.Code {
-		case http.StatusNotImplemented:
+		case http.StatusOK:
 			return true
 		case http.StatusUnauthorized:
 			if c := permExactError(t, rec); c != apierr.Unauthenticated {
@@ -469,7 +469,7 @@ func TestSVC7_FailedBearerAttemptsAreRateLimitedPerAddress(t *testing.T) {
 	}
 	// Over the limit: the valid token still reaches the handler.
 	for i := 0; i < 3; i++ {
-		if rec := from("203.0.113.9:5001", good.token); rec.Code != http.StatusNotImplemented {
+		if rec := from("203.0.113.9:5001", good.token); rec.Code != http.StatusOK {
 			t.Errorf("valid token from an address over the limit: %d %s", rec.Code, rec.Body)
 		}
 	}
@@ -486,7 +486,7 @@ func TestSVC7_FailedBearerAttemptsAreRateLimitedPerAddress(t *testing.T) {
 	if bodies[0] != bodies[1] || bodies[1] != bodies[2] {
 		t.Errorf("429 bodies tell the tokens apart: %q", bodies)
 	}
-	if rec := from("203.0.113.10:5000", good.token); rec.Code != http.StatusNotImplemented {
+	if rec := from("203.0.113.10:5000", good.token); rec.Code != http.StatusOK {
 		t.Errorf("another address: %d %s", rec.Code, rec.Body)
 	}
 	permWantDenied(t, from("203.0.113.10:5000", bad), permDenial{http.StatusUnauthorized, apierr.Unauthenticated})
@@ -610,4 +610,10 @@ func TestSVC8_DesignTableDecidesEveryNewRouteForEveryPrincipal(t *testing.T) {
 			t.Errorf("the design table lists %s but routes.go has no such route", op)
 		}
 	}
+}
+
+// reachedHandler reports that a request passed authentication and the scope
+// check: the route answered 200, or the service release's 501 stub.
+func reachedHandler(rec *httptest.ResponseRecorder) bool {
+	return rec.Code == http.StatusOK || rec.Code == http.StatusNotImplemented
 }

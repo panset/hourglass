@@ -221,9 +221,12 @@ func Run(ctx context.Context, opts runhook.Options) error {
 		closeStore()
 		return err
 	}
+	rt := ext.runtime(cfg.OIDC.Issuer)
+	rt.ReportedProviderMaxAge, _, _ = config.ReportedMaxAge(cfg.Provider) // validated by config.Validate
+	rt.ReportedPressureMaxAge, _, _ = config.ReportedMaxAge(&cfg.Pressure)
 	handler := api.New(api.Deps{
 		Store: st, Auth: authSvc, Holds: holdsSvc, Ledger: led, Events: disp, Collector: coll,
-		Clock: clock, Location: loc, Logger: log, Runtime: ext.runtime(cfg.OIDC.Issuer),
+		Clock: clock, Location: loc, Logger: log, Runtime: rt,
 		Fallback: uiFallback(opts.UI, cfg.UI.Serve, log),
 	})
 

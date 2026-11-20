@@ -91,7 +91,8 @@ type permFix struct {
 
 func newPermFix(t *testing.T) *permFix {
 	t.Helper()
-	b := newBackend(t, backendOpts{start: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)})
+	b := newBackend(t, backendOpts{start: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC),
+		runtime: Runtime{ReportedProviderMaxAge: 10 * time.Minute, ReportedPressureMaxAge: 10 * time.Minute}})
 	f := &permFix{backend: b}
 	ctx := context.Background()
 	if err := b.st.PutSetting(ctx, "max_holds_per_user", "50", nil, b.clk.Now()); err != nil {
@@ -611,7 +612,7 @@ var permExtraCover = map[string]string{
 // integrationStubs are the integration routes whose handler still answers
 // 501 not_implemented. The task that implements a route removes it here.
 var integrationStubs = map[string]bool{
-	"reportPressure": true, "reportDeployments": true, "getIntegrationState": true, "serviceReleaseHold": true,
+	"serviceReleaseHold": true,
 }
 
 func routeOf(t *testing.T, op string) Route {

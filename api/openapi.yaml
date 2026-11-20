@@ -1186,7 +1186,9 @@ paths:
         its active hold (`null` for a free setup) and the holder's id,
         username, email and name. `reported_deployed` reflects the stored
         report, not the last poll. `reported` and the `observed_at` fields are
-        `null` before the first report. Never includes balances, ledger
+        `null` before the first report, and always `null` (and nothing is
+        `reported_deployed`) when the pressure source or the provider is not
+        the `reported` one. Never includes balances, ledger
         entries, other users, settings or audit data.
       x-roles: service
       security:

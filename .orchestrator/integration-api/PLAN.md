@@ -13,8 +13,8 @@ store. Later tasks are outlines and are re-planned when the one before returns.
 | 60 | 1 | Migration 0005, store queries, `internal/reported` (ordering, staleness, atomic replace) (INT-2,3,6 at store level) | build | sonnet | 59 | `internal/store/`, `internal/reported/` | verified |
 | 61 | 2 | Service accounts: bearer auth, service principal, `ServiceRoute(scope)`, failed-attempt rate limit, `AccessService`, six admin routes, OpenAPI, permissions test (SVC-1..8) | build | opus | 60 | `internal/auth/`, `internal/api/`, `api/openapi.yaml`, `ui/src/api/schema.gen.ts` | verified |
 | 62 | 2 | Independent verification of 60-61, with a security read of the token path | verify | opus | 61 | (read-only) | done (findings: 62b) |
-| 63 | 3 | Report routes and state route; OpenAPI and contract test (INT-1..4, INT-8) | build | sonnet | 62 | `internal/api/`, `internal/reported/`, `api/`, config | running |
-| 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | pending |
+| 63 | 3 | Report routes and state route; OpenAPI and contract test (INT-1..4, INT-8) | build | sonnet | 62 | `internal/api/`, `internal/reported/`, `api/`, config | done (verified in 66) |
+| 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | running |
 | 65 | 5 | Pending release, `hold.releasing`, collector completion, service release route (HOLD-6..9, CMP-1) | build | sonnet | 64 | `internal/holds/`, `internal/collector/`, `internal/api/`, `pkg/hourglass/`, `hooks/webhook/`, `api/` | pending |
 | 66 | 5 | Independent verification of 63-65 | verify | opus | 65 | (read-only) | pending |
 | 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | pending |
