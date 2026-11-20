@@ -74,3 +74,9 @@ Bringing the stack up takes several minutes (image build); `./ci.sh` 5 to 15. Fo
 Follow the Reporting section of the contract. List server-versus-design differences, if any,
 as open questions.
 - `docs/ui-notes.md` still describes the old release refusal: update it (reported by task 67).
+- Task 68 observed that users who sign in through OIDC have an empty `username` in event JSON
+  (the e2e scenario compares the email instead). Check what `username` holds for OIDC and for
+  local users in both the webhook body and the state response, and make the guide say what a
+  reader will really see and which field to key on. If the state response omits a field the
+  design's example shows (username, email, name), that is a server-versus-design finding.
+- Stack helper: `e2e/integration-stack.sh up | token | down` (see task 68's RESULT.md).

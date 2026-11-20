@@ -3,18 +3,20 @@
 # Headless-browser acceptance test against the local stacks. Needs Docker, Bazel (to load images), node and npm.
 # Not part of `bazel test //...`.
 #
-#   e2e/run.sh <bundled|split|both>
+#   e2e/run.sh <bundled|split|both|integration>
 #
 # Loads the images, starts the stack (deploy/compose.<mode>.yaml with the test overrides e2e/compose.<mode>.yaml:
 # the *-e2e images and the clock control port), runs e2e/browser (Playwright, Chromium), collects the Playwright
 # report, screenshots, traces and container logs into e2e/out/<mode>/ and always tears the stack down (volume
 # included). Exit status is the test's. Each mode takes roughly 15 to 25 minutes (collector polls are a minute apart).
+# `integration` runs the bundled stack with the `reported` extensions (e2e/compose.integration.yaml) and the scripted
+# reporter scenario (e2e/browser/tests/integration.spec.ts) instead of the acceptance path; `both` does not include it.
 # What it needs and how it behaves: e2e/README.md. Installs the npm packages when e2e/browser/node_modules is
 # missing and downloads Chromium only when neither it nor system Chrome already launches.
 set -uo pipefail
 
 mode="${1:-}"
-case "$mode" in bundled | split | both) ;; *) echo "usage: $0 <bundled|split|both>" >&2; exit 2 ;; esac
+case "$mode" in bundled | split | both | integration) ;; *) echo "usage: $0 <bundled|split|both|integration>" >&2; exit 2 ;; esac
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -22,7 +24,11 @@ loaded=0
 
 run_mode() {
   local m="$1" out="$root/e2e/out/$1" rc=0
-  local compose=(docker compose -f "deploy/compose.$1.yaml" -f "e2e/compose.$1.yaml")
+  local compose=(docker compose -f "deploy/compose.$1.yaml" -f "e2e/compose.$1.yaml") spec=acceptance
+  if [ "$1" = integration ]; then
+    compose=(docker compose -f deploy/compose.bundled.yaml -f e2e/compose.bundled.yaml -f e2e/compose.integration.yaml)
+    spec=integration
+  fi
   rm -rf "$out"; mkdir -p "$out"
   echo "== [$m] start $(date +%H:%M:%S)"
   local t0=$SECONDS
@@ -35,7 +41,7 @@ run_mode() {
     echo "stack did not become ready, see $out/up.log" >&2
     rc=1
   else
-    (cd e2e/browser && E2E_MODE="$m" E2E_OUT="$out" npx playwright test) 2>&1 | tee "$out/playwright.log"
+    (cd e2e/browser && E2E_MODE="$m" E2E_OUT="$out" npx playwright test "$spec") 2>&1 | tee "$out/playwright.log"
     rc=${PIPESTATUS[0]}
   fi
   "${compose[@]}" logs --no-color >"$out/containers.log" 2>&1

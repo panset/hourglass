@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Hourglass config for the integration end-to-end scenario (e2e/run.sh integration): the `reported` provider and
+# pressure source, and a webhook to the scripted reporter's receiver, which runs inside the test process on the
+# host (port 9100; the compose override maps host.docker.internal to the host). The secret is a fake
+# development value; never reuse it.
+listen: ":8080"
+database: /data/hourglass.db
+timezone: UTC
+seed: /etc/hourglass/seed.yaml
+
+provider:
+  type: reported
+  config:
+    max_age: 10m
+
+pressure:
+  type: reported
+  config:
+    max_age: 10m
+
+metering:
+  type: default
+  config:
+    start_on_allocation: true
+    start_after: 2h
+
+hooks:
+  - type: webhook
+    config:
+      url: http://host.docker.internal:9100/hourglass
+      secret: dev-only-webhook-secret
+      types: [hold.acquired, hold.releasing, hold.released, poll.failed]

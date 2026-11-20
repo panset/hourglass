@@ -17,9 +17,9 @@ store. Later tasks are outlines and are re-planned when the one before returns.
 | 64 | 4 | `providers/reported` provider and pressure source, conformance suites, `check-provider`, blank import (INT-5,6,7) | build | sonnet | 63 | `providers/reported/`, `cmd/`, collector tests | verified |
 | 65 | 5 | Pending release, `hold.releasing`, collector completion, service release route (HOLD-6..9, CMP-1) | build | sonnet | 64 | `internal/holds/`, `internal/collector/`, `internal/api/`, `pkg/hourglass/`, `hooks/webhook/`, `api/` | verified |
 | 66 | 5 | Independent verification of 63-65 | verify | opus | 65 | (read-only) | done (0 high, 2 medium, 4 low: 66b) |
-| 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | done (verified in 69) |
-| 68 | 7 | End-to-end scenario with `reported` extensions and a scripted reporter: acquire, deploy, release request, teardown, completion, reporter going silent | build | sonnet | 67 | `deploy/`, `e2e/` | running |
-| 69 | 7 | Independent verification of 67-68 by running the scenario from scratch | verify | sonnet | 68 | (read-only) | pending |
+| 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | verified |
+| 68 | 7 | End-to-end scenario with `reported` extensions and a scripted reporter: acquire, deploy, release request, teardown, completion, reporter going silent | build | sonnet | 67 | `deploy/`, `e2e/` | verified |
+| 69 | 7 | Independent verification of 67-68 by running the scenario from scratch | verify | sonnet | 68 | (read-only) | done (0 high, 0 medium, 5 low: 69b) |
 | 70 | 8 | Docs: run every example in `docs/integrating.md` against the running server, correct it, remove the banner; `extending.md`, `deploying.md` (Upgrade entry), `README.md`, `progress.md` | build | sonnet | 69 | `docs/`, `README.md` | pending |
 | 71 | 8 | Final verification: requirement-id coverage table, `./ci.sh`, guide examples re-run | verify | opus | 70 | (read-only) | pending |
 | 72 | 8 | Owner report | write | sonnet | 71 | task folder | pending |
@@ -51,3 +51,4 @@ Fix tasks after a verification are numbered with a letter (62b, 66b, ...).
 | 62b | Fix the findings of 62 | sonnet | verified |
 | 62c | Verify the fixes of 62b | sonnet | done: all closed |
 | 66b | Fix the findings of 66 (missing tests, dead stub code, event order); new tests re-checked in 71 | sonnet | done |
+| 69b | Strengthen the e2e assertions per the five low findings of 69 | sonnet | running |

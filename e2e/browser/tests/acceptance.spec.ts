@@ -2,7 +2,7 @@
 // Acceptance path (docs/SPEC.md, "Acceptance path"), driven through the real UI in headless Chromium.
 // The same file runs against the bundled and the split stack (E2E_MODE). Test ids cite the steps:
 //   A1 not-authorized (AUTH-5), A2 admin approves (ADM-1), A3 acquire (HOLD-1), A4 pool + metering (MET-1, MET-4),
-//   A5 pressure band (MET-2, MET-3), A6 hold limit (HOLD-3), A7 release needs teardown (HOLD-2),
+//   A5 pressure band (MET-2, MET-3), A6 hold limit (HOLD-3), A7 release of a deployed setup is pending until teardown (HOLD-2, HOLD-6, HOLD-7),
 //   A8 month rollover with debt (LED-3).
 // Only two things are driven outside the UI, as they stand in for the outside world: the simulator control API
 // (pool and pressure) and the e2e clock control (month jump).
@@ -436,29 +436,30 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
   });
 
   // ---- 7
-  await step("A7", "release is refused while the pool exists, succeeds after it is destroyed", A, async () => {
+  await step("A7", "release of a deployed setup is pending until the pool is destroyed, then completes", A, async () => {
     const p = alice!;
     await reloadHome(p);
     const holds = p.getByRole("table", { name: "Current holds" });
     const row = holds.getByRole("row", { name: new RegExp(SETUP_A) });
     await row.getByRole("button", { name: "Release" }).click();
-    await expect(p.getByText("This setup is still deployed. Tear it down, then release.")).toBeVisible();
-    await expect(row).toBeVisible();
-    asserted("Release on a deployed setup shows \"This setup is still deployed. Tear it down, then release.\" and the hold stays");
+    // D43: the release of a deployed setup is not refused any more; it is accepted (202) and stays pending.
+    await expect(p.getByText(`Release requested for ${SETUP_A}.`)).toBeVisible();
+    await expect(p.getByText("This setup is still deployed")).toHaveCount(0);
+    await expect(row.getByText("Releasing")).toBeVisible();
+    await expect(row.getByRole("button", { name: "Release" })).toHaveCount(0);
+    await p.reload();
+    await expect(holds.getByRole("row", { name: new RegExp(SETUP_A) }).getByText("Releasing")).toBeVisible();
+    asserted("Release on a deployed setup is accepted: \"Release requested for lab-03.\", the row shows Releasing, the Release button is gone and the hold stays after a reload");
     const del = await fetch(`${SIM}/pools/${POOL_A}`, { method: "DELETE" });
     expect(del.status).toBe(204);
-    await untilHome(p, `${SETUP_A} no longer deployed`, async () => {
-      const r = holds.getByRole("row", { name: new RegExp(SETUP_A) });
-      return (await r.getByText("Acquired · deploying").count()) > 0;
+    await untilHome(p, `${SETUP_A} released by the poll`, async () => {
+      return (await holds.getByRole("row", { name: new RegExp(SETUP_A) }).count()) === 0;
     });
-    await holds.getByRole("row", { name: new RegExp(SETUP_A) }).getByRole("button", { name: "Release" }).click();
-    await expect(p.getByText(`Released ${SETUP_A}.`)).toBeVisible();
-    await expect(holds.getByRole("row", { name: new RegExp(SETUP_A) })).toHaveCount(0);
     await expect(p.getByText("Current holds · 1 of 2 allowed")).toBeVisible();
     await nav(p, "Setups");
     const setupRow = p.getByRole("table", { name: "All setups" }).getByRole("row", { name: new RegExp(SETUP_A) });
     await expect(setupRow).toContainText("Free");
-    asserted(`after the pool is destroyed and one poll, Release succeeds; ${SETUP_A} is Free on Setups; holds 1 of 2`);
+    asserted(`after the pool is destroyed and one poll the hold is released without a second click; ${SETUP_A} is Free on Setups; holds 1 of 2`);
   });
 
   // ---- 8

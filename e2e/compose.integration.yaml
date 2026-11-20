@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Override for the integration end-to-end scenario (e2e/run.sh integration), layered over
+# deploy/compose.bundled.yaml and e2e/compose.bundled.yaml: the same stack, with the `reported` extensions
+# (e2e/config.integration.yaml) and a route to the host, where the scripted reporter's webhook receiver listens.
+# Paths are relative to deploy/, the directory of the first compose file. Test only.
+services:
+  hourglass:
+    volumes:
+      - ../e2e/config.integration.yaml:/etc/hourglass/config.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
