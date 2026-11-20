@@ -23,10 +23,10 @@ vCenter" below.
 
 ## Changes to the spec made at the owner's direction (2026-11-20)
 
-These two changes were requested after v1 was complete. They are built and
-independently verified. The end-to-end acceptance test has NOT yet been
-re-run on them (it needs the ports the owner's demo stack is using);
-`./ci.sh` passes on them, with 35 of 35 Bazel test targets.
+These two changes were requested after v1 was complete. They are built,
+independently verified and pushed. `./ci.sh` passes on them (35 of 35 Bazel
+test targets) and the end-to-end acceptance test passes on them in both
+bundled and split mode.
 
 - **D40:** the core no longer has a resource-name template or a per-setup
   override (supersedes SET-4). A provider's allocation belongs to a setup
