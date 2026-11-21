@@ -15,7 +15,7 @@ filegroup(
     srcs = glob(
         ["src/**"],
         exclude = ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"],
-    ) + [
+    ) + glob(["public/**"]) + [
         "index.html",
         "package.json",
         "tsconfig.json",
@@ -25,7 +25,7 @@ filegroup(
 
 filegroup(
     name = "test_sources",
-    srcs = glob(["src/**"]) + [
+    srcs = glob(["src/**"]) + glob(["public/**"]) + [
         "index.html",
         "package.json",
         "tsconfig.json",

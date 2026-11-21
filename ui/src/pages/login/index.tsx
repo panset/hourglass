@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { getAuthMethods, localSignIn } from "../../api/endpoints";
-import { Alert, Button, Field, Input, LinkButton } from "../../components";
+import { Alert, BrandMark, Button, Field, Input, LinkButton } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { useSessionState } from "../../shell/session";
 import styles from "./Login.module.css";
@@ -44,7 +44,10 @@ export default function Login() {
 
   return (
     <div className="public-column">
-      <h1 className={styles.title}>Hourglass</h1>
+      <h1 className={styles.title}>
+        <BrandMark />
+        Hourglass
+      </h1>
       <p className="muted">Sign in to see your setups and tokens.</p>
 
       {urlError ? (

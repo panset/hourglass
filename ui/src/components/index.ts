@@ -4,6 +4,7 @@ export { Alert, ToastProvider, useToast, TOAST_MS } from "./Alert";
 export type { AlertProps, AlertTone } from "./Alert";
 export { Badge, Chip } from "./Badge";
 export type { BadgeProps, BadgeTone } from "./Badge";
+export { BrandMark } from "./BrandMark";
 export { Button, LinkButton } from "./Button";
 export type { ButtonProps, ButtonVariant, LinkButtonProps } from "./Button";
 export { ErrorBoundary } from "./ErrorBoundary";

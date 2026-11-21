@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { NavLink } from "react-router-dom";
+import { BrandMark } from "../components";
 import { getMe, getPendingUsers, getPressure } from "../api/endpoints";
 import { useApi } from "../hooks/useApi";
 import { POLL_INTERVAL_MS } from "../hooks/usePolling";
@@ -35,7 +36,10 @@ export function TopBar() {
 
   return (
     <header className={styles.bar}>
-      <span className={styles.brand}>Hourglass</span>
+      <span className={styles.brand}>
+        <BrandMark />
+        Hourglass
+      </span>
       <nav className={styles.nav} aria-label="Main">
         {general.map((r) => link(r.path, r.title))}
         {admin ? (

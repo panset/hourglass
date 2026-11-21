@@ -2,7 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { ApiError } from "../../api/client";
 import { changePassword } from "../../api/endpoints";
-import { Alert, Button, Field, Input } from "../../components";
+import { Alert, BrandMark, Button, Field, Input } from "../../components";
 import { useSessionState } from "../../shell/session";
 
 /** Minimum length of the new local admin password (AUTH-7). */
@@ -43,7 +43,10 @@ export default function ChangePassword() {
 
   return (
     <div className="public-column">
-      <div style={{ fontSize: "var(--fs-18)", fontWeight: 600 }}>Hourglass</div>
+      <div style={{ fontSize: "var(--fs-18)", fontWeight: 600 }}>
+        <BrandMark />
+        Hourglass
+      </div>
       <h1>Change your password</h1>
       <p className="muted">You must choose a new password before you can continue.</p>
       <form onSubmit={submit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>

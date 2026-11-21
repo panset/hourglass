@@ -2,7 +2,7 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { Alert, Badge, Button, Chip, ConfirmDialog, Field, Input, LinkButton, Modal, Select, Table, ToastProvider, TOAST_MS, useToast } from ".";
+import { Alert, Badge, BrandMark, Button, Chip, ConfirmDialog, Field, Input, LinkButton, Modal, Select, Table, ToastProvider, TOAST_MS, useToast } from ".";
 
 describe("Button", () => {
   it("is a real button that does not submit by default", async () => {
@@ -16,6 +16,16 @@ describe("Button", () => {
   it("LinkButton is a link", () => {
     render(<LinkButton href="/auth/oidc/start">Sign in with SSO</LinkButton>);
     expect(screen.getByRole("link", { name: "Sign in with SSO" })).toHaveAttribute("href", "/auth/oidc/start");
+  });
+});
+
+describe("BrandMark", () => {
+  it("draws the seven-bar mark in the text colour and is hidden from assistive technology", () => {
+    render(<BrandMark />);
+    const mark = screen.getByTestId("brand-mark");
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    expect(mark).toHaveAttribute("fill", "currentColor");
+    expect(mark.querySelectorAll("rect")).toHaveLength(7);
   });
 });
 
