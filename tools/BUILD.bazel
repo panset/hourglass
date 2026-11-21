@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "tools_test",
+    srcs = ["ci_test.go"],
+    # CMP-2: the test reads ci.sh, found by walking up from the runfiles directory.
+    data = ["//:ci.sh"],
+)

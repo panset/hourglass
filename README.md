@@ -145,6 +145,8 @@ The prerequisites and what CI enforces are in [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Documentation
 
+The integration API is for a lab that already has its own tooling. A customer's own service reports what is deployed and how contended the lab is over a token-authenticated HTTP API, and receives webhooks when a hold is acquired or released, with no Go required. [docs/integrating.md](docs/integrating.md) walks through it.
+
 - [docs/deploying.md](docs/deploying.md): bundled and split mode, images, configuration reference, OIDC, vSphere, backup, metrics, upgrade.
 - [docs/integrating.md](docs/integrating.md): connect an existing lab stack without writing Go. Your service reports what is deployed and how contended the lab is over a token-authenticated HTTP API, and receives webhooks for acquire and release.
 - [docs/extending.md](docs/extending.md): the four interfaces, events, hooks, building your own binary.

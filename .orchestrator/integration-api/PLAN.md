@@ -20,9 +20,9 @@ store. Later tasks are outlines and are re-planned when the one before returns.
 | 67 | 6 | UI: Service accounts page, "Releasing" state, last report times on the collector view, regenerated types | build | sonnet | 66 | `ui/` | verified |
 | 68 | 7 | End-to-end scenario with `reported` extensions and a scripted reporter: acquire, deploy, release request, teardown, completion, reporter going silent | build | sonnet | 67 | `deploy/`, `e2e/` | verified |
 | 69 | 7 | Independent verification of 67-68 by running the scenario from scratch | verify | sonnet | 68 | (read-only) | done (0 high, 0 medium, 5 low: 69b) |
-| 70 | 8 | Docs: run every example in `docs/integrating.md` against the running server, correct it, remove the banner; `extending.md`, `deploying.md` (Upgrade entry), `README.md`, `progress.md` | build | sonnet | 69 | `docs/`, `README.md` | done (verified in 71) |
-| 71 | 8 | Final verification: requirement-id coverage table, `./ci.sh`, guide examples re-run | verify | opus | 70 | (read-only) | running |
-| 72 | 8 | Owner report | write | sonnet | 71 | task folder | pending |
+| 70 | 8 | Docs: run every example in `docs/integrating.md` against the running server, correct it, remove the banner; `extending.md`, `deploying.md` (Upgrade entry), `README.md`, `progress.md` | build | sonnet | 69 | `docs/`, `README.md` | verified |
+| 71 | 8 | Final verification: requirement-id coverage table, `./ci.sh`, guide examples re-run | verify | opus | 70 | (read-only) | done (passed; lows closed in 71b) |
+| 72 | 8 | Owner report | write | sonnet | 71 | task folder | running |
 
 Fix tasks after a verification are numbered with a letter (62b, 66b, ...).
 
@@ -50,5 +50,14 @@ Fix tasks after a verification are numbered with a letter (62b, 66b, ...).
 | 62 | Verification found 1 high (valid token locked out by the failure limiter), 6 low | opus | done |
 | 62b | Fix the findings of 62 | sonnet | verified |
 | 62c | Verify the fixes of 62b | sonnet | done: all closed |
-| 66b | Fix the findings of 66 (missing tests, dead stub code, event order); new tests re-checked in 71 | sonnet | done |
-| 69b | Strengthen the e2e assertions per the five low findings of 69 | sonnet | done (re-checked in 71) |
+| 66b | Fix the findings of 66 (missing tests, dead stub code, event order); new tests re-checked in 71 | sonnet | verified |
+| 69b | Strengthen the e2e assertions per the five low findings of 69 | sonnet | verified |
+| 71b | Close the low findings of 71: CMP-2 test, decisions table columns, D60 residuals marked REVIEW, README paragraph | sonnet | done |
+
+## Paused by the owner
+
+Milestones 1 to 8 are committed (HEAD `cc6a4ca`), nothing pushed. Final
+verification 71 passed with 5 low findings. To resume: check `git status` and
+`tasks/71b-final-fixes/PROGRESS.md`, re-run 71b with a fresh agent from its
+BRIEF.md (it must first inspect any partial edits), run `./ci.sh`, commit, then
+run 72 (owner report, brief already written).

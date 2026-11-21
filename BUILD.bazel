@@ -9,6 +9,7 @@ gazelle(name = "gazelle")
 
 # The UI-to-backend contract, read by //ui (generated-client drift test).
 exports_files([
+    "ci.sh",  # read by //tools:tools_test (CMP-2)
     "api/openapi.yaml",
     "docs/SPEC.md",  # read by the permissions meta-test (//internal/api:api_test)
 ])
