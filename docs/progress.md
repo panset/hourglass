@@ -182,6 +182,7 @@ All decisions are in [decisions.md](decisions.md). The ones marked
 | D41 | Owner-directed: admins land on Setups; My usage is at `/usage`. |
 | D43 | Owner-directed: a user's release of a still-deployed setup is accepted and pending, not refused (`still_deployed` is gone). |
 | D60 | `hold.releasing` is queued inside the transaction; three residual cases (failed commit, webhook before the state shows it, owner lookup failure) are covered by idempotent handlers and reconciliation. |
+| D47 | Failed service-token attempts are limited per connection address; a valid token is never refused; behind a proxy all callers share one failure budget. |
 | D61 | A release made with no successful poll since start-up is immediate even if the setup is deployed; release is decided from the last poll, not the stored report. |
 
 Also worth a look, though not marked: D33 (reference-scenario settings are
