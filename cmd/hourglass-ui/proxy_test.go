@@ -4,14 +4,19 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
+
+	"github.com/panset/hourglass/internal/servetls/servetlstest"
 )
 
 var testUI = fstest.MapFS{
@@ -258,5 +263,66 @@ func TestUI3_UnnormalisedProxiedPathsAreRefused(t *testing.T) {
 		if rec.Code != 200 {
 			t.Errorf("%s: status %d", p, rec.Code)
 		}
+	}
+}
+
+// D64: with a certificate and key the proxy serves HTTPS, and tells the API so.
+func TestTLS_ServesHTTPSAndForwardsTheScheme(t *testing.T) {
+	var proto atomic.Value
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proto.Store(r.Header.Get("X-Forwarded-Proto"))
+	}))
+	defer api.Close()
+	cert, key, pool := servetlstest.WriteSelfSigned(t)
+	env := func(k string) string {
+		return map[string]string{apiEnv: api.URL, listenEnv: "127.0.0.1:0", tlsCertEnv: cert, tlsKeyEnv: key}[k]
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	pr, pw := io.Pipe()
+	done := make(chan int, 1)
+	go func() { done <- run(ctx, nil, env, testUI, pw, io.Discard); pw.Close() }()
+	var line struct {
+		Addr string `json:"addr"`
+		TLS  bool   `json:"tls"`
+	}
+	dec := json.NewDecoder(pr)
+	if err := dec.Decode(&line); err != nil || !line.TLS {
+		t.Fatalf("first log line: %v %+v", err, line)
+	}
+	go func() { _, _ = io.Copy(io.Discard, pr) }()
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}}
+	defer client.CloseIdleConnections()
+	for _, path := range []string{uiHealthPath, "/api/v1/session"} {
+		resp, err := client.Get("https://" + line.Addr + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Errorf("%s over https: %d", path, resp.StatusCode)
+		}
+	}
+	if proto.Load() != "https" {
+		t.Errorf("X-Forwarded-Proto = %v, want https", proto.Load())
+	}
+	client.CloseIdleConnections()
+	cancel()
+	if code := <-done; code != 0 {
+		t.Errorf("run: %d", code)
+	}
+}
+
+func TestTLS_CertAndKeyAreAPair(t *testing.T) {
+	cert, _, _ := servetlstest.WriteSelfSigned(t)
+	var out, errb strings.Builder
+	none := func(string) string { return "" }
+	args := []string{"-api", "http://127.0.0.1:1", "-listen", "127.0.0.1:0", "-tls-cert", cert}
+	if code := run(context.Background(), args, none, testUI, &out, &errb); code != 2 || !strings.Contains(errb.String(), tlsKeyEnv) {
+		t.Errorf("cert only: %d %q", code, errb.String())
+	}
+	errb.Reset()
+	args = append(args, "-tls-key", filepath.Join(t.TempDir(), "none.pem"))
+	if code := run(context.Background(), args, none, testUI, &out, &errb); code != 1 {
+		t.Errorf("missing key file: %d %q", code, errb.String())
 	}
 }

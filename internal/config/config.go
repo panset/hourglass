@@ -80,6 +80,13 @@ type Metrics struct {
 	Listen string `yaml:"listen"`
 }
 
+// TLS names the PEM certificate and key files that make the public listener
+// serve HTTPS itself (D64). Both empty: plain HTTP, TLS terminated in front.
+type TLS struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+}
+
 // Config is the typed configuration.
 type Config struct {
 	Listen        string      `yaml:"listen"`
@@ -96,6 +103,7 @@ type Config struct {
 	UI            UI          `yaml:"ui"`
 	CORS          CORS        `yaml:"cors"`
 	Metrics       Metrics     `yaml:"metrics"`
+	TLS           TLS         `yaml:"tls"`
 }
 
 // Defaults returns the built-in defaults.
@@ -159,6 +167,8 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	str("HOURGLASS_OIDC_CLIENT_SECRET", &c.OIDC.ClientSecret)
 	str("HOURGLASS_OIDC_REDIRECT_URL", &c.OIDC.RedirectURL)
 	str("HOURGLASS_METRICS_LISTEN", &c.Metrics.Listen)
+	str("HOURGLASS_TLS_CERT", &c.TLS.Cert)
+	str("HOURGLASS_TLS_KEY", &c.TLS.Key)
 	if v, ok := lookup(getenv, "HOURGLASS_UI_SERVE"); ok {
 		b, err := strconv.ParseBool(strings.TrimSpace(v))
 		if err != nil {
@@ -214,6 +224,10 @@ func (c Config) Validate() error {
 	}
 	if err := c.OIDC.validate(); err != nil {
 		return err
+	}
+	// The files themselves are read at start (internal/servetls).
+	if (c.TLS.Cert == "") != (c.TLS.Key == "") {
+		return errors.New("config: tls.cert and tls.key must be set together (HOURGLASS_TLS_CERT and HOURGLASS_TLS_KEY)")
 	}
 	for i, o := range c.CORS.AllowedOrigins {
 		if err := checkOrigin(o); err != nil {
@@ -377,6 +391,7 @@ func (c Config) Redacted() map[string]any {
 		"ui":       map[string]any{"serve": c.UI.Serve},
 		"cors":     map[string]any{"allowed_origins": append([]string{}, c.CORS.AllowedOrigins...)},
 		"metrics":  map[string]any{"listen": c.Metrics.Listen},
+		"tls":      map[string]any{"cert": c.TLS.Cert, "key": c.TLS.Key}, // paths, not contents
 	}
 	if c.Provider != nil {
 		out["provider"] = ext(*c.Provider)

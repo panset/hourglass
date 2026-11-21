@@ -1,6 +1,36 @@
-# Integrating your infrastructure with Hourglass
+# Setting up Hourglass and integrating your infrastructure
 
-This guide is for the engineer or AI agent connecting an existing lab stack to Hourglass. It is self-contained: you do not need to read Hourglass's source or write any Go. You run the stock Hourglass container and build one small service of your own.
+This guide is for the engineer or AI agent who installs Hourglass in a customer environment and connects the existing lab stack to it. It is self-contained: you do not need Hourglass's source, Bazel or any Go. You run the published Hourglass container and build one small service of your own.
+
+It has three parts. Do them in order.
+
+1. [Part 1: Set up Hourglass](#part-1-set-up-hourglass). Run the container over HTTPS, with its data on a volume.
+2. [Part 2: Build the integration service](#part-2-build-the-integration-service). Report deployments and pressure, react to events, reconcile.
+3. [Part 3: Verify and go live](#part-3-verify-and-go-live).
+
+[Deploying Hourglass](deploying.md) is the full operator reference (every setting, OIDC, backup, upgrade). You need it only for something this guide does not cover.
+
+## If you are an AI agent
+
+- **Work one step at a time.** Each step in Part 1 ends with a check and the output to expect. If a check fails, stop, read the container log (`docker compose logs hourglass`), and fix the cause. Do not go on with a failed check.
+- **Ask the person you work for; do not guess.** [What to find out first](#what-to-find-out-first) lists what only they can decide.
+- **Never print a secret.** Passwords, the session key, the webhook secret and service tokens go straight into a secret store or a file with mode `0600`. Do not echo them, log them, commit them, or paste them into a chat or a ticket. A service token is shown once: capture it to a file, never to the terminal.
+- **Do not make these changes without being asked:** turning `enforcement` on, deleting the data volume (`docker volume rm`, `docker compose down -v`), force-releasing a user's hold, or changing roles and balances.
+- **Hourglass never touches the infrastructure.** Deploying and tearing down is your service's job, and it is the only part that can damage something. Build it to do nothing when it is unsure.
+- The examples use `curl`, `jq` and `openssl`. `$HOURGLASS` is the base URL, for example `https://hourglass.example.com`, with no trailing slash.
+
+## What to find out first
+
+| Question | Why it matters | If they have no preference |
+| --- | --- | --- |
+| Which image version? | The published image is `ghcr.io/panset/hourglass` | Use `latest`, the newest release |
+| What host name will users type? | It goes in the certificate and in the OIDC redirect URL | Ask |
+| Is there a certificate, or should you make a self-signed one? | Users must reach Hourglass over HTTPS | Self-signed, then give them the certificate to trust |
+| How do users sign in? | Hourglass users come from an OIDC identity provider (Keycloak, Entra ID, Okta and the like). Without one, only the local `admin` can sign in | Ask. You need the issuer URL, a client id and a client secret |
+| What are the setups called? | Your service reports setups by exactly these names | Use the names people already use for the environments |
+| What does "deployed" mean, and how is lab pressure measured? | You implement both in Part 2 | Deployed: the environment's resources exist. Pressure: the highest of CPU, memory and storage use, 0 to 1 |
+| Where does your service run, and at what URL can Hourglass reach it? | Hourglass posts events to it | Next to Hourglass, on the same Docker network |
+| Where do backups go? | The database is one file on one volume | Ask. Off the host |
 
 ## What Hourglass does and what you do
 
@@ -26,46 +56,242 @@ Only the first two are required to make metering work. Add the others when you w
 
 **Reporting more often than every 60 seconds gains nothing.** Hourglass reads your latest report once per poll. Reporting less often than every few minutes is dangerous: see [If you stop reporting](#if-you-stop-reporting).
 
-## One-time setup by the Hourglass admin
+## Part 1: Set up Hourglass
 
-1. In the Hourglass config file, select the `reported` extensions and point a webhook at your service:
+You need a Linux host with Docker (amd64 or arm64) and port 443 open to users. Hourglass is one container, one port and one volume. All state is one SQLite file in `/data`.
 
-   ```yaml
-   provider:
-     type: reported
-     config:
-       max_age: 10m
-   pressure:
-     type: reported
-     config:
-       max_age: 10m
-   metering:
-     type: default
-     config:
-       start_on_allocation: true   # start charging when you report the setup deployed
-       start_after: 2h             # or 2 hours after acquire, whichever comes first
-   hooks:
-     - type: webhook
-       config:
-         url: https://lab-automation.example.com/hourglass
-         secret: a-long-shared-secret
-         types: [hold.acquired, hold.releasing, hold.released]   # add poll.failed to be alerted; see "React to events"
+### Step 1: Make a directory and the secrets
+
+```sh
+mkdir -p hourglass/certs hourglass/ca && cd hourglass
+umask 077
+printf 'HOURGLASS_ADMIN_PASSWORD=%s\nHOURGLASS_SESSION_KEY=%s\n' \
+  "$(openssl rand -hex 16)" "$(openssl rand -hex 32)" > hourglass.env
+openssl rand -hex 32 > webhook.secret
+```
+
+`hourglass.env` and `webhook.secret` are secrets. Keep them out of version control. The admin password is read only on the first start; the session key must stay the same across restarts or everyone is signed out.
+
+### Step 2: Get a certificate
+
+If the customer gave you a certificate and key, copy them to `certs/tls.crt` (leaf first, then intermediates) and `certs/tls.key`. Otherwise make a self-signed one. Replace the host name; it must be the name users type:
+
+```sh
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout certs/tls.key -out certs/tls.crt -subj "/CN=hourglass.example.com" \
+  -addext "subjectAltName=DNS:hourglass.example.com"
+chmod 755 certs && chmod 644 certs/tls.crt
+sudo chown 65532:65532 certs/tls.key && sudo chmod 600 certs/tls.key
+```
+
+The container runs as uid 65532 and must be able to read the key. A key it cannot read stops the start with `permission denied`.
+
+### Step 3: Write the config
+
+`config.yaml`. Put the contents of `webhook.secret` where shown, and your service's URL:
+
+```yaml
+listen: ":8443"
+database: /data/hourglass.db
+timezone: UTC                  # the month boundary for allowances uses this zone
+seed: /etc/hourglass/seed.yaml
+tls:
+  cert: /certs/tls.crt
+  key: /certs/tls.key
+provider:
+  type: reported               # your service reports what is deployed
+  config:
+    max_age: 10m
+pressure:
+  type: reported               # your service reports lab pressure
+  config:
+    max_age: 10m
+metering:
+  type: default
+  config:
+    start_on_allocation: true  # start charging when you report the setup deployed
+    start_after: 2h            # or 2 hours after acquire, whichever comes first
+hooks:
+  - type: webhook
+    config:
+      url: https://lab-automation.example.com/hourglass
+      secret: PASTE-THE-CONTENTS-OF-webhook.secret
+      types: [hold.acquired, hold.releasing, hold.released, poll.failed]
+```
+
+The file now holds the webhook secret and uid 65532 must read it: `sudo chown 65532:65532 config.yaml && sudo chmod 600 config.yaml`. An unknown key anywhere in the file stops the start, so do not add keys that this guide or [the reference](deploying.md#configuration-reference) does not name.
+
+`seed.yaml` creates the first setups and rate rules (`chmod 644 seed.yaml`; it holds no secret). It is read once, on the first start of an empty database, and never again:
+
+```yaml
+setups:
+  - name: lab-01
+    labels: {size: medium}
+    details: {}
+  - name: lab-02
+    labels: {size: large}
+    details: {}
+rate_rules:
+  - {selector: "size=large", weight: 2}   # a large setup costs twice as much per hour
+```
+
+### Step 4: Start it
+
+`compose.yaml`:
+
+```yaml
+services:
+  hourglass:
+    image: ghcr.io/panset/hourglass:latest      # the newest release
+    restart: unless-stopped
+    env_file: hourglass.env
+    environment:
+      HOURGLASS_CONFIG: /etc/hourglass/config.yaml
+      SSL_CERT_DIR: /extra-ca:/etc/ssl/certs    # trust the certificates in ./ca, see below
+    ports:
+      - "443:8443"
+    volumes:
+      - data:/data
+      - ./config.yaml:/etc/hourglass/config.yaml:ro
+      - ./seed.yaml:/etc/hourglass/seed.yaml:ro
+      - ./certs:/certs:ro
+      - ./ca:/extra-ca:ro
+volumes:
+  data:
+```
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+`latest` moves with each release, and Docker does not fetch it again by itself: `docker compose pull` is what brings a newer one. So the image changes only when you run that command.
+
+**Trusting private certificates on outgoing calls.** Hourglass makes HTTPS calls of its own: to your webhook receiver and to the OIDC issuer. It checks their certificates against the public authorities in the image. If either uses a self-signed certificate or a private authority, put that certificate (PEM) in `./ca`, readable by everyone. `SSL_CERT_DIR` above adds that directory to the trusted set. Without it, webhook deliveries fail with a certificate error in the log.
+
+**The data.** The named volume `data` is the whole state of Hourglass. It survives `docker compose down`, restarts and image upgrades. It does not survive `docker compose down -v`, `docker volume rm`, or the loss of the host: see [Back up the database](#back-up-the-database).
+
+### Step 5: Check that it is up
+
+```sh
+export HOURGLASS=https://hourglass.example.com
+export CURL_CA_BUNDLE=$PWD/certs/tls.crt     # self-signed only: makes curl trust it
+curl -sS $HOURGLASS/healthz
+```
+
+Expect `{"status":"ok","database":"ok","last_poll_age_seconds":null}`. `null` is right at this point. Then check the log:
+
+```sh
+docker compose logs hourglass | grep -E '"msg":"(http listening|poll failed)"'
+```
+
+Expect an `http listening` line with `"tls":true`, and a `poll failed` line that says `no deployment report received yet`. That failure is expected: nothing has reported yet, and nobody is charged while polls fail. If your webhook receiver is already running, it receives `poll.failed`.
+
+If the host name does not resolve yet, add `--resolve hourglass.example.com:443:<host address>` to the `curl` commands.
+
+### Step 6: Set the admin password
+
+The first start created the local account `admin` with the password from `hourglass.env`. It must be changed before the API answers anything else (`403 password_change_required`). Choose the new password with the customer, at least 12 characters, and store it in their secret store.
+
+```sh
+. ./hourglass.env                                  # the initial password; NEW_PASSWORD is yours to set
+curl -sS -c cookies.txt -o /dev/null -w '%{http_code}\n' -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg p "$HOURGLASS_ADMIN_PASSWORD" '{username:"admin",password:$p}')" \
+  $HOURGLASS/auth/local                            # 200
+
+CSRF=$(curl -sS -b cookies.txt $HOURGLASS/api/v1/session | jq -r .csrf_token)
+curl -sS -b cookies.txt -c cookies.txt -o /dev/null -w '%{http_code}\n' \
+  -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg c "$HOURGLASS_ADMIN_PASSWORD" --arg n "$NEW_PASSWORD" '{current_password:$c,new_password:$n}')" \
+  $HOURGLASS/auth/local/password                   # 200
+
+CSRF=$(curl -sS -b cookies.txt $HOURGLASS/api/v1/session | jq -r .csrf_token)   # it changed: read it again
+```
+
+- Every admin call that changes something needs the session cookie and the `X-CSRF-Token` header. The token changes when the password changes.
+- Five wrong passwords in 15 minutes lock sign-in for the account (`429 rate_limited`). Do not retry a failing sign-in in a loop.
+- `cookies.txt` is a live admin session. Delete it when you finish Part 1.
+- The same steps work in a browser at `$HOURGLASS`.
+
+### Step 7: Create the service account and its token
+
+```sh
+ACCOUNT=$(curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"name":"lab-automation","scopes":["deployments:write","pressure:write","state:read","holds:release"]}' \
+  $HOURGLASS/api/v1/admin/service-accounts | jq -r .id)
+
+(umask 077; curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
+  $HOURGLASS/api/v1/admin/service-accounts/$ACCOUNT/tokens | jq -r .token > service.token)
+```
+
+| Scope | Needed for |
+| --- | --- |
+| `deployments:write` | Reporting what is deployed |
+| `pressure:write` | Reporting lab pressure |
+| `state:read` | Reading setups and holds |
+| `holds:release` | Releasing a hold after your automation tears a setup down |
+
+- Give the account only the scopes your service uses.
+- The token (`hgsa_`, the token id, then 64 hex characters) appears only in that one response. Hourglass keeps a hash and cannot show it again. If you lose it, issue another.
+- An account can hold several tokens, so you can rotate without a gap: issue a new one, switch the service, then revoke the old one (Admin, Service accounts).
+- A name that already exists is `409 conflict`: list the accounts with `GET /api/v1/admin/service-accounts` and use its id.
+
+To add a setup later without the UI:
+
+```sh
+curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"name":"lab-03","labels":{"size":"large"},"details":{},"enabled":true}' \
+  $HOURGLASS/api/v1/admin/setups                   # 201; all four fields are required
+```
+
+### Step 8: Check the integration API
+
+```sh
+export HOURGLASS_TOKEN=$(cat service.token)
+curl -sS $HOURGLASS/api/v1/integration/state -H "Authorization: Bearer $HOURGLASS_TOKEN" \
+  | jq '{provider: .deployments.provider, pressure: .pressure.source, setups: [.setups[].name]}'
+```
+
+Expect `"provider": "reported"`, `"pressure": "reported"` and your setup names. Hourglass is now ready for your service.
+
+### Step 9: Connect sign-in
+
+Skip this only if the customer wants nothing but the local admin for now. Users cannot sign in without it.
+
+1. In the identity provider, register a confidential client that uses the authorization code flow, with the redirect URI `https://hourglass.example.com/auth/callback` (the host name from step 2).
+2. Add to `hourglass.env`, then run `docker compose up -d` again:
+
+   ```sh
+   HOURGLASS_OIDC_ISSUER=https://idp.example.com/realms/lab
+   HOURGLASS_OIDC_CLIENT_ID=hourglass
+   HOURGLASS_OIDC_CLIENT_SECRET=...
+   HOURGLASS_OIDC_REDIRECT_URL=https://hourglass.example.com/auth/callback
    ```
 
-   Until your service has sent its first deployments report and its first pressure report, every poll fails with `no deployment report received yet` (or `no pressure report received yet`). That is expected at first start.
+3. Check: `curl -sS -o /dev/null -w '%{http_code}\n' $HOURGLASS/auth/oidc/start` prints `302`. A `500` means Hourglass could not read the issuer's discovery document: check the URL, and `./ca` if the issuer has a private certificate.
+4. A person who signs in for the first time has no role and sees a not-authorized page. An admin gives them the `developer` role in Admin, Users. Roles live in Hourglass, not in the identity provider.
 
-2. In the admin UI, open Service accounts, create an account for your service, and give it only the scopes it needs:
+### Back up the database
 
-   | Scope | Needed for |
-   | --- | --- |
-   | `deployments:write` | Reporting what is deployed |
-   | `pressure:write` | Reporting lab pressure |
-   | `state:read` | Reading setups and holds |
-   | `holds:release` | Releasing a hold after your automation tears a setup down |
+Hourglass takes no backups of its own. Do not copy the file while the container runs. Take a consistent copy with `VACUUM INTO`, on a schedule, and move the copies off the host. The Hourglass image has no shell, so run `sqlite3` in a helper container that mounts the same volume. Any image that has `sqlite3` will do; use one the customer already trusts:
 
-3. Issue a token for the account (`hgsa_` followed by the account id and a long random part). It is shown once. Store it in your secret manager and never in source control or logs. An account can hold several tokens, so you can rotate without a gap: issue a new one, switch the service, revoke the old one.
+```sh
+docker run --rm -v hourglass_data:/data -v /backups:/backups <image with sqlite3> \
+  sqlite3 -readonly /data/hourglass.db ".timeout 10000" \
+  "VACUUM INTO '/backups/hourglass-$(date +%Y%m%d-%H%M%S).db'"
+```
 
-4. Create the setups in the admin UI (or the seed file) with the names your service will report.
+The volume name is the compose project name, an underscore, then `data` (`docker volume ls` shows it). The target file must not exist. Check a copy with `sqlite3 FILE "PRAGMA integrity_check"`, which prints `ok`. Take a backup before every image upgrade: there are no down migrations, so the backup is the only way back.
+
+## Part 2: Build the integration service
+
+## What Part 1 gave you
+
+- `$HOURGLASS`, the base URL, and (with a self-signed certificate) the certificate file your HTTP client must trust. In `curl` that is `--cacert` or `CURL_CA_BUNDLE`; in Python `requests` it is `verify="tls.crt"`; in Node it is `NODE_EXTRA_CA_CERTS`. Do not switch certificate checking off instead.
+- A service token, in `service.token`. Move it to the secret store your service reads.
+- The webhook secret, in `webhook.secret`. Your receiver needs it to verify signatures.
+- Setups whose names your service will report.
+
+If someone else installed Hourglass, ask them for these four things. The config your integration depends on is in [step 3](#step-3-write-the-config): the `reported` provider and pressure source, and a `webhook` hook that points at your receiver.
 
 ## Authentication
 
@@ -280,9 +506,40 @@ Every error has the shape `{"error": {"code": "...", "message": "..."}}`.
 
 For network errors and 5xx, do not build a retry queue. Reports are full snapshots, so the next scheduled report supersedes anything you failed to send.
 
+## Part 3: Verify and go live
+
+### Verify end to end
+
+Do this with a real person's account that has the `developer` role. The local admin cannot acquire a setup.
+
+1. Start your service. Within a minute, the state response shows both reports with an `expires_at` in the future:
+
+   ```sh
+   curl -sS $HOURGLASS/api/v1/integration/state -H "Authorization: Bearer $HOURGLASS_TOKEN" \
+     | jq '{deployments: .deployments.expires_at, pressure: .pressure.reported.expires_at, last_ok: .poll.last_ok_at}'
+   ```
+
+2. Wait for one poll (5 minutes by default). `last_ok` is no longer `null`, and `curl -sS $HOURGLASS/healthz` shows a number for `last_poll_age_seconds`.
+3. Have the person acquire a setup. Your receiver gets `hold.acquired` with a valid signature, and your service deploys the setup.
+4. After your next report and one poll, the hold in the state response has `deployed_at` and `metering_started_at` set.
+5. Have the person release it. Your receiver gets `hold.releasing`; your service tears the setup down and reports without it. After one poll the hold is gone from the state response and you receive `hold.released`.
+6. Stop your service for longer than `max_age`. Polls fail, `poll.failed` arrives, and your alert fires. Start it again and polls recover.
+
+### Go live
+
+- **Start in shadow mode.** A new Hourglass has `enforcement` off: balances fall but nobody is blocked from acquiring. Leave it off for 2 to 4 weeks while the customer checks the rates, the pressure bands and the monthly allowance against real use. Turning it on is the customer's decision, in Admin, Settings.
+- **Schedule the backup** from [Back up the database](#back-up-the-database) and test one restore.
+- **Hand over the secrets:** the admin password, `hourglass.env`, the webhook secret and the certificate. Delete `cookies.txt` and `service.token` once the token is in the secret store.
+- **Give users the certificate** if it is self-signed, or their browsers warn on every visit.
+- **Renewing the certificate** means replacing the two files and restarting the container. Hourglass reads them only at start.
+- **Upgrading** means taking a backup, then running `docker compose pull && docker compose up -d` to move to the newest release. Read the [upgrade notes](deploying.md#upgrade) first: a newer release can migrate the database, and then only the backup takes you back.
+
 ## Checklist
 
+- [ ] Hourglass answers on HTTPS, its data is on a named volume, and a backup runs on a schedule.
+- [ ] The admin password was changed and stored; `cookies.txt` and `service.token` are deleted.
 - [ ] The token comes from a secret store and is never logged.
+- [ ] The service checks Hourglass's certificate; verification is not switched off.
 - [ ] Both reports are sent every 60 seconds from a loop that survives a single failure.
 - [ ] A failed infrastructure query skips the report; it never sends an empty list or a zero.
 - [ ] The deployments report always contains the full set.
@@ -290,4 +547,5 @@ For network errors and 5xx, do not build a retry queue. Reports are full snapsho
 - [ ] The webhook receiver verifies the signature, replies within 30 seconds, and is idempotent per hold id.
 - [ ] Reconciliation runs at startup and every 5 minutes.
 - [ ] There is an alert on a failed report, on a 401, and on `poll.failed`.
+- [ ] `enforcement` is still off unless the customer asked for it.
 - [ ] The service account has only the scopes the service uses.

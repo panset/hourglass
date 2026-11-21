@@ -28,6 +28,7 @@ import (
 	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
 	"github.com/panset/hourglass/internal/reported"
+	"github.com/panset/hourglass/internal/servetls"
 	"github.com/panset/hourglass/internal/store"
 	"github.com/panset/hourglass/internal/uiserve"
 	"github.com/panset/hourglass/pkg/hourglass"
@@ -156,6 +157,12 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	if err != nil {
 		return err
 	}
+	// The certificate and key are read here, so a wrong path or a mismatched
+	// pair stops the start before the database is touched (D64).
+	tlsCfg, err := servetls.Load(cfg.TLS.Cert, cfg.TLS.Key)
+	if err != nil {
+		return err
+	}
 	if cfg.OIDC.Issuer == "" {
 		log.Info("OIDC is not configured; only the local admin can sign in")
 	}
@@ -236,6 +243,13 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	})
 
 	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	serve := srv.Serve
+	if tlsCfg != nil {
+		srv.TLSConfig = tlsCfg
+		// Failed handshakes (a client that does not trust the certificate) go to the JSON log.
+		srv.ErrorLog = slog.NewLogLogger(log.Handler(), slog.LevelWarn)
+		serve = func(l net.Listener) error { return srv.ServeTLS(l, "", "") }
+	}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		_ = disp.Close(ctx)
@@ -264,8 +278,8 @@ func Run(ctx context.Context, opts runhook.Options) error {
 		}
 	}()
 	serveErr := make(chan error, 2)
-	go func() { serveErr <- wrapServe("http", srv.Serve(ln)) }()
-	log.Info("http listening", "addr", ln.Addr().String())
+	go func() { serveErr <- wrapServe("http", serve(ln)) }()
+	log.Info("http listening", "addr", ln.Addr().String(), "tls", tlsCfg != nil)
 	if msrv != nil {
 		go func() { serveErr <- wrapServe("metrics", msrv.Serve(mln)) }()
 		log.Info("metrics listening", "addr", mln.Addr().String())

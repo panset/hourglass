@@ -19,6 +19,7 @@ In split mode:
 
 - The API container must not be reachable from users except through the UI container. Anything that reaches the API port can use the API directly.
 - `hourglass-ui` takes `-api URL` or `HOURGLASS_UI_API` (required, for example `http://hourglass-api:8080`), and `-listen ADDR` or `HOURGLASS_UI_LISTEN` (default `:8080`). A flag wins over its variable.
+- To serve HTTPS from the UI container, give it `-tls-cert FILE` and `-tls-key FILE`, or `HOURGLASS_UI_TLS_CERT` and `HOURGLASS_UI_TLS_KEY` (see [TLS and cookies](#tls-and-cookies)). Leave the API container on plain HTTP inside the private network: the proxy trusts only public certificate authorities, so it cannot reach an API that serves a self-signed certificate.
 - It proxies exactly `/api`, `/auth` and `/healthz` (each path and anything under it). Everything else is a static file or the single-page app's `index.html`.
 - Its own health check is `/ui-healthz`. If the API is down it answers 502 with the standard JSON error shape.
 - Set the OIDC redirect URL to the public URL of the UI container (`https://hourglass.example.com/auth/callback`).
@@ -45,7 +46,33 @@ deploy/load-images.sh hourglass        # only the named ones
 bazel run //deploy/images:load_hourglass   # the same, one image
 ```
 
-`bazel build //...` builds every image layer for both architectures without Docker. There is no registry push in v1: build and load the images on the machine that runs them.
+`bazel build //...` builds every image layer for both architectures without Docker.
+
+### Publishing the images to a registry
+
+The three product images each have a push target, which publishes both architectures as one multi-platform image. The test images have none. The default registry is `ghcr.io/panset` (`REGISTRY` in `deploy/images/BUILD.bazel`), giving `ghcr.io/panset/hourglass`, `ghcr.io/panset/hourglass-api` and `ghcr.io/panset/hourglass-ui`.
+
+```sh
+docker login ghcr.io                     # once; a token with the write:packages scope
+deploy/push-images.sh v1.0.0             # all three, tagged v1.0.0
+deploy/push-images.sh v1.0.0 latest      # several tags
+bazel run //deploy/images:push_hourglass -- --tag v1.0.0   # one image
+```
+
+- Always name a tag. Without `--tag`, a push target publishes by digest only.
+- To publish somewhere else, set `HOURGLASS_REGISTRY=registry.example.com/team` for the script, or pass `--repository registry.example.com/team/hourglass` to one target.
+- The push reads credentials from the Docker config file. It does not need a running Docker daemon.
+- On GitHub, a new package is private until you make it public in the package's settings.
+- The binary reports its version from `internal/version`, not from the image tag.
+
+Someone with only Docker can then run a published image, with no Bazel and no source tree:
+
+```sh
+docker run -d --name hourglass -p 8080:8080 -v hourglass-data:/data \
+  -e HOURGLASS_ADMIN_PASSWORD="choose-a-long-password" \
+  -e HOURGLASS_SESSION_KEY="$(head -c 32 /dev/urandom | base64)" \
+  ghcr.io/panset/hourglass:v1.0.0
+```
 
 Run a product image on its own:
 
@@ -71,7 +98,9 @@ Configuration is a YAML file plus environment variables. The file comes from `-c
 
 | File key | Environment variable | Default | Meaning |
 | --- | --- | --- | --- |
-| `listen` | `HOURGLASS_LISTEN` | `:8080` | Address of the public listener. Plain HTTP |
+| `listen` | `HOURGLASS_LISTEN` | `:8080` | Address of the public listener. Plain HTTP unless `tls.cert` and `tls.key` are set |
+| `tls.cert` | `HOURGLASS_TLS_CERT` | empty | Path of a PEM certificate file. With `tls.key`, the public listener serves HTTPS. See [TLS and cookies](#tls-and-cookies) |
+| `tls.key` | `HOURGLASS_TLS_KEY` | empty | Path of the certificate's PEM private key file. Set both or neither |
 | `database` | `HOURGLASS_DATABASE` | `hourglass.db` | Path of the SQLite file. The images set the working directory to `/data` |
 | `session_key` | `HOURGLASS_SESSION_KEY` | empty | Signs CSRF tokens and the OIDC handshake cookie. At least 32 bytes. Empty means a random key at every start, so sessions do not survive a restart (a warning is logged). Always set it in production |
 | `timezone` | `HOURGLASS_TIMEZONE` | `UTC` | IANA name. The month boundary (allowance, rollover) uses it. All stored times are UTC |
@@ -187,14 +216,53 @@ The password is stored as an argon2id hash.
 
 ## TLS and cookies
 
-Hourglass listens on plain HTTP. It does not terminate TLS. Put a reverse proxy or load balancer in front of it and serve users over HTTPS.
+Users must reach Hourglass over HTTPS. There are two ways:
+
+- **Hourglass serves HTTPS itself.** Give it a certificate and key, as below. This is the simplest way to run one container with a self-signed certificate.
+- **Something in front terminates TLS.** Leave the two settings empty; Hourglass listens on plain HTTP behind a reverse proxy or load balancer.
+
+### Serving HTTPS with your own certificate
+
+Set `HOURGLASS_TLS_CERT` and `HOURGLASS_TLS_KEY` (or `tls.cert` and `tls.key`) to the paths of a PEM certificate and its private key. Both or neither: one alone stops the start. For a self-signed certificate:
+
+```sh
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout tls.key -out tls.crt -subj "/CN=hourglass.example.com" \
+  -addext "subjectAltName=DNS:hourglass.example.com"
+chown 65532:65532 tls.key        # the container runs as uid 65532; keep the key 0600
+
+docker run -d --name hourglass -p 443:8443 -v hourglass-data:/data \
+  -v "$PWD/tls.crt:/certs/tls.crt:ro" -v "$PWD/tls.key:/certs/tls.key:ro" \
+  -e HOURGLASS_LISTEN=:8443 \
+  -e HOURGLASS_TLS_CERT=/certs/tls.crt -e HOURGLASS_TLS_KEY=/certs/tls.key \
+  -e HOURGLASS_ADMIN_PASSWORD="choose-a-long-password" \
+  -e HOURGLASS_SESSION_KEY="$(head -c 32 /dev/urandom | base64)" \
+  ghcr.io/panset/hourglass:v1.0.0
+
+curl --cacert tls.crt https://hourglass.example.com/healthz
+```
+
+- The certificate's subject alternative name must be the host name (or IP address) that users type. Browsers ignore the common name.
+- With a certificate signed by an authority, put the leaf first in the certificate file, then the intermediates.
+- The key file must be readable by uid 65532. A key that only root can read stops the start with `permission denied`.
+- The image runs without root, so it cannot listen on a port below 1024 inside the container. Listen on a high port and publish it as 443.
+- The files are read once, at start. Restart the container after you renew the certificate.
+- A wrong path, or a key that does not belong to the certificate, stops the start before the database is opened. The start-up log line `http listening` carries `"tls":true`.
+- The listener then serves only HTTPS, with TLS 1.2 as the minimum; plain HTTP on that port gets `400`. There is no redirect from port 80.
+- Everything that calls Hourglass must trust a self-signed certificate: each browser (or it warns on every visit), every script that uses the integration API, and any health check (`curl --cacert`).
+- The metrics listener (`metrics.listen`) stays plain HTTP.
+- Set `oidc.redirect_url` to the `https://` address.
+
+In split mode the same two settings exist for the UI container, as `HOURGLASS_UI_TLS_CERT` and `HOURGLASS_UI_TLS_KEY`; put the certificate there and not on the API container.
+
+### Cookies
 
 The session cookie (`hourglass_session`) is always `Secure`, `HttpOnly` and `SameSite=Lax`, with an 8-hour idle timeout. Browsers send a `Secure` cookie only over HTTPS, with one exception: they accept it on `http://localhost`. So:
 
 - Over a plain-HTTP address that is not `localhost`, sign-in appears to succeed and the next request is unauthenticated, because the browser drops the cookie. Use HTTPS.
 - On `localhost`, plain HTTP works. The local stacks use it.
 
-The proxy must pass `/` through unchanged, including the `Set-Cookie` header and `Location` redirects, and must not rewrite the `Host`-dependent paths. Hourglass does not read `X-Forwarded-*` headers. Set `oidc.redirect_url` to the public HTTPS URL, because that is the only place the public address is configured.
+A reverse proxy in front must pass `/` through unchanged, including the `Set-Cookie` header and `Location` redirects, and must not rewrite the `Host`-dependent paths. Hourglass does not read `X-Forwarded-*` headers. Set `oidc.redirect_url` to the public HTTPS URL, because that is the only place the public address is configured.
 
 State-changing requests must carry the session's CSRF token in an `X-CSRF-Token` header. The UI does this; a script gets the token from `GET /api/v1/session`.
 
@@ -261,7 +329,7 @@ Mocks cannot confirm these. Work through them before enforcement is turned on, w
 
 ## Connecting your infrastructure with the integration API
 
-If your lab is not vCenter, or you would rather not give Hourglass credentials to it, your own service can tell Hourglass what is deployed and how contended the lab is. Hourglass never reads your infrastructure; the service calls Hourglass over HTTP. [Integrating your infrastructure with Hourglass](integrating.md) is the guide to give the engineer who builds that service. This section is what you, the operator, set up.
+If your lab is not vCenter, or you would rather not give Hourglass credentials to it, your own service can tell Hourglass what is deployed and how contended the lab is. Hourglass never reads your infrastructure; the service calls Hourglass over HTTP. [Setting up Hourglass and integrating your infrastructure](integrating.md) is the guide to give the engineer or AI agent who installs Hourglass and builds that service. This section is what you, the operator, set up.
 
 ### Config
 
@@ -295,7 +363,7 @@ Every create, change, token issue and revoke is audited, and so is each hold a s
 
 ### Behind a reverse proxy
 
-Failed token attempts are rate-limited per client address: 5 failures in 15 minutes, then 429 `rate_limited` with `Retry-After` for further bad tokens from that address. Hourglass uses the address of the TCP connection and does not read `X-Forwarded-For`. Behind a reverse proxy, which this document requires, every caller therefore shares the proxy's address and one failure budget. Nobody who presents a valid token is ever refused by the limit, so the service keeps working while someone else's bad requests use up the budget; they just see 429 instead of 401. Do not try to restore client addresses with a forwarding header: Hourglass would trust whatever the client sends. If you want the service to bypass the proxy, let it reach Hourglass directly on a private address.
+Failed token attempts are rate-limited per client address: 5 failures in 15 minutes, then 429 `rate_limited` with `Retry-After` for further bad tokens from that address. Hourglass uses the address of the TCP connection and does not read `X-Forwarded-For`. Behind a reverse proxy every caller therefore shares the proxy's address and one failure budget. Nobody who presents a valid token is ever refused by the limit, so the service keeps working while someone else's bad requests use up the budget; they just see 429 instead of 401. Do not try to restore client addresses with a forwarding header: Hourglass would trust whatever the client sends. If you want the service to bypass the proxy, let it reach Hourglass directly on a private address.
 
 ### Releasing and the teardown setting
 
@@ -399,12 +467,12 @@ Pruning runs once a day, from the collector.
 ## Known limits
 
 - One instance. One process owns the database; there is no high availability, and running two against one file is not supported.
-- Plain HTTP only; terminate TLS in front.
+- TLS is optional and static: one certificate, read at start, no reload and no automatic issuing (ACME). In split mode the UI container cannot reach an API that serves a self-signed certificate.
 - The event queue is in memory: events still queued at shutdown are lost, and nothing is retried.
 - The local admin password cannot be reset without database access.
 - vSphere: clusters in host sub-folders are not discovered, and nothing has been run against a real vCenter.
-- Images are built and smoke-tested on arm64. The amd64 images are built but have not been run.
-- There is no registry push, no Helm chart and no Dockerfile.
+- Images are built and smoke-tested on arm64. The amd64 `hourglass` image has only been started under emulation; the other amd64 images have not been run.
+- Nothing publishes the images automatically: someone runs `deploy/push-images.sh` for each release. There is no Helm chart and no Dockerfile.
 
 ## Local stacks
 

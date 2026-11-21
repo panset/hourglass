@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "servetls",
+    srcs = ["servetls.go"],
+    importpath = "github.com/panset/hourglass/internal/servetls",
+    visibility = ["//:__subpackages__"],
+)
+
+go_test(
+    name = "servetls_test",
+    srcs = ["servetls_test.go"],
+    deps = [
+        ":servetls",
+        "//internal/servetls/servetlstest",
+    ],
+)

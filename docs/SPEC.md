@@ -365,6 +365,7 @@ Secrets and connection details live in a config file or environment variables; a
 | Allowed CORS origins (cors.allowed\_origins) | File / env | empty | Only for UI development from another origin (UI-4) |
 | Teardown before release (release\_requires\_teardown) | Admin UI | On | HOLD-2; has no effect without a provider |
 | Metrics listen address (metrics.listen) | File / env | empty (off) | Never the public port |
+| TLS certificate and key files (tls.cert, tls.key) | File / env | `HOURGLASS_TLS_CERT`, `HOURGLASS_TLS_KEY` | Optional and only as a pair; when set, the public listener serves HTTPS (D64) |
 
 Environment variables override the file. Secrets are never returned by the API or written to logs.
 

@@ -5,11 +5,12 @@
 // reverse-proxies /api/, /auth/ and /healthz to the API container, so the
 // browser sees one origin and the session cookie and CSRF token work unchanged.
 //
-//	hourglass-ui [-listen addr] [-api http://host:port]
+//	hourglass-ui [-listen addr] [-api http://host:port] [-tls-cert file -tls-key file]
 //
 // -api may also be set with HOURGLASS_UI_API, and -listen with
-// HOURGLASS_UI_LISTEN (default :8080); a flag wins over its variable. The
-// proxy's own health check is /ui-healthz.
+// HOURGLASS_UI_LISTEN (default :8080); a flag wins over its variable. With
+// -tls-cert and -tls-key (or HOURGLASS_UI_TLS_CERT and HOURGLASS_UI_TLS_KEY)
+// it serves HTTPS itself (D64). The proxy's own health check is /ui-healthz.
 package main
 
 import (
@@ -28,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/panset/hourglass/internal/servetls"
 	"github.com/panset/hourglass/internal/uiserve"
 	"github.com/panset/hourglass/internal/version"
 )
@@ -35,6 +37,8 @@ import (
 const (
 	apiEnv        = "HOURGLASS_UI_API"
 	listenEnv     = "HOURGLASS_UI_LISTEN"
+	tlsCertEnv    = "HOURGLASS_UI_TLS_CERT"
+	tlsKeyEnv     = "HOURGLASS_UI_TLS_KEY"
 	defaultListen = ":8080"
 	shutdownBound = 10 * time.Second
 )
@@ -56,6 +60,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, ui fs.F
 	fl.SetOutput(stderr)
 	listen := fl.String("listen", "", "address to listen on (or HOURGLASS_UI_LISTEN; default "+defaultListen+")")
 	api := fl.String("api", "", "base URL of the API container, e.g. http://hourglass-api:8080 (or HOURGLASS_UI_API)")
+	tlsCert := fl.String("tls-cert", "", "PEM certificate file; with -tls-key, serve HTTPS (or "+tlsCertEnv+")")
+	tlsKey := fl.String("tls-key", "", "PEM private key file for -tls-cert (or "+tlsKeyEnv+")")
 	if err := fl.Parse(args); err != nil {
 		return 2
 	}
@@ -76,6 +82,21 @@ func run(ctx context.Context, args []string, getenv func(string) string, ui fs.F
 		fmt.Fprintf(stderr, "hourglass-ui: the API address is required: -api http://host:port or %s\n", apiEnv)
 		return 2
 	}
+	if *tlsCert == "" {
+		*tlsCert = getenv(tlsCertEnv)
+	}
+	if *tlsKey == "" {
+		*tlsKey = getenv(tlsKeyEnv)
+	}
+	tlsCfg, err := servetls.Load(*tlsCert, *tlsKey)
+	if errors.Is(err, servetls.ErrOneOfPair) {
+		fmt.Fprintf(stderr, "hourglass-ui: %v: -tls-cert and -tls-key, or %s and %s\n", err, tlsCertEnv, tlsKeyEnv)
+		return 2
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, "hourglass-ui:", err)
+		return 1
+	}
 	if ui == nil {
 		fmt.Fprintln(stderr, "hourglass-ui: this binary was built without the UI (build tag \"ui\")")
 		return 1
@@ -92,9 +113,15 @@ func run(ctx context.Context, args []string, getenv func(string) string, ui fs.F
 		return 1
 	}
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	serve := srv.Serve
+	if tlsCfg != nil {
+		srv.TLSConfig = tlsCfg
+		srv.ErrorLog = slog.NewLogLogger(log.Handler(), slog.LevelWarn)
+		serve = func(l net.Listener) error { return srv.ServeTLS(l, "", "") }
+	}
 	errc := make(chan error, 1)
-	go func() { errc <- srv.Serve(ln) }()
-	log.Info("http listening", "addr", ln.Addr().String(), "api", *api)
+	go func() { errc <- serve(ln) }()
+	log.Info("http listening", "addr", ln.Addr().String(), "api", *api, "tls", tlsCfg != nil)
 	select {
 	case <-ctx.Done():
 	case err := <-errc:

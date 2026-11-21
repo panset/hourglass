@@ -9,10 +9,17 @@ load(":defs.bzl", "NONROOT", "hourglass_image")
 #   bazel build //deploy/images:all           layers and manifests, no Docker needed
 #   bazel run //deploy/images:load_hourglass  docker load as hourglass:dev (host CPU)
 #   deploy/load-images.sh                     loads every image the stacks use
+#   bazel run //deploy/images:push_hourglass -- --tag v1.0.0
+#                                             pushes both platforms to REGISTRY (D65)
+#   deploy/push-images.sh v1.0.0              pushes the three product images
 #
 # /data is created here owned by 65532, so a Docker named volume mounted there
 # is writable by the nonroot user. A bind mount keeps the host directory's
 # owner: it must be writable by uid 65532 (chown 65532:65532 or equivalent).
+# Where the product images are published (D65). The test images have no push
+# target. Override per run with `-- --repository other.registry/path/NAME`.
+REGISTRY = "ghcr.io/panset"
+
 tar(
     name = "data_layer",
     srcs = [],
@@ -28,6 +35,7 @@ hourglass_image(
     gotags = ["ui"],
     lib = "//cmd/hourglassd:hourglassd_lib",
     ports = [8080],
+    push_repository = REGISTRY + "/hourglass",
 )
 
 hourglass_image(
@@ -36,6 +44,7 @@ hourglass_image(
     description = "Hourglass server, API only, no UI (split mode, listens on 8080)",
     lib = "//cmd/hourglassd:hourglassd_lib",
     ports = [8080],
+    push_repository = REGISTRY + "/hourglass-api",
 )
 
 hourglass_image(
@@ -45,6 +54,7 @@ hourglass_image(
     gotags = ["ui"],
     lib = "//cmd/hourglass-ui:hourglass-ui_lib",
     ports = [8080],
+    push_repository = REGISTRY + "/hourglass-ui",
 )
 
 # Test stacks only (docs/decisions.md D8, D29).

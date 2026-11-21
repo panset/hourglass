@@ -11,6 +11,7 @@ go_library(
     visibility = ["//deploy/images:__pkg__"],
     deps = [
         "//internal/api/apierr",
+        "//internal/servetls",
         "//internal/uiserve",
         "//internal/version",
     ],
@@ -28,6 +29,7 @@ go_test(
     name = "hourglass-ui_test",
     srcs = ["proxy_test.go"],
     embed = [":hourglass-ui_lib"],
+    deps = ["//internal/servetls/servetlstest"],
 )
 
 # The source scan in internal/api/registration_test.go reads these files.

@@ -6,11 +6,14 @@ Per image NAME the macro defines:
   NAME_index               both platforms as one OCI index
   NAME                     alias to the image for the host CPU (what oci_load loads)
   load_NAME                oci_load into the local Docker daemon as NAME:dev (tag "manual")
+  push_NAME                oci_push of NAME_index to push_repository; only with push_repository.
+                           Not "manual": `bazel build //...` builds the push script, and
+                           nothing is pushed until it is run.
 """
 
 load("@aspect_bazel_lib//lib:tar.bzl", "tar")
 load("@rules_go//go:def.bzl", "go_binary")
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_image_index", "oci_load", "oci_push")
 
 # arch name -> (rules_go goarch, base image repository, host CPU constraint)
 _ARCHS = {
@@ -20,7 +23,10 @@ _ARCHS = {
 
 NONROOT = "65532"
 
-def hourglass_image(name, lib, binary, ports, description, gotags = []):
+# The source repository. GitHub's registry links a pushed image to it.
+SOURCE = "https://github.com/panset/hourglass"
+
+def hourglass_image(name, lib, binary, ports, description, gotags = [], push_repository = None):
     """Defines the image targets for one binary.
 
     Args:
@@ -30,6 +36,9 @@ def hourglass_image(name, lib, binary, ports, description, gotags = []):
       ports: TCP ports the image listens on (the EXPOSE equivalent).
       description: one line for the org.opencontainers.image.description label.
       gotags: Go build tags; ["ui"] embeds the UI.
+      push_repository: registry repository the multi-platform image is pushed
+        to by `bazel run :push_NAME -- --tag TAG` (D65). None, the default,
+        defines no push target: test images are never published.
     """
     images = {}
     for arch, (goarch, base, _) in _ARCHS.items():
@@ -67,6 +76,7 @@ def hourglass_image(name, lib, binary, ports, description, gotags = []):
                 "org.opencontainers.image.title": name,
                 "org.opencontainers.image.description": description,
                 "org.opencontainers.image.licenses": "MIT",
+                "org.opencontainers.image.source": SOURCE,
                 "org.opencontainers.image.base.name": "gcr.io/distroless/static-debian12:nonroot",
                 "io.hourglass.ports": ",".join([str(p) for p in ports]),
                 "io.hourglass.data-volume": "/data (must be writable by uid/gid " + NONROOT + ")",
@@ -95,3 +105,13 @@ def hourglass_image(name, lib, binary, ports, description, gotags = []):
         tags = ["manual"],
         visibility = ["//visibility:public"],
     )
+    if push_repository:
+        # Pushes both platforms as one index. No tag is fixed here: without
+        # --tag the image is pushed by digest only, so a release always names
+        # its tag (deploy/push-images.sh). --repository overrides the target.
+        oci_push(
+            name = "push_" + name,
+            image = ":" + name + "_index",
+            repository = push_repository,
+            visibility = ["//visibility:public"],
+        )

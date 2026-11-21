@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Bundled mode over HTTPS with a self-signed certificate (D64). An override
+# for compose.bundled.yaml: Hourglass serves TLS itself on 8443, with no
+# reverse proxy. Local development only, like the file it extends.
+#
+#   deploy/load-images.sh hourglass hourglass-vcsim
+#   deploy/make-dev-cert.sh
+#   docker compose -f deploy/compose.bundled.yaml -f deploy/compose.tls.yaml up -d --wait
+#   curl --cacert deploy/certs/tls.crt https://localhost:8443/healthz
+#   open https://localhost:8443        # the browser warns until it trusts the certificate
+#
+# It has its own project name and data volume, and uses the same Keycloak and
+# simulator ports as the other stacks, so run one stack at a time.
+name: hourglass-tls
+
+services:
+  hourglass:
+    environment:
+      HOURGLASS_LISTEN: ":8443"
+      HOURGLASS_TLS_CERT: /certs/tls.crt
+      HOURGLASS_TLS_KEY: /certs/tls.key
+      HOURGLASS_OIDC_REDIRECT_URL: https://localhost:8443/auth/callback
+    volumes:
+      - ./certs:/certs:ro
+    ports: !override
+      - "8443:8443"
+
+  stack-ready:
+    volumes:
+      - ./certs/tls.crt:/certs/tls.crt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null --cacert /certs/tls.crt https://hourglass:8443/healthz"]

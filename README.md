@@ -114,6 +114,7 @@ To see the dashboard, use the Bazel-built bundled binary (`bazel build //cmd/hou
 | `go build ./...` | Builds everything. `hourglassd` has no UI. No Node, no Bazel |
 | `go test ./...` | Runs the Go tests |
 | `bazel build //...` | Builds every binary, the UI and all images for both architectures |
+| `deploy/push-images.sh TAG` | Pushes the three product images to the registry (`ghcr.io/panset` by default) |
 | `bazel test //...` | Runs every test, including the UI tests and the API contract test |
 | `./ci.sh` | Everything CI runs: header and genericity checks, the dependency license check, Go build and vet, the Gazelle check, `bazel build //...`, `bazel test //...` |
 | `bazel build //cmd/hourglassd:hourglassd` | The bundled binary with the UI embedded (build tag `ui`) |

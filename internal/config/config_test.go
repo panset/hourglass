@@ -270,3 +270,28 @@ func TestReportedMaxAge(t *testing.T) {
 		}
 	}
 }
+
+// D64: the certificate and key come from the file or the environment, and
+// only as a pair.
+func TestCFG_TLSCertAndKeyAreAPair(t *testing.T) {
+	if c := Defaults(); c.TLS != (TLS{}) {
+		t.Errorf("TLS is on by default: %+v", c.TLS)
+	}
+	p := writeFile(t, "tls: {cert: /f/cert.pem, key: /f/key.pem}\n")
+	c, err := Load(p, env(nil))
+	if err != nil || c.TLS != (TLS{Cert: "/f/cert.pem", Key: "/f/key.pem"}) {
+		t.Fatalf("file: %v %+v", err, c.TLS)
+	}
+	c, err = Load(p, env(map[string]string{"HOURGLASS_TLS_CERT": "/e/cert.pem", "HOURGLASS_TLS_KEY": "/e/key.pem"}))
+	if err != nil || c.TLS != (TLS{Cert: "/e/cert.pem", Key: "/e/key.pem"}) {
+		t.Fatalf("env over file: %v %+v", err, c.TLS)
+	}
+	if got := c.Redacted()["tls"].(map[string]any); got["cert"] != "/e/cert.pem" || got["key"] != "/e/key.pem" {
+		t.Errorf("redacted view: %v", got)
+	}
+	for _, one := range []map[string]string{{"HOURGLASS_TLS_CERT": "/e/cert.pem"}, {"HOURGLASS_TLS_KEY": "/e/key.pem"}} {
+		if _, err := Load("", env(one)); err == nil || !strings.Contains(err.Error(), "set together") {
+			t.Errorf("%v alone: %v", one, err)
+		}
+	}
+}

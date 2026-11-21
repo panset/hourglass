@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/panset/hourglass/internal/app/runhook"
+	"github.com/panset/hourglass/internal/servetls/servetlstest"
 	"github.com/panset/hourglass/internal/store"
 	"github.com/panset/hourglass/pkg/hourglass"
 	"github.com/panset/hourglass/pkg/hourglasstest"
@@ -620,5 +622,66 @@ func TestLED2_StartupRebuildsBalanceCachesBeforeServing(t *testing.T) {
 	}
 	if strings.Contains(r.out.String(), "some were wrong") {
 		t.Error("clean start logged a repair")
+	}
+}
+
+// D64: with tls.cert and tls.key the public listener serves HTTPS and nothing
+// else; the metrics listener stays plain HTTP.
+func TestTLS_PublicListenerServesHTTPSWithTheConfiguredCertificate(t *testing.T) {
+	cert, key, pool := servetlstest.WriteSelfSigned(t)
+	cfg, db := writeConfig(t, fmt.Sprintf("tls: {cert: %q, key: %q}\nmetrics: {listen: 'localhost:0'}\n", cert, key))
+	r := start(t, cfg, db)
+	line := r.out.logLine(t, "http listening")
+	if line["tls"] != true {
+		t.Errorf("log line does not say tls: %v", line)
+	}
+	addr := line["addr"].(string)
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}}
+	t.Cleanup(client.CloseIdleConnections)
+	resp, err := client.Get("https://" + addr + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(body), `"database":"ok"`) || resp.TLS == nil {
+		t.Errorf("https healthz: %d %s", resp.StatusCode, body)
+	}
+	// A client that does not trust the certificate is refused by its own check.
+	if _, err := http.Get("https://" + addr + "/healthz"); err == nil {
+		t.Error("an untrusting client got an answer")
+	}
+	// Plain HTTP on the TLS port is not served.
+	if code, _ := get(t, "http://"+addr+"/healthz"); code != 400 {
+		t.Errorf("plain HTTP on the TLS port = %d, want 400", code)
+	}
+	maddr := r.out.logLine(t, "metrics listening")["addr"].(string)
+	if code, _ := get(t, "http://"+maddr+"/metrics"); code != 200 {
+		t.Errorf("metrics over plain HTTP = %d, want 200", code)
+	}
+	if err := r.stop(); err != nil {
+		t.Errorf("shutdown: %v", err)
+	}
+}
+
+// D64: an unreadable or half-set pair stops the start before the database exists.
+func TestTLS_BadCertificateStopsTheStartBeforeTheDatabaseIsCreated(t *testing.T) {
+	registerFakes()
+	cert, _, _ := servetlstest.WriteSelfSigned(t)
+	for name, extra := range map[string]string{
+		"missing key file": fmt.Sprintf("tls: {cert: %q, key: %q}\n", cert, filepath.Join(t.TempDir(), "none.pem")),
+		"cert only":        fmt.Sprintf("tls: {cert: %q}\n", cert),
+	} {
+		cfg, db := writeConfig(t, extra)
+		err := Run(context.Background(), runhook.Options{
+			ConfigPath: cfg, DefaultPressureSource: testPressure, DefaultMeteringPolicy: testPolicy,
+			Stdout: io.Discard, Stderr: io.Discard,
+		})
+		if err == nil {
+			t.Fatalf("%s: Run started", name)
+		}
+		if _, serr := os.Stat(db); !os.IsNotExist(serr) {
+			t.Errorf("%s: the database was created: %v", name, serr)
+		}
 	}
 }
