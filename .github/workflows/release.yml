@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MIT
+# Publishes the product images when a release tag is pushed (D67).
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+#
+# pushes ghcr.io/panset/hourglass, hourglass-api and hourglass-ui, each for
+# linux/amd64 and linux/arm64, tagged v1.2.0 and latest. A pre-release tag
+# (one with a hyphen, such as v1.2.0-rc1) is pushed under its own name only
+# and does not move latest. The tests are not run here; run ./ci.sh first.
+name: Release images
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      # The runner's `bazel` is Bazelisk, which reads .bazelversion.
+      - name: Build and push
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$TAG" == *-* ]]; then
+            deploy/push-images.sh "$TAG"
+          else
+            deploy/push-images.sh "$TAG" latest
+          fi

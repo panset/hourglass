@@ -60,6 +60,7 @@ bazel run //deploy/images:push_hourglass -- --tag v1.0.0   # one image
 ```
 
 - Always name a tag. Without `--tag`, a push target publishes by digest only.
+- A release does this for you: pushing a git tag such as `v1.2.0` runs `.github/workflows/release.yml`, which pushes all three images tagged `v1.2.0` and `latest`. A tag with a hyphen (`v1.2.0-rc1`) is a pre-release: it is pushed under its own name and `latest` does not move. The workflow does not run the tests, so run `./ci.sh` before you tag.
 - To publish somewhere else, set `HOURGLASS_REGISTRY=registry.example.com/team` for the script, or pass `--repository registry.example.com/team/hourglass` to one target.
 - The push reads credentials from the Docker config file. It does not need a running Docker daemon.
 - On GitHub, a new package is private until you make it public in the package's settings.
@@ -472,7 +473,7 @@ Pruning runs once a day, from the collector.
 - The local admin password cannot be reset without database access.
 - vSphere: clusters in host sub-folders are not discovered, and nothing has been run against a real vCenter.
 - Images are built and smoke-tested on arm64. The amd64 `hourglass` image has only been started under emulation; the other amd64 images have not been run.
-- Nothing publishes the images automatically: someone runs `deploy/push-images.sh` for each release. There is no Helm chart and no Dockerfile.
+- The release workflow publishes the images on a `v*` git tag without running the tests. There is no Helm chart and no Dockerfile.
 
 ## Local stacks
 
