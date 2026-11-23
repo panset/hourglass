@@ -909,7 +909,10 @@ export interface components {
             new_password: string;
         };
         /** @description Identity of the signed-in user. For a user with no role this is exactly
-         *     these fields and nothing else (AUTH-5): `roles` is empty.
+         *     these fields and nothing else (AUTH-5, AUTH-9): `roles` is empty.
+         *     `display_name` is the name, else the username, else the email, by the
+         *     same rule the rest of the API uses to show a user; it is derived only
+         *     from fields this response already carries.
          *      */
         Session: {
             /** Format: int64 */
@@ -917,6 +920,8 @@ export interface components {
             username: string;
             email: string;
             name: string;
+            /** @description Name, else username, else email; empty only when all three are empty. */
+            display_name: string;
             auth_source: components["schemas"]["AuthSource"];
             status: components["schemas"]["UserStatus"];
             roles: components["schemas"]["Role"][];

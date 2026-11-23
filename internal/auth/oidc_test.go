@@ -41,6 +41,7 @@ type fakeIssuer struct {
 	codes map[string]authz // code -> request
 	// Knobs for the next ID token.
 	sub, email, name string
+	given, family, preferred string // optional claims; omitted from the token when empty
 	audience         string        // "" = the client id
 	nonceOverride    string        // "" = the requested nonce
 	ttl              time.Duration // 0 = 5 minutes
@@ -145,6 +146,12 @@ func (f *fakeIssuer) token(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	aud, nonce, ttl := f.audience, f.nonceOverride, f.ttl
 	sub, email, name := f.sub, f.email, f.name
+	extra := map[string]any{}
+	for k, v := range map[string]string{"given_name": f.given, "family_name": f.family, "preferred_username": f.preferred} {
+		if v != "" {
+			extra[k] = v
+		}
+	}
 	f.mu.Unlock()
 	if aud == "" {
 		aud = testClientID
@@ -156,8 +163,12 @@ func (f *fakeIssuer) token(w http.ResponseWriter, r *http.Request) {
 		ttl = 5 * time.Minute
 	}
 	now := f.now()
-	idt := f.sign(map[string]any{"iss": f.srv.URL, "sub": sub, "aud": aud, "nonce": nonce,
-		"iat": now.Unix(), "exp": now.Add(ttl).Unix(), "email": email, "name": name})
+	claims := map[string]any{"iss": f.srv.URL, "sub": sub, "aud": aud, "nonce": nonce,
+		"iat": now.Unix(), "exp": now.Add(ttl).Unix(), "email": email, "name": name}
+	for k, v := range extra {
+		claims[k] = v
+	}
+	idt := f.sign(claims)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "at-not-real", "token_type": "Bearer", "expires_in": 300, "id_token": idt})
 }

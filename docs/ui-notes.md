@@ -166,7 +166,7 @@ Header strip, 12 px by 32 px padding, bottom border `#BDBDBD`, wraps. Left to ri
 1. Wordmark "Hourglass" (18 px, 600).
 2. Main nav (aria-label "Main", 20 px gaps): "My usage", "Setups". Active item is 600 weight, `#1A1A1A`, with a 2 px bottom border (aria-current="page"). Inactive items are plain text without underline.
 3. Admins only: after a divider (1 px left border and 12 px padding) a small muted label "Admin" followed by "Users · 2 pending" (the pending count is part of the link text), "Setup inventory", "Settings", "Audit log". In the wireframes the Audit log link goes nowhere (`#audit`).
-4. Right group: lab pressure pill "Lab 82% · 2×" (13 px, amber border `#B45309`, text `#92400E`, fully rounded); balance in bold, "142 tokens" for the developer and "300 tokens" for the admin; user name ("Dana Dev", "Riley Admin"); link "Sign out".
+4. Right group: lab pressure pill "Lab 82% · 2×" (13 px, amber border `#B45309`, text `#92400E`, fully rounded); balance in bold, "142 tokens" for the developer and "300 tokens" for the admin; greeting "Hello, {display_name}" ("Hello, Dana Dev", "Hello, Riley Admin"; UI-10), where `display_name` is the session's name, else username, else email; it is cut with an ellipsis at a fixed maximum width (240 px) with the full text in its `title`, and nothing is shown when `display_name` is empty; link "Sign out".
 
 Developer view shows only the first two nav items. The Sign in and Not authorized pages have no top bar.
 

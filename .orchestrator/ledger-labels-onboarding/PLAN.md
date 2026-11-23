@@ -19,8 +19,8 @@ when the one before returns. Task numbers continue from the previous job (72).
 | 78 | 5 | Ledger UI (UI-8) and the acceptance scenario's `readLedger` helper | build | sonnet | 77 | `ui/src/pages/usage/`, `e2e/browser/tests/acceptance.spec.ts` | verified |
 | 79 | 5 | Independent verification of M4-M5 | verify | opus | 78 | (read-only) | done (0 high, 0 medium, 6 low: 79b; bundled e2e not run, port 8081 held by the hourglass-tls stack) |
 | 80 | 6 | Labels: `label_index`, selector term in `internal/rules`, chips (SET-8, UI-9) | build | sonnet | 79 | `internal/rules/`, `internal/api/`, `api/`, `ui/` | done (verify: 84) |
-| 81 | 6 | Greeting: claims, shared display-name function, `display_name`, top bar (AUTH-9, UI-10) | build | sonnet | 80 | `internal/auth/`, `internal/api/`, `api/`, `ui/` | running |
-| 82 | 7 | Pre-approval: store, sign-in step via injected interface, admin routes, file overlay, permissions test (PRE-1..8) | build | opus | 81 | `internal/store/`, `internal/auth/`, `internal/api/`, `internal/config/`, `internal/app/`, `api/`, `deploy/config.sample.yaml` | pending |
+| 81 | 6 | Greeting: claims, shared display-name function, `display_name`, top bar (AUTH-9, UI-10) | build | sonnet | 80 | `internal/auth/`, `internal/api/`, `api/`, `ui/` | done (verify: 84) |
+| 82 | 7 | Pre-approval: store, sign-in step via injected interface, admin routes, file overlay, permissions test (PRE-1..8) | build | opus | 81 | `internal/store/`, `internal/auth/`, `internal/api/`, `internal/config/`, `internal/app/`, `api/`, `deploy/config.sample.yaml` | running |
 | 83 | 7 | Admin > Users pre-approval UI (UI-11) | build | sonnet | 82 | `ui/` | pending |
 | 84 | 7 | Independent verification of M6-M7, with a security read of the sign-in path | verify | opus | 83 | (read-only) | pending |
 | 85 | 8 | End-to-end scenarios (paging, chip, greeting, pre-approved first sign-in, compaction via test clock), Keycloak user, UPG-2, UPG-3 | build | sonnet | 84 | `e2e/`, `deploy/keycloak/`, `internal/` tests | pending |

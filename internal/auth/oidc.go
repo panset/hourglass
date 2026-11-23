@@ -247,8 +247,11 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var claims struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		Email             string `json:"email"`
+		Name              string `json:"name"`
+		GivenName         string `json:"given_name"`
+		FamilyName        string `json:"family_name"`
+		PreferredUsername string `json:"preferred_username"`
 	}
 	if err := idt.Claims(&claims); err != nil {
 		fail("bad id token claims", err)
@@ -259,7 +262,8 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.now()
-	su, created, err := s.st.UpsertOIDCLogin(r.Context(), idt.Subject, claims.Email, claims.Name, now)
+	su, created, err := s.st.UpsertOIDCLogin(r.Context(), idt.Subject, claims.Email,
+		storedName(claims.Name, claims.GivenName, claims.FamilyName, claims.PreferredUsername), now)
 	if err != nil {
 		s.log.Error("storing oidc user failed", "err", err)
 		callbackError(w, r, apierr.Internal)
@@ -299,4 +303,18 @@ func truncate(s string, n int) string {
 		return s[:n]
 	}
 	return s
+}
+
+// storedName is the name kept in users.name for an SSO user (AUTH-9): the
+// first non-empty of name; given_name and family_name joined by a space and
+// trimmed; preferred_username. Whitespace-only claims count as empty. All
+// empty gives an empty name.
+func storedName(name, given, family, preferred string) string {
+	if strings.TrimSpace(name) != "" {
+		return name // stored exactly as sent, as before
+	}
+	if n := strings.TrimSpace(strings.TrimSpace(given) + " " + strings.TrimSpace(family)); n != "" {
+		return n
+	}
+	return strings.TrimSpace(preferred)
 }

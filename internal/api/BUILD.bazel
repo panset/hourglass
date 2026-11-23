@@ -45,6 +45,7 @@ go_test(
         "admin_testenv_test.go",
         "admin_users_test.go",
         "contract_test.go",
+        "greeting_test.go",
         "helpers_test.go",
         "integration_reports_test.go",
         "ledger_view_test.go",

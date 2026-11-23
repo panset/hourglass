@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/panset/hourglass/internal/api/apierr"
+	"github.com/panset/hourglass/internal/auth"
 	"github.com/panset/hourglass/internal/events"
 	"github.com/panset/hourglass/internal/holds"
 	"github.com/panset/hourglass/internal/ledger"
@@ -203,17 +204,10 @@ func labelsNonNil(m map[string]string) map[string]string {
 	return m
 }
 
-// userDisplayName is the name shown for a user: name, else username, else email.
-func userDisplayName(u store.User) string {
-	switch {
-	case u.Name != "":
-		return u.Name
-	case u.Username != "":
-		return u.Username
-	default:
-		return u.Email
-	}
-}
+// userDisplayName is the name shown for a user: name, else username, else
+// email. It is auth.DisplayName, the function behind the session's
+// display_name (AUTH-9).
+func userDisplayName(u store.User) string { return auth.DisplayName(u) }
 
 func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }
 

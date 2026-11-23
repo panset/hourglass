@@ -42,6 +42,7 @@ export const developerSession: Session = {
   username: "dana",
   email: "dana@example.com",
   name: "Dana Dev",
+  display_name: "Dana Dev",
   auth_source: "oidc",
   status: "active",
   roles: ["developer"],
@@ -56,6 +57,7 @@ export const adminSession: Session = {
   username: "riley",
   email: "riley@example.com",
   name: "Riley Admin",
+  display_name: "Riley Admin",
   roles: ["admin"],
   csrf_token: "csrf-riley",
 };
@@ -64,6 +66,7 @@ export const noRoleSession: Session = {
   ...developerSession,
   email: "morgan@example.com",
   name: "Morgan Q.",
+  display_name: "Morgan Q.",
   roles: [],
   status: "pending",
 };
@@ -75,6 +78,7 @@ export const localAdminSession: Session = {
   username: "admin",
   email: "",
   name: "admin",
+  display_name: "admin",
   auth_source: "local",
   is_local_admin: true,
 };

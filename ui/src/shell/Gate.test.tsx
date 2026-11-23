@@ -82,7 +82,7 @@ describe("UI-5 shell routing by session state", () => {
     expect(screen.queryByRole("link", { name: "Audit log" })).not.toBeInTheDocument();
     expect(await screen.findByText("142.2 tokens")).toBeInTheDocument();
     expect(await screen.findByText(/Lab 82%/)).toHaveTextContent("Lab 82% · 2×");
-    expect(screen.getByText("Dana Dev")).toBeInTheDocument();
+    expect(screen.getByText("Hello, Dana Dev")).toBeInTheDocument();
   });
 
   it("a developer on an admin URL gets not-found, not the admin page", async () => {

@@ -132,7 +132,7 @@ func TestAUTH5_SessionOfUnassignedUser(t *testing.T) {
 	}
 	var raw map[string]json.RawMessage
 	_ = json.Unmarshal(rec.Body.Bytes(), &raw)
-	want := []string{"user_id", "username", "email", "name", "auth_source", "status", "roles", "csrf_token", "must_change_password", "is_local_admin"}
+	want := []string{"user_id", "username", "email", "name", "display_name", "auth_source", "status", "roles", "csrf_token", "must_change_password", "is_local_admin"}
 	if len(raw) != len(want) {
 		t.Fatalf("fields %v", raw)
 	}

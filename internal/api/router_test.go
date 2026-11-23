@@ -238,7 +238,7 @@ func TestAUTH5_UnassignedUserSessionHasEmptyRoleList(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	want := "auth_source,csrf_token,email,is_local_admin,must_change_password,name,roles,status,user_id,username"
+	want := "auth_source,csrf_token,display_name,email,is_local_admin,must_change_password,name,roles,status,user_id,username"
 	if got := strings.Join(keys, ","); got != want {
 		t.Errorf("session keys = %s, want %s", got, want)
 	}

@@ -151,13 +151,31 @@ func (s *Service) loadUser(ctx context.Context, id int64) (*User, error) {
 	return &User{User: su, Roles: roles}, nil
 }
 
+// DisplayName is the name shown for a user: name, else username, else email.
+// It is the one function behind the session's display_name and the user names
+// the rest of the API shows (AUTH-9), so the two cannot drift. It lives here
+// because internal/api already imports this package and not the reverse.
+func DisplayName(u store.User) string {
+	switch {
+	case u.Name != "":
+		return u.Name
+	case u.Username != "":
+		return u.Username
+	default:
+		return u.Email
+	}
+}
+
 // SessionView is the Session schema of api/openapi.yaml: for a user with no
-// role it is exactly these fields and nothing else (AUTH-5).
+// role it is exactly these fields and nothing else (AUTH-5, AUTH-9). The one
+// field beyond the identity is display_name, derived only from name, username
+// and email, which this response already carries.
 type SessionView struct {
 	UserID             int64    `json:"user_id"`
 	Username           string   `json:"username"`
 	Email              string   `json:"email"`
 	Name               string   `json:"name"`
+	DisplayName        string   `json:"display_name"`
 	AuthSource         string   `json:"auth_source"`
 	Status             string   `json:"status"`
 	Roles              []string `json:"roles"`
@@ -172,6 +190,6 @@ func (s *Service) view(u *User, sess store.Session) SessionView {
 		roles = []string{}
 	}
 	return SessionView{UserID: u.ID, Username: u.Username, Email: u.Email, Name: u.Name,
-		AuthSource: u.AuthSource, Status: u.Status, Roles: roles, CSRFToken: s.CSRFToken(sess.ID),
+		DisplayName: DisplayName(u.User), AuthSource: u.AuthSource, Status: u.Status, Roles: roles, CSRFToken: s.CSRFToken(sess.ID),
 		MustChangePassword: u.MustChangePassword, IsLocalAdmin: IsLocalAdmin(u.User)}
 }

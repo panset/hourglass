@@ -58,7 +58,11 @@ export function TopBar() {
         {!session.is_local_admin && typeof balance === "number" ? (
           <span className={styles.balance}>{formatTokens(balance)} tokens</span>
         ) : null}
-        <span>{session.name}</span>
+        {session.display_name ? (
+          <span className={styles.greeting} title={session.display_name}>
+            Hello, {session.display_name}
+          </span>
+        ) : null}
         <button type="button" className={styles.signOut} onClick={() => void signOut()}>
           Sign out
         </button>

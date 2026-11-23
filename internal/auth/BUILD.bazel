@@ -30,6 +30,7 @@ go_library(
 go_test(
     name = "auth_test",
     srcs = [
+        "greeting_test.go",
         "helpers_test.go",
         "local_test.go",
         "oidc_test.go",

@@ -813,7 +813,7 @@ func TestAUTH5_SessionOfUserWithNoRoleIsOwnIdentityOnly(t *testing.T) {
 		}
 		for k := range m {
 			switch k {
-			case "user_id", "username", "email", "name", "auth_source", "status", "roles", "csrf_token", "must_change_password", "is_local_admin":
+			case "user_id", "username", "email", "name", "display_name", "auth_source", "status", "roles", "csrf_token", "must_change_password", "is_local_admin":
 			default:
 				t.Errorf("%s: session has an unexpected field %q", name, k)
 			}

@@ -1491,13 +1491,19 @@ components:
       type: object
       description: |
         Identity of the signed-in user. For a user with no role this is exactly
-        these fields and nothing else (AUTH-5): `roles` is empty.
-      required: [user_id, username, email, name, auth_source, status, roles, csrf_token, must_change_password, is_local_admin]
+        these fields and nothing else (AUTH-5, AUTH-9): `roles` is empty.
+        `display_name` is the name, else the username, else the email, by the
+        same rule the rest of the API uses to show a user; it is derived only
+        from fields this response already carries.
+      required: [user_id, username, email, name, display_name, auth_source, status, roles, csrf_token, must_change_password, is_local_admin]
       properties:
         user_id: {type: integer, format: int64}
         username: {type: string}
         email: {type: string}
         name: {type: string}
+        display_name:
+          type: string
+          description: Name, else username, else email; empty only when all three are empty.
         auth_source: {$ref: '#/components/schemas/AuthSource'}
         status: {$ref: '#/components/schemas/UserStatus'}
         roles:
