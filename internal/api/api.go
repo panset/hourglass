@@ -8,6 +8,7 @@
 //
 //	handlers_user.go         the "any role" data routes (me, pressure, setups, acquire, release)
 //	handlers_admin.go        the admin routes
+//	preapproval.go           the pre-approval admin routes and the sign-in approval step
 //	handlers_service.go      the service-account admin routes
 //	handlers_integration.go  the /api/v1/integration/ routes (service tokens)
 //	health.go                GET /healthz
@@ -66,6 +67,9 @@ type Deps struct {
 	Location  *time.Location // the configured time zone (month boundary, YYYY-MM-DD days)
 	Logger    *slog.Logger
 	Runtime   Runtime
+	// Preapprovals is the sign-in approval step; the list route reads its
+	// file overlay. Nil means no file entries.
+	Preapprovals *Preapprover
 	// Fallback serves every path that is not under /api/ or /auth/ and is
 	// not /healthz (the UI, later). Nil means a plain 404.
 	Fallback http.Handler
@@ -188,15 +192,19 @@ func (a *API) handlers() map[string]http.HandlerFunc {
 		"rejectUser":     a.rejectUser,
 		"grantTokens":    a.grantTokens,
 		"resetBalance":   a.resetBalance,
-		"createSetup":    a.createSetup,
-		"updateSetup":    a.updateSetup,
-		"deleteSetup":    a.deleteSetup,
-		"getRules":       a.getRules,
-		"replaceRules":   a.replaceRules,
-		"getSettings":    a.getSettings,
-		"updateSettings": a.updateSettings,
-		"getCollector":   a.getCollector,
-		"listAudit":      a.listAudit,
+		// preapproval.go
+		"listPreapprovals":  a.listPreapprovals,
+		"addPreapprovals":   a.addPreapprovals,
+		"deletePreapproval": a.deletePreapproval,
+		"createSetup":       a.createSetup,
+		"updateSetup":       a.updateSetup,
+		"deleteSetup":       a.deleteSetup,
+		"getRules":          a.getRules,
+		"replaceRules":      a.replaceRules,
+		"getSettings":       a.getSettings,
+		"updateSettings":    a.updateSettings,
+		"getCollector":      a.getCollector,
+		"listAudit":         a.listAudit,
 		// handlers_service.go
 		"listServiceAccounts":  a.listServiceAccounts,
 		"createServiceAccount": a.createServiceAccount,

@@ -100,10 +100,13 @@ type Config struct {
 	Metering      Extension   `yaml:"metering"` // empty Type: the caller's default
 	Hooks         []Extension `yaml:"hooks"`
 	Seed          string      `yaml:"seed"`
-	UI            UI          `yaml:"ui"`
-	CORS          CORS        `yaml:"cors"`
-	Metrics       Metrics     `yaml:"metrics"`
-	TLS           TLS         `yaml:"tls"`
+	// PreapprovedUsersFile names the optional read-only list of pre-approved
+	// SSO users (docs/design/ledger-labels-onboarding.md, D4); empty is none.
+	PreapprovedUsersFile string  `yaml:"preapproved_users_file"`
+	UI                   UI      `yaml:"ui"`
+	CORS                 CORS    `yaml:"cors"`
+	Metrics              Metrics `yaml:"metrics"`
+	TLS                  TLS     `yaml:"tls"`
 }
 
 // Defaults returns the built-in defaults.
@@ -169,6 +172,7 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	str("HOURGLASS_METRICS_LISTEN", &c.Metrics.Listen)
 	str("HOURGLASS_TLS_CERT", &c.TLS.Cert)
 	str("HOURGLASS_TLS_KEY", &c.TLS.Key)
+	str("HOURGLASS_PREAPPROVED_USERS_FILE", &c.PreapprovedUsersFile)
 	if v, ok := lookup(getenv, "HOURGLASS_UI_SERVE"); ok {
 		b, err := strconv.ParseBool(strings.TrimSpace(v))
 		if err != nil {
@@ -384,14 +388,15 @@ func (c Config) Redacted() map[string]any {
 			"client_secret": mask(c.OIDC.ClientSecret),
 			"redirect_url":  c.OIDC.RedirectURL,
 		},
-		"pressure": ext(c.Pressure),
-		"metering": ext(c.Metering),
-		"hooks":    hooks,
-		"seed":     c.Seed,
-		"ui":       map[string]any{"serve": c.UI.Serve},
-		"cors":     map[string]any{"allowed_origins": append([]string{}, c.CORS.AllowedOrigins...)},
-		"metrics":  map[string]any{"listen": c.Metrics.Listen},
-		"tls":      map[string]any{"cert": c.TLS.Cert, "key": c.TLS.Key}, // paths, not contents
+		"pressure":               ext(c.Pressure),
+		"metering":               ext(c.Metering),
+		"hooks":                  hooks,
+		"seed":                   c.Seed,
+		"preapproved_users_file": c.PreapprovedUsersFile, // a path; the file holds no secret
+		"ui":                     map[string]any{"serve": c.UI.Serve},
+		"cors":                   map[string]any{"allowed_origins": append([]string{}, c.CORS.AllowedOrigins...)},
+		"metrics":                map[string]any{"listen": c.Metrics.Listen},
+		"tls":                    map[string]any{"cert": c.TLS.Cert, "key": c.TLS.Key}, // paths, not contents
 	}
 	if c.Provider != nil {
 		out["provider"] = ext(*c.Provider)

@@ -176,26 +176,11 @@ func (a *API) setUserRoles(w http.ResponseWriter, r *http.Request) {
 				return adminRefuse(apierr.HasActiveHold, "the user holds a setup; force-release it first")
 			}
 		}
-		if err := tx.SetUserRoles(ctx, id, roles); err != nil {
+		statusAfter, ev, err := grantRolesTx(ctx, tx, a.d.Ledger, u, roles, now)
+		if err != nil {
 			return err
 		}
-		statusAfter := u.Status
-		if len(roles) > 0 {
-			if a.d.Ledger == nil {
-				return errors.New("api: ledger service is not configured")
-			}
-			if u.Status != store.StatusActive {
-				if err := tx.SetUserStatus(ctx, id, store.StatusActive); err != nil {
-					return err
-				}
-				statusAfter = store.StatusActive
-				approved = &hourglass.Event{Type: hourglass.EventUserApproved, Time: now,
-					User: &hourglass.User{ID: u.ID, Username: u.Username, Email: u.Email, Name: u.Name, Roles: roles}}
-			}
-			if err := a.d.Ledger.EnsureFirstAllowanceTx(tx, id, now); err != nil {
-				return err
-			}
-		}
+		approved = ev
 		return putAudit(ctx, tx, caller.ID, auditUserRoles, targetID("user", id),
 			map[string]any{"roles": nonNil(before), "status": u.Status},
 			map[string]any{"roles": roles, "status": statusAfter}, now)

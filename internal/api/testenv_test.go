@@ -67,6 +67,7 @@ type backend struct {
 	hook     *hourglasstest.FakeHook
 	h        http.Handler
 	deps     Deps
+	pre      *Preapprover
 	logs     *syncBuf
 	admin    store.User // the local admin
 }
@@ -82,6 +83,12 @@ type backendOpts struct {
 	startEvents bool
 	// keepMustChange leaves the local admin's forced password change in place.
 	keepMustChange bool
+	// preFile is the pre-approval file overlay (D4).
+	preFile []PreapprovalEntry
+	// emitter, when set, receives the events of sign-in (user.pending from
+	// internal/auth, user.approved from the pre-approval step) instead of
+	// the dispatcher.
+	emitter auth.Emitter
 }
 
 func newBackend(t *testing.T, o backendOpts) *backend {
@@ -101,10 +108,6 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 	if o.oidcIssuer != "" {
 		cfg.OIDC = auth.OIDCConfig{IssuerURL: o.oidcIssuer, ClientID: "cid", ClientSecret: "csecret", RedirectURL: "http://app.test/auth/callback"}
 	}
-	svc, err := auth.New(cfg, st, nil, log)
-	if err != nil {
-		t.Fatal(err)
-	}
 	admin, err := auth.EnsureLocalAdmin(ctx, st, testAdminPassword, log)
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +117,7 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 			t.Fatal(err)
 		}
 	}
-	b := &backend{t: t, st: st, auth: svc, logs: logs, admin: admin, clk: hourglasstest.NewFakeClock(o.start),
+	b := &backend{t: t, st: st, logs: logs, admin: admin, clk: hourglasstest.NewFakeClock(o.start),
 		prov: hourglasstest.NewFakeProvider(), pressure: hourglasstest.NewFakePressureSource(),
 		policy: hourglasstest.NewFakePolicy(), hook: hourglasstest.NewFakeHook()}
 	b.pressure.SetValue(0.8) // 2x with the default bands
@@ -132,12 +135,22 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 		loc = time.UTC
 	}
 	b.led = ledger.NewService(st, b.ev, b.clk, loc)
+	var preEvents auth.Emitter = b.ev
+	if o.emitter != nil {
+		preEvents = o.emitter
+	}
+	b.pre = NewPreapprover(PreapproverDeps{Store: st, Ledger: b.led, Events: preEvents, Clock: b.clk, Logger: log, File: o.preFile})
+	svc, err := auth.New(cfg, st, o.emitter, log, auth.WithPreapprover(b.pre))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.auth = svc
 	b.col = collector.New(collector.Deps{Store: st, Provider: b.prov, Pressure: b.pressure, Policy: b.policy,
 		Events: b.ev, Ledger: b.led, Clock: b.clk, Logger: log})
 	hs := holds.NewService(holds.Deps{Store: st, Events: b.ev, ProviderConfigured: true, Clock: b.clk, Logger: log,
 		Poll: func() holds.PollView { return b.col.LastPoll().ForHolds() }})
 	b.deps = Deps{Store: st, Auth: svc, Holds: hs, Ledger: b.led, Events: b.ev, Collector: b.col, Clock: b.clk,
-		Location: loc, Logger: log, Runtime: o.runtime, Fallback: o.fallback}
+		Location: loc, Logger: log, Runtime: o.runtime, Fallback: o.fallback, Preapprovals: b.pre}
 	b.h = New(b.deps)
 	return b
 }

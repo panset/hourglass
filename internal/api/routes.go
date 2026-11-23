@@ -62,6 +62,10 @@ var routes = []Route{
 	{"POST", "/api/v1/admin/users/{id}/reject", AccessAdmin, "rejectUser", ""},
 	{"POST", "/api/v1/admin/users/{id}/grants", AccessAdmin, "grantTokens", ""},
 	{"POST", "/api/v1/admin/users/{id}/reset", AccessAdmin, "resetBalance", ""},
+	// Pre-approved SSO users (docs/design/ledger-labels-onboarding.md, D3).
+	{"GET", "/api/v1/admin/preapprovals", AccessAdmin, "listPreapprovals", ""},
+	{"POST", "/api/v1/admin/preapprovals", AccessAdmin, "addPreapprovals", ""},
+	{"DELETE", "/api/v1/admin/preapprovals/{id}", AccessAdmin, "deletePreapproval", ""},
 	{"POST", "/api/v1/admin/setups", AccessAdmin, "createSetup", ""},
 	{"PUT", "/api/v1/admin/setups/{id}", AccessAdmin, "updateSetup", ""},
 	{"DELETE", "/api/v1/admin/setups/{id}", AccessAdmin, "deleteSetup", ""},

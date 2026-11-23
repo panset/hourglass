@@ -34,6 +34,7 @@ go_test(
         "helpers_test.go",
         "local_test.go",
         "oidc_test.go",
+        "preapproval_test.go",
         "service_test.go",
         "session_test.go",
     ],

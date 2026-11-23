@@ -11,6 +11,14 @@ listen: ":8080"
 database: /data/hourglass.db
 timezone: UTC
 seed: /etc/hourglass/seed.yaml    # imported once, on the first start with no setups (SET-7)
+# Optional read-only list of SSO users who get a role at their first sign-in
+# (or HOURGLASS_PREAPPROVED_USERS_FILE). Read once at start; an invalid file
+# stops the start. Never written. A .json file is JSON, anything else YAML:
+#   users:
+#     - email: alice@example.com
+#       roles: [developer]
+#     - email: bob@example.com        # roles default to [developer]
+# preapproved_users_file: /etc/hourglass/preapproved-users.yaml
 
 # OIDC comes from the environment: HOURGLASS_OIDC_ISSUER, _CLIENT_ID,
 # _CLIENT_SECRET and _REDIRECT_URL.

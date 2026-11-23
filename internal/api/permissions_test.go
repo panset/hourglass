@@ -76,7 +76,7 @@ const (
 )
 
 // Markers seeded into data the role-less actors must never see.
-var permMarkers = []string{"MKR-setup", "MKR-label", "MKR-details", "MKR-victim", "MKR-audit", "MKR-ledger", "MKR-service"}
+var permMarkers = []string{"MKR-setup", "MKR-label", "MKR-details", "MKR-victim", "MKR-audit", "MKR-ledger", "MKR-service", "MKR-preapproval"}
 
 type permFix struct {
 	*backend
@@ -154,7 +154,26 @@ func newPermFix(t *testing.T) *permFix {
 	if _, err := b.st.UpdateServiceAccount(ctx, mkr.acct.ID, "MKR-service description", mkr.acct.Scopes, true); err != nil {
 		t.Fatal(err)
 	}
+	// A marked pre-approval: only admins may see it.
+	if _, err := b.st.UpsertPreapproval(ctx, "MKR-preapproval@example.test", []string{store.RoleDeveloper}, b.admin.ID, b.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
 	return f
+}
+
+// newPreapproval creates a fresh database pre-approval for a probe to delete.
+func (f *permFix) newPreapproval() int64 {
+	f.t.Helper()
+	ctx := context.Background()
+	email := fmt.Sprintf("perm-target-%d@example.test", f.uniq())
+	if _, err := f.st.UpsertPreapproval(ctx, email, []string{store.RoleDeveloper}, f.admin.ID, f.clk.Now()); err != nil {
+		f.t.Fatal(err)
+	}
+	p, err := f.st.GetPreapprovalByEmail(ctx, email)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return p.ID
 }
 
 // newServiceAccount creates a fresh account (no token) for a probe to change.
@@ -241,6 +260,7 @@ var probeOps = map[string]bool{
 	"getSettings": true, "updateSettings": true, "getCollector": true, "listAudit": true,
 	"listServiceAccounts": true, "createServiceAccount": true, "updateServiceAccount": true, "deleteServiceAccount": true,
 	"issueServiceToken": true, "revokeServiceToken": true,
+	"listPreapprovals": true, "addPreapprovals": true, "deletePreapproval": true,
 	"reportPressure": true, "reportDeployments": true, "getIntegrationState": true, "serviceReleaseHold": true,
 }
 
@@ -311,6 +331,13 @@ func (f *permFix) probe(op string, a permActor, mode probeMode) permProbe {
 		return permProbe{method: "POST", path: "/api/v1/admin/users/" + id(f.victim.user.ID) + "/grants", body: `{"amount_tokens":1,"reason":"permissions test"}`}
 	case "resetBalance":
 		return permProbe{method: "POST", path: "/api/v1/admin/users/" + id(f.victim.user.ID) + "/reset", body: `{"reason":"permissions test"}`}
+	case "listPreapprovals":
+		return permProbe{method: "GET", path: "/api/v1/admin/preapprovals"}
+	case "addPreapprovals":
+		return permProbe{method: "POST", path: "/api/v1/admin/preapprovals",
+			body: fmt.Sprintf(`{"emails":["perm-added-%d@example.test"],"roles":["developer"]}`, f.uniq())}
+	case "deletePreapproval":
+		return permProbe{method: "DELETE", path: "/api/v1/admin/preapprovals/" + id(f.newPreapproval())}
 	case "createSetup":
 		return permProbe{method: "POST", path: "/api/v1/admin/setups", body: setupBody(fmt.Sprintf("created-%d", f.uniq()), `{}`, true)}
 	case "updateSetup":
@@ -599,6 +626,11 @@ var permExtraCover = map[string]string{
 	"reportDeployments":    "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
 	"getIntegrationState":  "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
 	"serviceReleaseHold":   "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
+	// Pre-approved SSO users (docs/design/ledger-labels-onboarding.md, D3):
+	// admin-only like every user management route.
+	"listPreapprovals":  "TestPRE5_RoutesRefusedForEveryPrincipalButAnAdmin and the exhaustive test",
+	"addPreapprovals":   "TestPRE5_RoutesRefusedForEveryPrincipalButAnAdmin and the exhaustive test",
+	"deletePreapproval": "TestPRE5_RoutesRefusedForEveryPrincipalButAnAdmin and the exhaustive test",
 }
 
 func routeOf(t *testing.T, op string) Route {

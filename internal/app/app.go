@@ -163,6 +163,15 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	if err != nil {
 		return err
 	}
+	// The pre-approval file is read once, here, before the database is
+	// touched; an invalid file stops the start (D4). Only the count is logged.
+	preFile, err := LoadPreapprovedUsers(cfg.PreapprovedUsersFile)
+	if err != nil {
+		return err
+	}
+	if cfg.PreapprovedUsersFile != "" {
+		log.Info("pre-approved users file read", "file", cfg.PreapprovedUsersFile, "entries", len(preFile))
+	}
 	if cfg.OIDC.Issuer == "" {
 		log.Info("OIDC is not configured; only the local admin can sign in")
 	}
@@ -223,11 +232,12 @@ func Run(ctx context.Context, opts runhook.Options) error {
 		Store: st, Events: disp, Poll: holdsPoll(coll), ProviderConfigured: ext.provider != nil,
 		Clock: clock, Logger: log,
 	})
+	pre := api.NewPreapprover(api.PreapproverDeps{Store: st, Ledger: led, Events: disp, Clock: clock, Logger: log, File: preFile})
 	authSvc, err := auth.New(auth.Config{
 		OIDC: auth.OIDCConfig{IssuerURL: cfg.OIDC.Issuer, ClientID: cfg.OIDC.ClientID,
 			ClientSecret: cfg.OIDC.ClientSecret, RedirectURL: cfg.OIDC.RedirectURL},
 		SessionKey: cfg.SessionKey, AllowedOrigins: cfg.CORS.AllowedOrigins,
-	}, st, disp, log, auth.WithClock(clock.Now))
+	}, st, disp, log, auth.WithClock(clock.Now), auth.WithPreapprover(pre))
 	if err != nil {
 		_ = disp.Close(ctx)
 		closeStore()
@@ -238,7 +248,7 @@ func Run(ctx context.Context, opts runhook.Options) error {
 	rt.ReportedPressureMaxAge, _, _ = config.ReportedMaxAge(&cfg.Pressure)
 	handler := api.New(api.Deps{
 		Store: st, Auth: authSvc, Holds: holdsSvc, Ledger: led, Events: disp, Collector: coll,
-		Clock: clock, Location: loc, Logger: log, Runtime: rt,
+		Clock: clock, Location: loc, Logger: log, Runtime: rt, Preapprovals: pre,
 		Fallback: uiFallback(opts.UI, cfg.UI.Serve, log),
 	})
 

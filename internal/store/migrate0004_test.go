@@ -41,7 +41,7 @@ func TestD40_Migration0004DropsResourceNameOverride(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM settings WHERE key = 'resource_name_template'`).Scan(&tmpl)
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM settings WHERE key = 'default_weight'`).Scan(&other)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 6 || cols != 0 || tmpl != 0 || other != 1 || ic != "ok" {
+	if v != 7 || cols != 0 || tmpl != 0 || other != 1 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d, override column %d, template rows %d, other settings %d, integrity %q", v, cols, tmpl, other, ic)
 	}
 	want := []Setup{
@@ -62,7 +62,7 @@ func TestD40_Migration0004DropsResourceNameOverride(t *testing.T) {
 	s = must(Open(path)) // reopen: nothing to run
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 6 {
+	if n != 7 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
 	}
 }

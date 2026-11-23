@@ -66,6 +66,12 @@ func adminCaller(w http.ResponseWriter, r *http.Request) (*auth.User, bool) {
 // after are marshalled as JSON; nil means null. Callers pass only values that
 // are safe to store (never secrets, never setup details).
 func putAudit(ctx context.Context, tx *store.Tx, actorID int64, action, target string, before, after any, at time.Time) error {
+	return putAuditAs(ctx, tx, &actorID, action, target, before, after, at)
+}
+
+// putAuditAs is putAudit with an optional actor: nil is the system (shown as
+// "system" in the audit log), as for a pre-approved sign-in.
+func putAuditAs(ctx context.Context, tx *store.Tx, actorID *int64, action, target string, before, after any, at time.Time) error {
 	enc := func(v any) (string, error) {
 		if v == nil {
 			return "", nil
@@ -81,7 +87,7 @@ func putAudit(ctx context.Context, tx *store.Tx, actorID int64, action, target s
 	if err != nil {
 		return err
 	}
-	_, err = tx.AppendAudit(ctx, store.AuditEntry{ActorID: &actorID, Action: action, Target: target,
+	_, err = tx.AppendAudit(ctx, store.AuditEntry{ActorID: actorID, Action: action, Target: target,
 		BeforeJSON: bj, AfterJSON: aj}, at)
 	return err
 }

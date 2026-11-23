@@ -18,6 +18,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/panset/hourglass/internal/api/apierr"
+	"github.com/panset/hourglass/internal/store"
 	"github.com/panset/hourglass/pkg/hourglass"
 	"golang.org/x/oauth2"
 )
@@ -252,6 +253,9 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		GivenName         string `json:"given_name"`
 		FamilyName        string `json:"family_name"`
 		PreferredUsername string `json:"preferred_username"`
+		// EmailVerified is a boolean or the string "true" / "false"; absent
+		// counts as verified (D1).
+		EmailVerified json.RawMessage `json:"email_verified"`
 	}
 	if err := idt.Claims(&claims); err != nil {
 		fail("bad id token claims", err)
@@ -269,7 +273,11 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		callbackError(w, r, apierr.Internal)
 		return
 	}
-	if created && s.em != nil {
+	// A pre-approved user is approved here and gets user.approved instead of
+	// user.pending. A failed approval leaves the user pending and the sign-in
+	// goes on (PRE-8).
+	approved := s.applyPreapproval(r.Context(), su, claims.Email, claims.EmailVerified)
+	if created && !approved && s.em != nil {
 		s.em.Emit(hourglass.Event{Type: hourglass.EventUserPending, Time: now,
 			User: &hourglass.User{ID: su.ID, Username: su.Username, Email: su.Email, Name: su.Name, Roles: []string{}}})
 	}
@@ -282,6 +290,47 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// and shows the not-authorized page for a user without a role.
 	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// applyPreapproval runs the pre-approval step (D1) for a signed-in SSO user
+// and reports whether it approved them. It applies only to a pending SSO user
+// whose email claim is not empty and whose email_verified claim is not false;
+// the step itself checks the status again in its transaction and looks the
+// email up. An error is logged, never returned: the sign-in succeeds and the
+// user stays pending.
+func (s *Service) applyPreapproval(ctx context.Context, su store.User, email string, verified json.RawMessage) bool {
+	if s.pre == nil || su.AuthSource != store.AuthOIDC || su.Status != store.StatusPending {
+		return false
+	}
+	if strings.TrimSpace(email) == "" || !emailVerified(verified) {
+		return false
+	}
+	ok, err := s.pre.ApplyPreapproval(ctx, su.ID, email)
+	if err != nil {
+		s.log.Error("applying a pre-approval failed; the user stays pending", "user_id", su.ID, "err", err)
+		return false
+	}
+	return ok
+}
+
+// emailVerified reads the email_verified claim (D1): absent or null is
+// verified, because several enterprise providers never send it; true and the
+// string "true" are verified; false, the string "false" and any other value
+// are not.
+func emailVerified(raw json.RawMessage) bool {
+	v := strings.TrimSpace(string(raw))
+	if v == "" || v == "null" {
+		return true
+	}
+	var b bool
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err == nil {
+		return strings.EqualFold(strings.TrimSpace(str), "true")
+	}
+	return false
 }
 
 // exchangeErr reduces a token endpoint error to its OAuth error code and

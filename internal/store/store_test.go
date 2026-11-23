@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 6 {
+	if n != 7 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -114,6 +114,8 @@ func TestSchemaColumnsMatchSpec(t *testing.T) {
 		"reported_pressure":         {"value", "observed_at", "received_at", "service_account"},
 		"reported_deployments_meta": {"observed_at", "received_at", "service_account"},
 		"reported_deployments":      {"setup_name", "labels_json"},
+
+		"preapprovals": {"id", "email", "roles_json", "created_by", "created_at", "used_at", "used_by"},
 	}
 	s := openTemp(t)
 	for table, cols := range spec {
@@ -957,7 +959,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&rows)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 6 || rows != 14 || ic != "ok" {
+	if v != 7 || rows != 14 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d, ledger rows %d, integrity %q", v, rows, ic)
 	}
 	var idx []string
@@ -988,7 +990,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s = must(Open(path)) // reopen: nothing to run
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 6 {
+	if n != 7 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
 	}
 }

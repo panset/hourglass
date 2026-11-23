@@ -20,8 +20,8 @@ func concretePath(p string) string {
 	return strings.NewReplacer("{id}", "1", "{tokenId}", "1").Replace(p)
 }
 
-// seed creates setup 1, hold 1 (held by a developer), service account 1 and
-// its token 1, so that every id of concretePath names something that exists.
+// seed creates setup 1, hold 1 (held by a developer), service account 1, its
+// token 1 and pre-approval 1, so that every id of concretePath names something that exists.
 func (e *env) seed() {
 	e.t.Helper()
 	ctx := context.Background()
@@ -38,6 +38,9 @@ func (e *env) seed() {
 	if tok, err := e.st.InsertServiceToken(ctx, 1, "seed-hash", nil, e.clk.Now()); err != nil || tok.ID != 1 {
 		e.t.Fatalf("seed service token: %d %v", tok.ID, err)
 	}
+	if _, err := e.st.UpsertPreapproval(ctx, "seed@example.test", []string{store.RoleDeveloper}, e.admin.ID, e.clk.Now()); err != nil {
+		e.t.Fatalf("seed pre-approval: %v", err)
+	}
 }
 
 func TestAPI_RouteTableIsConsistent(t *testing.T) {
@@ -50,8 +53,8 @@ func TestAPI_RouteTableIsConsistent(t *testing.T) {
 		}
 		seen[k], ops[r.OperationID] = true, true
 	}
-	if len(Routes()) != 40 {
-		t.Errorf("routes = %d, want the 40 operations of api/openapi.yaml", len(Routes()))
+	if len(Routes()) != 43 {
+		t.Errorf("routes = %d, want the 43 operations of api/openapi.yaml", len(Routes()))
 	}
 	// Every non-auth operation has a handler, and the handler map has nothing extra.
 	hs := (&API{}).handlers()

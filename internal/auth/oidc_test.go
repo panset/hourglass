@@ -46,6 +46,8 @@ type fakeIssuer struct {
 	nonceOverride    string        // "" = the requested nonce
 	ttl              time.Duration // 0 = 5 minutes
 	tokenRequests    int
+	// claims overrides or adds ID token claims; a nil value removes the claim.
+	claims map[string]any
 }
 
 type authz struct {
@@ -168,6 +170,15 @@ func (f *fakeIssuer) token(w http.ResponseWriter, r *http.Request) {
 	for k, v := range extra {
 		claims[k] = v
 	}
+	f.mu.Lock()
+	for k, v := range f.claims {
+		if v == nil {
+			delete(claims, k)
+		} else {
+			claims[k] = v
+		}
+	}
+	f.mu.Unlock()
 	idt := f.sign(claims)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "at-not-real", "token_type": "Bearer", "expires_in": 300, "id_token": idt})

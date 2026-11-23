@@ -435,7 +435,9 @@ func newWorld(t *testing.T) *world {
 	b := newBackend(t, backendOpts{start: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC), startEvents: true, oidcIssuer: idp.URL,
 		runtime: Runtime{Provider: "fake-provider", PressureSource: "fake-pressure", MeteringPolicy: "fake-policy",
 			Hooks: []string{"fake-hook"}, OIDCIssuer: idp.URL,
-			ReportedProviderMaxAge: 10 * time.Minute, ReportedPressureMaxAge: 10 * time.Minute}})
+			ReportedProviderMaxAge: 10 * time.Minute, ReportedPressureMaxAge: 10 * time.Minute},
+		preFile: []PreapprovalEntry{{Email: "both@example.test", Roles: []string{store.RoleAdmin}},
+			{Email: "file-only@example.test", Roles: []string{store.RoleDeveloper}}}})
 	b.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "lab is busy"})
 	w := &world{backend: b, c: newContract(t), idp: idp}
 	ctx := context.Background()
@@ -676,6 +678,44 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		rec := c.call(w.backend, false, tc.method, tc.path, tc.as, true, tc.body)
 		w.status(rec, tc.status)
 	}
+	// Pre-approvals (PRE-5, PRE-6): add, update, a used entry, the list with
+	// both sources, the refusals and a delete.
+	w.must(200, "POST", "/api/v1/admin/preapprovals", &w.adm, `{"emails":["new@example.test"," Both@Example.test "],"roles":["developer"]}`)
+	w.must(200, "POST", "/api/v1/admin/preapprovals", &w.adm, `{"emails":["new@example.test"],"roles":["admin","developer"]}`)
+	{
+		ctx := context.Background()
+		p, err := w.st.GetPreapprovalByEmail(ctx, "both@example.test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.st.MarkPreapprovalUsed(ctx, p.ID, w.devA.user.ID, w.clk.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list := w.must(200, "GET", "/api/v1/admin/preapprovals", &w.adm, "")
+	if n := len(list["preapprovals"].([]any)); n != 4 {
+		t.Errorf("pre-approval list holds %d entries, want 4 (two database, two file)", n)
+	}
+	newID := ""
+	for _, e := range list["preapprovals"].([]any) {
+		if m := e.(map[string]any); m["email"] == "new@example.test" {
+			newID = fmt.Sprint(int64(m["id"].(float64)))
+		}
+	}
+	for _, tc := range []struct {
+		status       int
+		method, path string
+		body         string
+	}{
+		{400, "POST", "/api/v1/admin/preapprovals", `{"emails":["not-an-email"],"roles":["developer"]}`},
+		{400, "POST", "/api/v1/admin/preapprovals", `{"emails":["a@example.test"],"roles":[]}`},
+		{400, "POST", "/api/v1/admin/preapprovals", `{"emails":[],"roles":["developer"]}`},
+		{404, "DELETE", "/api/v1/admin/preapprovals/99999", ""},
+		{400, "DELETE", "/api/v1/admin/preapprovals/x", ""},
+	} {
+		w.status(c.call(w.backend, false, tc.method, tc.path, &w.adm, true, tc.body), tc.status)
+	}
+	w.must(204, "DELETE", "/api/v1/admin/preapprovals/"+newID, &w.adm, "")
 	// Service accounts: the admin routes with data, and their refusals.
 	acct := w.must(201, "POST", "/api/v1/admin/service-accounts", &w.adm,
 		`{"name":"deployer","description":"lab automation","scopes":["state:read","deployments:write"]}`)

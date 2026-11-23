@@ -476,6 +476,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/preapprovals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pre-approved SSO users from the database and the file
+         * @description PRE-5, PRE-6. Every pre-approval, by email: the database list managed
+         *     here (`source` = `database`) and the read-only file named by
+         *     `preapproved_users_file` (`source` = `config`). An email in both
+         *     sources appears twice, the database entry first. A file entry has
+         *     `id`, `created_at`, `created_by`, `used_at` and `used_by` null. A
+         *     database entry has `used_at` and `used_by` null until a pending SSO
+         *     user with that email claim first signs in; an entry is never consumed.
+         *     A user who signs in with a matching email claim gets the union of the
+         *     roles of both sources.
+         *
+         */
+        get: operations["listPreapprovals"];
+        put?: never;
+        /**
+         * Pre-approve SSO users by email
+         * @description PRE-5. Adds 1 to 1,000 emails to the database list with one role set.
+         *     An email already in the list gets the new roles and keeps its id,
+         *     creator and use record. Emails are stored trimmed and in lower case;
+         *     an email given more than once in a request counts once. An email is
+         *     valid when it is at most 254 characters after trimming, has exactly
+         *     one `@` with text on both sides, and contains no whitespace, comma or
+         *     `*`. Roles must not be empty and follow the rules of `setUserRoles`.
+         *     All or nothing: any invalid email or role is 400 `validation` naming
+         *     the first bad value (`field` = `emails` or `roles`), and nothing is
+         *     stored. A pending user is approved at their next sign-in. Audited as
+         *     `preapproval.add` with the emails and roles.
+         *
+         */
+        post: operations["addPreapprovals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/preapprovals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a pre-approval from the database list
+         * @description PRE-5. Removes one database entry. It changes no user, including one
+         *     it already approved. File entries have no id and cannot be removed
+         *     here. Audited as `preapproval.delete`.
+         *
+         */
+        delete: operations["deletePreapproval"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/setups": {
         parameters: {
             query?: never;
@@ -1318,6 +1385,56 @@ export interface components {
         };
         SetRolesRequest: {
             roles: components["schemas"]["Role"][];
+        };
+        /**
+         * @description `database`: added through the admin API or page. `config`: read from `preapproved_users_file`.
+         * @enum {string}
+         */
+        PreapprovalSource: "database" | "config";
+        PreapprovalUser: {
+            /** Format: int64 */
+            id: number;
+            /** @description The display name, or "unknown user". */
+            name: string;
+        } | null;
+        Preapproval: {
+            /**
+             * Format: int64
+             * @description Null for a file entry.
+             */
+            id: number | null;
+            /** @description Trimmed and in lower case. */
+            email: string;
+            roles: components["schemas"]["Role"][];
+            source: components["schemas"]["PreapprovalSource"];
+            /**
+             * Format: date-time
+             * @description Null for a file entry.
+             */
+            created_at: string | null;
+            /** @description The admin who added the entry. Null for a file entry. */
+            created_by: components["schemas"]["PreapprovalUser"] | null;
+            /**
+             * Format: date-time
+             * @description The first sign-in it approved; null until used, always null for a file entry.
+             */
+            used_at: string | null;
+            /** @description The user that first sign-in approved; null until used, always null for a file entry. */
+            used_by: components["schemas"]["PreapprovalUser"] | null;
+        };
+        PreapprovalList: {
+            /** @description By email; for an email in both sources, the database entry first. */
+            preapprovals: components["schemas"]["Preapproval"][];
+        };
+        AddPreapprovalsRequest: {
+            emails: string[];
+            roles: components["schemas"]["Role"][];
+        };
+        AddPreapprovalsResult: {
+            /** @description Emails that were not in the database list. */
+            added: number;
+            /** @description Emails already in the list whose roles were replaced. */
+            updated: number;
         };
         GrantRequest: {
             /**
@@ -2416,6 +2533,88 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPreapprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pre-approvals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreapprovalList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    addPreapprovals: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPreapprovalsRequest"];
+            };
+        };
+        responses: {
+            /** @description How many emails were added and how many existing entries were updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddPreapprovalsResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deletePreapproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

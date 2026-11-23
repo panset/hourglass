@@ -52,11 +52,28 @@ type Emitter interface {
 	Emit(hourglass.Event)
 }
 
+// Preapprover is the approval step of a pre-approved SSO sign-in
+// (docs/design/ledger-labels-onboarding.md, D1). internal/app supplies it, so
+// this package needs neither the ledger service nor the pre-approval list.
+type Preapprover interface {
+	// ApplyPreapproval approves the SSO user userID when a pre-approval
+	// exists for email, the ID token's email claim as sent. It runs one
+	// transaction that checks again that the user is pending, emits
+	// user.approved after commit, and reports whether it approved the user.
+	// It is called only for a pending SSO user with a non-empty email claim
+	// whose email_verified claim is not false.
+	ApplyPreapproval(ctx context.Context, userID int64, email string) (approved bool, err error)
+}
+
 // Option configures a Service.
 type Option func(*Service)
 
 // WithClock replaces time.Now (tests).
 func WithClock(now func() time.Time) Option { return func(s *Service) { s.now = now } }
+
+// WithPreapprover sets the pre-approval step run at the end of each SSO
+// sign-in. Without one, sign-in leaves a new user pending, as before.
+func WithPreapprover(p Preapprover) Option { return func(s *Service) { s.pre = p } }
 
 // WithHTTPClient sets the client used for OIDC discovery, JWKS and the
 // token exchange. The default has a 10 second timeout.
@@ -70,6 +87,7 @@ type Service struct {
 	cfg        Config
 	st         *store.Store
 	em         Emitter
+	pre        Preapprover // nil: no pre-approval step
 	log        *slog.Logger
 	now        func() time.Time
 	httpClient *http.Client

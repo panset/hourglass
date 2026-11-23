@@ -57,7 +57,7 @@ tags:
   - name: Holds
     description: Release and force-release (HOLD-2).
   - name: Admin users
-    description: Users, roles, grants and resets (ADM-1, ADM-5, LED-4, LED-5).
+    description: Users, roles, grants, resets and pre-approved SSO users (ADM-1, ADM-5, LED-4, LED-5, PRE-5).
   - name: Admin setups
     description: Setup inventory (SET-1 to SET-5).
   - name: Admin rules
@@ -692,6 +692,100 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/preapprovals:
+    get:
+      operationId: listPreapprovals
+      tags: [Admin users]
+      summary: List pre-approved SSO users from the database and the file
+      description: |
+        PRE-5, PRE-6. Every pre-approval, by email: the database list managed
+        here (`source` = `database`) and the read-only file named by
+        `preapproved_users_file` (`source` = `config`). An email in both
+        sources appears twice, the database entry first. A file entry has
+        `id`, `created_at`, `created_by`, `used_at` and `used_by` null. A
+        database entry has `used_at` and `used_by` null until a pending SSO
+        user with that email claim first signs in; an entry is never consumed.
+        A user who signs in with a matching email claim gets the union of the
+        roles of both sources.
+      x-roles: admin
+      responses:
+        '200':
+          description: Pre-approvals.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PreapprovalList'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: addPreapprovals
+      tags: [Admin users]
+      summary: Pre-approve SSO users by email
+      description: |
+        PRE-5. Adds 1 to 1,000 emails to the database list with one role set.
+        An email already in the list gets the new roles and keeps its id,
+        creator and use record. Emails are stored trimmed and in lower case;
+        an email given more than once in a request counts once. An email is
+        valid when it is at most 254 characters after trimming, has exactly
+        one `@` with text on both sides, and contains no whitespace, comma or
+        `*`. Roles must not be empty and follow the rules of `setUserRoles`.
+        All or nothing: any invalid email or role is 400 `validation` naming
+        the first bad value (`field` = `emails` or `roles`), and nothing is
+        stored. A pending user is approved at their next sign-in. Audited as
+        `preapproval.add` with the emails and roles.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AddPreapprovalsRequest'}
+      responses:
+        '200':
+          description: How many emails were added and how many existing entries were updated.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AddPreapprovalsResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/preapprovals/{id}:
+    delete:
+      operationId: deletePreapproval
+      tags: [Admin users]
+      summary: Remove a pre-approval from the database list
+      description: |
+        PRE-5. Removes one database entry. It changes no user, including one
+        it already approved. File entries have no id and cannot be removed
+        here. Audited as `preapproval.delete`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/admin/setups:
@@ -1969,6 +2063,67 @@ components:
           uniqueItems: true
           items: {$ref: '#/components/schemas/Role'}
       additionalProperties: false
+    PreapprovalSource:
+      type: string
+      enum: [database, config]
+      description: '`database`: added through the admin API or page. `config`: read from `preapproved_users_file`.'
+    PreapprovalUser:
+      type: object
+      nullable: true
+      required: [id, name]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string, description: 'The display name, or "unknown user".'}
+    Preapproval:
+      type: object
+      required: [id, email, roles, source, created_at, created_by, used_at, used_by]
+      properties:
+        id: {type: integer, format: int64, nullable: true, description: Null for a file entry.}
+        email: {type: string, description: Trimmed and in lower case.}
+        roles:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/Role'}
+        source: {$ref: '#/components/schemas/PreapprovalSource'}
+        created_at: {type: string, format: date-time, nullable: true, description: Null for a file entry.}
+        created_by:
+          allOf: [{$ref: '#/components/schemas/PreapprovalUser'}]
+          nullable: true
+          description: The admin who added the entry. Null for a file entry.
+        used_at: {type: string, format: date-time, nullable: true, description: 'The first sign-in it approved; null until used, always null for a file entry.'}
+        used_by:
+          allOf: [{$ref: '#/components/schemas/PreapprovalUser'}]
+          nullable: true
+          description: The user that first sign-in approved; null until used, always null for a file entry.
+    PreapprovalList:
+      type: object
+      required: [preapprovals]
+      properties:
+        preapprovals:
+          type: array
+          description: By email; for an email in both sources, the database entry first.
+          items: {$ref: '#/components/schemas/Preapproval'}
+    AddPreapprovalsRequest:
+      type: object
+      required: [emails, roles]
+      properties:
+        emails:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: {type: string}
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Role'}
+      additionalProperties: false
+    AddPreapprovalsResult:
+      type: object
+      required: [added, updated]
+      properties:
+        added: {type: integer, description: Emails that were not in the database list.}
+        updated: {type: integer, description: Emails already in the list whose roles were replaced.}
     GrantRequest:
       type: object
       required: [amount_tokens, reason]

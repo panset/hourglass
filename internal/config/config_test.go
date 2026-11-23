@@ -295,3 +295,23 @@ func TestCFG_TLSCertAndKeyAreAPair(t *testing.T) {
 		}
 	}
 }
+
+// PRE-6: preapproved_users_file is optional and empty by default, comes from
+// the file or the environment, and its path is shown in the redacted view.
+func TestPRE6_PreapprovedUsersFileKey(t *testing.T) {
+	if d := Defaults(); d.PreapprovedUsersFile != "" || d.Redacted()["preapproved_users_file"] != "" {
+		t.Fatalf("default %+v", d.Redacted()["preapproved_users_file"])
+	}
+	p := writeFile(t, "preapproved_users_file: /f/users.yaml\n")
+	c, err := Load(p, env(nil))
+	if err != nil || c.PreapprovedUsersFile != "/f/users.yaml" {
+		t.Fatalf("file: %v %q", err, c.PreapprovedUsersFile)
+	}
+	c, err = Load(p, env(map[string]string{"HOURGLASS_PREAPPROVED_USERS_FILE": "/e/users.json"}))
+	if err != nil || c.PreapprovedUsersFile != "/e/users.json" {
+		t.Fatalf("env over file: %v %q", err, c.PreapprovedUsersFile)
+	}
+	if got := c.Redacted()["preapproved_users_file"]; got != "/e/users.json" {
+		t.Errorf("redacted view: %v", got)
+	}
+}
