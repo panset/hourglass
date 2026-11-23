@@ -19,13 +19,15 @@ import { useSession } from "../../shell/session";
 import { BarChart } from "./BarChart";
 import {
   elapsedSince,
-  getMyLedger,
+  getMyLedgerPage,
+  LEDGER_PAGE_SIZE,
   isPendingRelease,
   getMyUsage,
   listActiveHolds,
   releaseHold,
   type Hold,
   type LedgerEntry,
+  type LedgerView,
 } from "./holdApi";
 import { PressureBar } from "./PressureBar";
 import styles from "./usage.module.css";
@@ -36,7 +38,7 @@ const typeLabel = (e: LedgerEntry) => {
 };
 
 const detail = (e: LedgerEntry) => {
-  if (e.setup_name) return e.setup_name;
+  if (e.setup_name) return e.entry_count > 1 ? `${e.setup_name} · ${e.entry_count} polls` : e.setup_name;
   const parts = [e.actor_name, e.reason].filter(Boolean);
   return parts.join(": ");
 };
@@ -54,6 +56,10 @@ export default function UsagePage() {
   const toast = useToast();
   const personal = !session.is_local_admin;
   const [period, setPeriod] = useState<string | undefined>();
+  const [view, setView] = useState<LedgerView>("day");
+  // Cursors of the pages visited after the first: the page shown is cursors[cursors.length - 1], or the first page when empty.
+  // A cursor is meant for the period and view it came from, so changing either drops them all.
+  const [cursors, setCursors] = useState<string[]>([]);
   const [releasing, setReleasing] = useState<number | null>(null);
   const [releaseError, setReleaseError] = useState<string>();
 
@@ -62,7 +68,17 @@ export default function UsagePage() {
   const me = useApi(getMe, [], { ...poll, enabled: personal });
   const holds = useApi(listActiveHolds, [], { ...poll, enabled: personal });
   const usage = useApi(() => getMyUsage(period), [period], { ...poll, enabled: personal });
-  const ledger = useApi(() => getMyLedger(period), [period], { ...poll, enabled: personal });
+  const cursor = cursors[cursors.length - 1];
+  const ledger = useApi(() => getMyLedgerPage(period, view, cursor), [period, view, cursor], { ...poll, enabled: personal });
+  const changePeriod = (p: string) => {
+    setPeriod(p);
+    setCursors([]);
+  };
+  const changeView = (v: LedgerView) => {
+    setView(v);
+    setCursors([]);
+  };
+  const nextCursor = ledger.data?.next_cursor ?? null;
 
   const currentPeriod = me.data?.period;
   const selected = period ?? currentPeriod ?? usage.data?.period ?? "";
@@ -105,7 +121,7 @@ export default function UsagePage() {
           {personal && options.length > 0 ? (
             <label className={styles.month}>
               Month
-              <Select value={selected} onChange={(e) => setPeriod(e.target.value)}>
+              <Select value={selected} onChange={(e) => changePeriod(e.target.value)}>
                 {options.map((o) => (
                   <option key={o} value={o}>
                     {formatPeriod(o)}
@@ -276,10 +292,18 @@ export default function UsagePage() {
                 <h2 style={{ fontSize: 16, margin: "0 0 12px" }}>Ledger</h2>
                 {ledger.loading && !ledger.data ? <Loading /> : null}
                 {ledger.error && !ledger.data ? <Failed error={ledger.error} /> : null}
+                <div className={styles.viewSwitch} role="group" aria-label="Ledger view">
+                  <Button aria-pressed={view === "day"} onClick={() => changeView("day")}>
+                    By day
+                  </Button>
+                  <Button aria-pressed={view === "poll"} onClick={() => changeView("poll")}>
+                    Every poll
+                  </Button>
+                </div>
                 {ledger.data ? (
                   <Table<LedgerEntry>
                     label="Ledger"
-                    rows={ledger.data.entries}
+                    rows={ledger.data.entries.slice(0, LEDGER_PAGE_SIZE)}
                     rowKey={(e) => e.id}
                     emptyMessage="No ledger entries for this period."
                     columns={[
@@ -291,6 +315,17 @@ export default function UsagePage() {
                     ]}
                   />
                 ) : null}
+                <div className={styles.pager}>
+                  <Button disabled={cursors.length === 0 || ledger.loading} onClick={() => setCursors((c) => c.slice(0, -1))}>
+                    Newer
+                  </Button>
+                  <Button
+                    disabled={nextCursor === null || ledger.loading}
+                    onClick={() => nextCursor !== null && setCursors((c) => [...c, nextCursor])}
+                  >
+                    Older
+                  </Button>
+                </div>
               </section>
             </div>
           </>

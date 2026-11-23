@@ -50,7 +50,8 @@ Top bar (see Shared), "My usage" active. Content: max width 1216 px, 32 px paddi
      - Nov 18, 17:25 | Debit · 2× | setup-04 | −0.17 | 142.2
      - Nov 12, 10:02 | Grant | Riley Admin: release week | +40.00 | 213.5
      - Nov 1, 00:00 | Allowance | (blank) | +300.00 | 300.0
-     - Link below: "Show all entries, grouped by day".
+     - Link below: "Show all entries, grouped by day". (Built as the view switch below; see the next bullets.)
+     - Ledger paging (UI-8, design A5): above the table a two-button switch "By day" (default, requests `rollup=day&limit=20`) and "Every poll" (requests `limit=20`), the pressed one has `aria-pressed="true"`; the table shows at most 20 rows; below it the buttons "Newer" (disabled on the first page) and "Older" (disabled when `next_cursor` is null). Visited cursors are kept in the page; changing the month or the view drops them and shows the first page. The 60-second poll and the reload after a release refetch the page being shown. The Type cell shows the multiplier only when it is not null; the Detail cell shows "setup-name · N polls" when `entry_count` is above 1.
 
 States shown: Deployed hold. Not shown: empty state, an overdrawn balance on this page, an error for a refused release (text is in the spec).
 

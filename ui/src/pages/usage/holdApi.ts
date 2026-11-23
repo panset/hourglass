@@ -7,7 +7,7 @@ import { formatDuration } from "../../lib/format";
 type S = components["schemas"];
 export type Hold = S["Hold"];
 export type LedgerResponse = S["LedgerResponse"];
-export type LedgerEntry = S["LedgerEntry"];
+export type LedgerEntry = S["LedgerViewEntry"];
 export type UsageResponse = S["UsageResponse"];
 export type SetupList = S["SetupList"];
 export type Setup = S["Setup"];
@@ -16,7 +16,21 @@ export const listActiveHolds = () => api.get<{ holds: Hold[] }>("/api/v1/me/hold
 
 const periodQuery = (period?: string) => (period ? `?period=${encodeURIComponent(period)}` : "");
 export const getMyUsage = (period?: string) => api.get<UsageResponse>(`/api/v1/me/usage${periodQuery(period)}`);
-export const getMyLedger = (period?: string) => api.get<LedgerResponse>(`/api/v1/me/ledger${periodQuery(period)}`);
+
+/** The two Ledger views (A5): `day` requests `rollup=day`, `poll` sends no `rollup`. */
+export type LedgerView = "day" | "poll";
+/** Rows per Ledger page (UI-8). */
+export const LEDGER_PAGE_SIZE = 20;
+
+/** One page of the ledger: `limit=20`, plus `rollup=day` in the By day view, plus the cursor of the page. */
+export const getMyLedgerPage = (period: string | undefined, view: LedgerView, cursor?: string) => {
+  const q = new URLSearchParams();
+  if (period) q.set("period", period);
+  if (view === "day") q.set("rollup", "day");
+  q.set("limit", String(LEDGER_PAGE_SIZE));
+  if (cursor) q.set("cursor", cursor);
+  return api.get<LedgerResponse>(`/api/v1/me/ledger?${q.toString()}`);
+};
 
 /**
  * Normal release: empty body. The API answers 200 with the released hold, or 202 with the still-active

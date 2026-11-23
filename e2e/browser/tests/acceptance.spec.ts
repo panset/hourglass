@@ -147,8 +147,8 @@ interface LedgerRow {
   mult?: number;
 }
 
-/** My usage > Ledger, oldest first. */
-async function readLedger(page: Page): Promise<LedgerRow[]> {
+/** Rows of the Ledger table as shown on the current page, newest first. */
+async function ledgerPageRows(page: Page): Promise<LedgerRow[]> {
   const rows = page.getByRole("table", { name: "Ledger" }).locator("tbody tr");
   const n = await rows.count();
   const out: LedgerRow[] = [];
@@ -157,6 +157,42 @@ async function readLedger(page: Page): Promise<LedgerRow[]> {
     if (c.length < 5) continue;
     const m = /(\d+(?:\.\d+)?)×/.exec(c[1]!);
     out.push({ when: c[0]!, type: c[1]!, detail: c[2]!, amount: num(c[3]!), balance: num(c[4]!), mult: m ? Number(m[1]) : undefined });
+  }
+  return out;
+}
+
+/**
+ * Clicks a Ledger control and waits for the page it requests to be shown. `want` selects the request by its query
+ * string; the answer's entries decide when the table has caught up (row count, then two animation frames for the commit).
+ */
+async function ledgerClick(page: Page, name: string, want: (q: URLSearchParams) => boolean): Promise<{ next_cursor: string | null }> {
+  const answered = page.waitForResponse((r) => {
+    const u = new URL(r.url());
+    return u.pathname === "/api/v1/me/ledger" && want(u.searchParams);
+  });
+  await page.getByRole("button", { name, exact: true }).click();
+  const body = (await (await answered).json()) as { entries: unknown[]; next_cursor: string | null };
+  await expect(page.getByRole("table", { name: "Ledger" }).locator("tbody tr")).toHaveCount(Math.max(body.entries.length, 1));
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+  return body;
+}
+
+/**
+ * My usage > Ledger, oldest first. Switches to the Every poll view (single debits, as before the By day view existed)
+ * and walks every page with Older. The view survives a month change, so it is set from By day each time: that makes the
+ * walk start on the first page whatever the page showed before.
+ */
+async function readLedger(page: Page): Promise<LedgerRow[]> {
+  const poll = page.getByRole("button", { name: "Every poll", exact: true });
+  if ((await poll.getAttribute("aria-pressed")) === "true") {
+    await ledgerClick(page, "By day", (q) => q.get("rollup") === "day" && !q.has("cursor"));
+  }
+  let body = await ledgerClick(page, "Every poll", (q) => !q.has("rollup") && !q.has("cursor"));
+  const out: LedgerRow[] = await ledgerPageRows(page);
+  for (let guard = 0; body.next_cursor !== null && guard < 1000; guard++) {
+    const cursor = body.next_cursor;
+    body = await ledgerClick(page, "Older", (q) => !q.has("rollup") && q.get("cursor") === cursor);
+    out.push(...(await ledgerPageRows(page)));
   }
   // The table must be newest first: each row's balance is the next (older) row's balance plus its own
   // amount (within display rounding). Assert that for every pair, then return the rows oldest first.

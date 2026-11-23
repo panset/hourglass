@@ -20,3 +20,7 @@
 .stack { display: flex; flex-direction: column; gap: 12px; }
 
 .releasing { display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+
+.viewSwitch { display: flex; gap: var(--gap-control); margin: 0 0 8px; }
+.viewSwitch button[aria-pressed="true"] { font-weight: 600; border-color: var(--color-text); }
+.pager { display: flex; gap: var(--gap-control); margin: 8px 0 0; }
