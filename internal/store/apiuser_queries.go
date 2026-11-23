@@ -141,11 +141,13 @@ func (q *queries) DebitEntries(ctx context.Context, userID int64, from, to time.
 // DebitMultipliers returns, per ledger entry id, the pressure multiplier the
 // debit was charged at, found through the usage sample with the same hold and
 // poll time (the collector writes a debit with created_at = polled_at).
-// Debits whose sample was pruned are absent.
+// Debits whose sample was pruned are absent, and so are rolled-up debits
+// (LED-15): such a row stands for many polls, and the sample at its
+// created_at is only the last of them.
 func (q *queries) DebitMultipliers(ctx context.Context, userID int64, period string) (map[int64]float64, error) {
 	rows, err := q.db.QueryContext(ctx, `SELECT l.id, u.multiplier FROM ledger l
 		JOIN usage_samples u ON u.hold_id = l.hold_id AND u.polled_at = l.created_at
-		WHERE l.user_id = ? AND l.period = ? AND l.type = 'debit'`, userID, period)
+		WHERE l.user_id = ? AND l.period = ? AND l.type = 'debit' AND l.rollup_count IS NULL`, userID, period)
 	if err != nil {
 		return nil, err
 	}

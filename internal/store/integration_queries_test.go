@@ -360,7 +360,7 @@ func TestMigration0005UpgradesVersion4Database(t *testing.T) {
 	var ic string
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 5 || ic != "ok" {
+	if v != 6 || ic != "ok" {
 		t.Fatalf("version %d integrity %q", v, ic)
 	}
 	h := must(s.GetHold(ctx, 1))

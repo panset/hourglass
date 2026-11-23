@@ -19,21 +19,25 @@ type LedgerEntry struct {
 	ActorID   *int64
 	Reason    string
 	CreatedAt time.Time
+	// RollupCount is the number of raw debit rows a rolled-up debit replaced
+	// (LED-7); 0 for every other row (stored as null).
+	RollupCount int
 }
 
-const ledgerCols = `id, user_id, period, type, amount_mt, hold_id, actor_id, reason, created_at`
+const ledgerCols = `id, user_id, period, type, amount_mt, hold_id, actor_id, reason, created_at, rollup_count`
 
 func scanLedger(r rowScanner) (LedgerEntry, error) {
 	var (
 		e         LedgerEntry
 		hold, act sql.NullInt64
+		rollup    sql.NullInt64
 		at        string
 		err       error
 	)
-	if err = r.Scan(&e.ID, &e.UserID, &e.Period, &e.Type, &e.AmountMT, &hold, &act, &e.Reason, &at); err != nil {
+	if err = r.Scan(&e.ID, &e.UserID, &e.Period, &e.Type, &e.AmountMT, &hold, &act, &e.Reason, &at, &rollup); err != nil {
 		return e, err
 	}
-	e.HoldID, e.ActorID = nullInt64Ptr(hold), nullInt64Ptr(act)
+	e.HoldID, e.ActorID, e.RollupCount = nullInt64Ptr(hold), nullInt64Ptr(act), int(rollup.Int64)
 	e.CreatedAt, err = ParseTime(at)
 	return e, err
 }

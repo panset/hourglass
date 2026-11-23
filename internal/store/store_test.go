@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 5 {
+	if n != 6 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -91,22 +91,23 @@ func TestMigrateNewerDatabaseIsError(t *testing.T) {
 
 func TestSchemaColumnsMatchSpec(t *testing.T) {
 	spec := map[string][]string{
-		"users":            {"id", "auth_source", "oidc_sub", "username", "email", "name", "status", "labels_json", "password_hash", "must_change_password", "balance_mt", "created_at", "last_login_at"},
-		"user_roles":       {"user_id", "role"},
-		"setups":           {"id", "name", "details_json", "enabled"},
-		"setup_labels":     {"setup_id", "key", "value"},
-		"rules":            {"id", "kind", "position", "selector", "value", "updated_by", "updated_at"},
-		"holds":            {"id", "setup_id", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at", "released_by", "release_reason", "release_requested_at", "released_by_service"},
-		"usage_samples":    {"id", "hold_id", "polled_at", "weight", "rule_selector", "pressure", "multiplier", "debit_mt", "reason"},
-		"ledger":           {"id", "user_id", "period", "type", "amount_mt", "hold_id", "actor_id", "reason", "created_at"},
-		"pressure_samples": {"polled_at", "source", "raw", "smoothed", "multiplier"},
-		"orphans":          {"resource_name", "first_seen_at", "last_seen_at", "labels_json"},
-		"event_deliveries": {"id", "event_type", "hook", "payload_json", "ok", "error", "started_at", "finished_at"},
-		"settings":         {"key", "value_json", "updated_by", "updated_at"},
-		"audit_log":        {"id", "actor_id", "actor_service", "action", "target", "before_json", "after_json", "created_at"},
-		"sessions":         {"id", "user_id", "created_at", "last_seen_at", "expires_at"},
-		"collector_runs":   {"id", "started_at", "finished_at", "ok", "error"},
-		"outages":          {"id", "started_at", "ended_at", "reason"},
+		"users":             {"id", "auth_source", "oidc_sub", "username", "email", "name", "status", "labels_json", "password_hash", "must_change_password", "balance_mt", "created_at", "last_login_at"},
+		"user_roles":        {"user_id", "role"},
+		"setups":            {"id", "name", "details_json", "enabled"},
+		"setup_labels":      {"setup_id", "key", "value"},
+		"rules":             {"id", "kind", "position", "selector", "value", "updated_by", "updated_at"},
+		"holds":             {"id", "setup_id", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at", "released_by", "release_reason", "release_requested_at", "released_by_service"},
+		"usage_samples":     {"id", "hold_id", "polled_at", "weight", "rule_selector", "pressure", "multiplier", "debit_mt", "reason"},
+		"ledger":            {"id", "user_id", "period", "type", "amount_mt", "hold_id", "actor_id", "reason", "created_at", "rollup_count"},
+		"ledger_compaction": {"one"},
+		"pressure_samples":  {"polled_at", "source", "raw", "smoothed", "multiplier"},
+		"orphans":           {"resource_name", "first_seen_at", "last_seen_at", "labels_json"},
+		"event_deliveries":  {"id", "event_type", "hook", "payload_json", "ok", "error", "started_at", "finished_at"},
+		"settings":          {"key", "value_json", "updated_by", "updated_at"},
+		"audit_log":         {"id", "actor_id", "actor_service", "action", "target", "before_json", "after_json", "created_at"},
+		"sessions":          {"id", "user_id", "created_at", "last_seen_at", "expires_at"},
+		"collector_runs":    {"id", "started_at", "finished_at", "ok", "error"},
+		"outages":           {"id", "started_at", "ended_at", "reason"},
 
 		"service_accounts":          {"id", "name", "description", "scopes_json", "enabled", "created_by", "created_at"},
 		"service_tokens":            {"id", "account_id", "token_hash", "created_at", "expires_at", "last_used_at"},
@@ -930,12 +931,22 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	hr := must(s.sqldb.Exec(`INSERT INTO holds (setup_id, user_id, acquired_at) VALUES (?, ?, ?)`, setupID, a.ID, FormatTime(t0)))
 	holdID := must(hr.LastInsertId())
 	h := Hold{ID: holdID}
+	// Raw ledger inserts for the same reason (AppendLedger reads back the
+	// rollup_count column of migration 0006); RebuildBalance then sets the
+	// caches as the appends would have (the 2026-11 sums).
+	appendV2 := func(user int64, period, typ string, amount int64, hold *int64) {
+		must(s.sqldb.Exec(`INSERT INTO ledger (user_id, period, type, amount_mt, hold_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			user, period, typ, amount, nullInt(hold), FormatTime(t0)))
+	}
 	for _, u := range []int64{a.ID, b.ID} {
-		must(s.AppendLedger(ctx, LedgerEntry{UserID: u, Period: "2026-10", Type: "allowance", AmountMT: 300000}, "2026-10", t0))
-		must(s.AppendLedger(ctx, LedgerEntry{UserID: u, Period: "2026-11", Type: "allowance", AmountMT: 300000}, "2026-11", t0))
+		appendV2(u, "2026-10", "allowance", 300000, nil)
+		appendV2(u, "2026-11", "allowance", 300000, nil)
 	}
 	for i := 0; i < 10; i++ {
-		must(s.AppendLedger(ctx, LedgerEntry{UserID: a.ID, Period: "2026-11", Type: "debit", AmountMT: -167, HoldID: &h.ID}, "2026-11", t0))
+		appendV2(a.ID, "2026-11", "debit", -167, &h.ID)
+	}
+	for _, u := range []int64{a.ID, b.ID} {
+		must(s.RebuildBalance(ctx, u, "2026-11"))
 	}
 	s.Close()
 
@@ -946,7 +957,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&rows)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 5 || rows != 14 || ic != "ok" {
+	if v != 6 || rows != 14 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d, ledger rows %d, integrity %q", v, rows, ic)
 	}
 	var idx []string
@@ -960,7 +971,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 		idx = append(idx, n)
 	}
 	r.Close()
-	if want := []string{"ledger_hold_type", "ledger_period_type", "ledger_user_period_type"}; !reflect.DeepEqual(idx, want) {
+	if want := []string{"ledger_hold_type", "ledger_period_type", "ledger_raw_debit_created", "ledger_raw_debit_hold", "ledger_user_period_type"}; !reflect.DeepEqual(idx, want) {
 		t.Errorf("ledger indexes %v, want %v", idx, want)
 	}
 	for _, u := range []User{a, b} {
@@ -977,7 +988,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s = must(Open(path)) // reopen: nothing to run
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 5 {
+	if n != 6 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
 	}
 }
