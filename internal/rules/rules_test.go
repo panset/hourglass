@@ -430,3 +430,29 @@ func TestRULE5_EngineIsGenericOverKinds(t *testing.T) {
 		t.Errorf("MatchCounts for a second kind: %v %v", per, un)
 	}
 }
+
+func TestSET8_LabelTerm(t *testing.T) {
+	ok := map[[2]string]string{
+		{"site", "sjc"}: "site=sjc", {"site", ""}: "site=", {"a.b/c-d_e", "v.1:2"}: "a.b/c-d_e=v.1:2",
+		{"site", "in"}: "site=in", {"site", "ünï"}: "site=ünï", {"site", strings.Repeat("x", MaxValueLength)}: "site=" + strings.Repeat("x", MaxValueLength),
+	}
+	for in, want := range ok {
+		got, good := LabelTerm(in[0], in[1])
+		if !good || got != want {
+			t.Errorf("LabelTerm(%q,%q) = %q,%v, want %q", in[0], in[1], got, good, want)
+		}
+		if m, err := Match(got, map[string]string{in[0]: in[1]}); err != nil || !m {
+			t.Errorf("term %q does not select its own label: %v %v", got, m, err)
+		}
+	}
+	null := [][2]string{
+		{"site", "a b"}, {"site", "a\tb"}, {"site", "a\nb"}, {"site", "a,b"}, {"site", "(a)"}, {"site", "a=b"}, {"site", "a!b"}, {"site", "!"},
+		{"site", strings.Repeat("x", MaxValueLength+1)},
+		{"", "v"}, {"Site", "v"}, {"-site", "v"}, {"si te", "v"}, {"a=b", "v"},
+	}
+	for _, in := range null {
+		if got, good := LabelTerm(in[0], in[1]); good {
+			t.Errorf("LabelTerm(%q,%q) = %q, want no term", in[0], in[1], got)
+		}
+	}
+}

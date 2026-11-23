@@ -11,6 +11,8 @@ import { POLL_INTERVAL_MS } from "../../hooks/usePolling";
 import { formatMultiplier, formatPerHour, formatTokens } from "../../lib/format";
 import { isAdmin, useSession } from "../../shell/session";
 import { elapsedSince, isPendingRelease, releaseHold, type Hold, type Setup, type SetupList } from "../usage/holdApi";
+import { LabelChips, placeholderFrom } from "./LabelChips";
+import { applyChip, splitTerms } from "./labelTerms";
 import styles from "./setups.module.css";
 
 const getSetups = (selector: string) =>
@@ -68,6 +70,16 @@ export default function SetupsPage() {
     if (stateFilter && stateOf(s) !== stateFilter) return false;
     return keys.every((k) => !labelFilters[k] || s.labels[k] === labelFilters[k]);
   });
+
+  const labelIndex = data?.label_index ?? [];
+  const placeholder = placeholderFrom(labelIndex);
+
+  // A chip puts its API-given term into the box and applies the filter (UI-9).
+  const activateChip = (key: string, term: string) => {
+    const next = applyChip(selectorDraft, key, term);
+    setSelectorDraft(next);
+    setSelector(next);
+  };
 
   const applySelector = (e: FormEvent) => {
     e.preventDefault();
@@ -273,7 +285,7 @@ export default function SetupsPage() {
                 <Input
                   {...p}
                   className={styles.selectorInput}
-                  placeholder="e.g. site=sjc, gpu=true"
+                  placeholder={placeholder}
                   value={selectorDraft}
                   onChange={(e) => setSelectorDraft(e.target.value)}
                 />
@@ -282,6 +294,8 @@ export default function SetupsPage() {
             <Button type="submit">Filter</Button>
           </form>
         </div>
+
+        {data ? <LabelChips index={labelIndex} applied={splitTerms(selector)} onToggle={activateChip} /> : null}
 
         {block ? <Alert tone="warning">{block}</Alert> : null}
         {actionError ? <Alert tone="error">{actionError}</Alert> : null}

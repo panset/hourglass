@@ -377,7 +377,7 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 	e.poll()
 
 	l := uWantOK(t, e.get("/api/v1/setups", &dev), 200)
-	uWantKeys(t, "setups response", l, "setups", "display_label_keys", "summary", "metering_description")
+	uWantKeys(t, "setups response", l, "setups", "display_label_keys", "label_index", "summary", "metering_description")
 	if k := l["display_label_keys"].([]any); len(k) != 1 || k[0] != "tier" {
 		t.Errorf("display_label_keys %v", k)
 	}

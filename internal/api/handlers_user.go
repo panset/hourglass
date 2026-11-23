@@ -646,6 +646,54 @@ type setupJSON struct {
 	Admin       *setupAdminJSON   `json:"admin"`
 }
 
+type labelValueJSON struct {
+	Value string `json:"value"`
+	// Selector is the term that selects exactly the setups with this value, or
+	// null when the value cannot be written in a selector (rules.LabelTerm).
+	Selector *string `json:"selector"`
+}
+
+type labelKeyJSON struct {
+	Key    string           `json:"key"`
+	Values []labelValueJSON `json:"values"`
+}
+
+// labelIndexBuilder collects the distinct label keys and values of the setups
+// the caller may see (SET-8).
+type labelIndexBuilder map[string]map[string]struct{}
+
+func (b labelIndexBuilder) add(labels map[string]string) {
+	for k, v := range labels {
+		if b[k] == nil {
+			b[k] = map[string]struct{}{}
+		}
+		b[k][v] = struct{}{}
+	}
+}
+
+// build returns the index sorted by key with sorted values; [] when empty.
+func (b labelIndexBuilder) build() []labelKeyJSON {
+	out := make([]labelKeyJSON, 0, len(b))
+	for k, set := range b {
+		vals := make([]string, 0, len(set))
+		for v := range set {
+			vals = append(vals, v)
+		}
+		sort.Strings(vals)
+		kj := labelKeyJSON{Key: k, Values: make([]labelValueJSON, 0, len(vals))}
+		for _, v := range vals {
+			lv := labelValueJSON{Value: v}
+			if t, ok := rules.LabelTerm(k, v); ok {
+				lv.Selector = &t
+			}
+			kj.Values = append(kj.Values, lv)
+		}
+		out = append(out, kj)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
+
 // listSetups is GET /api/v1/setups[?selector=]. Every user with a role sees
 // every enabled setup and the holder's balance by design; admins also get
 // disabled setups and the admin sub-object. The summary counts ignore the
@@ -694,9 +742,11 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 	if keys == nil {
 		keys = []string{}
 	}
+	index := labelIndexBuilder{}
 	var summary struct{ Enabled, Deployed, Free int }
 	list := make([]setupJSON, 0, len(rows))
 	for _, s := range rows {
+		index.add(s.Labels) // before the selector filter: the index ignores the selector
 		rep := l.reported(s)
 		h, held := holdOf[s.ID]
 		if s.Enabled {
@@ -741,7 +791,7 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 		list = append(list, v)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"setups": list, "display_label_keys": keys,
+		"setups": list, "display_label_keys": keys, "label_index": index.build(),
 		"summary": map[string]int{"enabled": summary.Enabled, "deployed": summary.Deployed, "free": summary.Free},
 		// The policy interface has no describe method, so there is no text to show.
 		"metering_description": nil,

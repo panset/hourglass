@@ -69,6 +69,9 @@ const setups: Setup[] = [
 const list = (over: Partial<SetupList> = {}, items: Setup[] = setups): SetupList => ({
   setups: items,
   display_label_keys: ["size"],
+  label_index: [
+    { key: "size", values: [{ value: "extralarge", selector: "size=extralarge" }, { value: "large", selector: "size=large" }, { value: "medium", selector: "size=medium" }] },
+  ],
   summary: { enabled: 11, deployed: 9, free: 2 },
   metering_description: "deployed or 2 h after acquire",
   ...over,
@@ -318,5 +321,185 @@ describe("Setups page", () => {
     mount();
     await screen.findByRole("table", { name: "All setups" });
     expect(within(screen.getByLabelText("State")).queryByRole("option", { name: "Disabled" })).not.toBeInTheDocument();
+  });
+});
+
+type IndexKey = SetupList["label_index"][number];
+const term = (key: string, value: string) => ({ value, selector: `${key}=${value}` });
+const labelIndex: IndexKey[] = [
+  { key: "site", values: [term("site", "ams"), term("site", "sjc")] },
+  { key: "tier", values: [term("tier", "a"), term("tier", "b"), { value: "has space", selector: null }, { value: "", selector: "tier=" }] },
+];
+const withIndex = (label_index: IndexKey[]) => routes({ "GET /api/v1/setups": list({ label_index }) });
+const selectorBox = () => screen.getByLabelText("Label selector") as HTMLInputElement;
+const chip = (term: string) => screen.getByRole("button", { name: `Filter by ${term}` });
+const lastUrl = (calls: { url: string }[]) => calls.filter((c) => c.url.startsWith("/api/v1/setups")).at(-1)?.url;
+
+describe("UI-9 label chips on Setups", () => {
+  it("UI-9 lists every key and every value of label_index as chips named 'Filter by key=value'", async () => {
+    mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    expect(screen.getByRole("heading", { name: "Available labels" })).toBeInTheDocument();
+    const site = screen.getByRole("group", { name: "Label site" });
+    expect(within(site).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Filter by site=ams", "Filter by site=sjc"]);
+    const tier = screen.getByRole("group", { name: "Label tier" });
+    expect(within(tier).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Filter by tier=a", "Filter by tier=b", "tier=has space cannot be used in a selector", "Filter by tier=",
+    ]);
+  });
+
+  it("UI-9 activating a chip appends its term and filters through the API", async () => {
+    const { calls } = mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    await userEvent.click(chip("site=sjc"));
+    expect(selectorBox().value).toBe("site=sjc");
+    await waitFor(() => expect(lastUrl(calls)).toBe("/api/v1/setups?selector=site%3Dsjc"));
+    await userEvent.click(chip("tier=a"));
+    expect(selectorBox().value).toBe("site=sjc,tier=a");
+    await waitFor(() => expect(lastUrl(calls)).toBe("/api/v1/setups?selector=site%3Dsjc%2Ctier%3Da"));
+  });
+
+  it("UI-9 a chip replaces another key=value term of the same key and keeps the other terms", async () => {
+    mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    await userEvent.type(selectorBox(), "site=ams, tier=a");
+    await userEvent.click(chip("site=sjc"));
+    expect(selectorBox().value).toBe("site=sjc,tier=a");
+  });
+
+  it("UI-9 a chip whose exact term is in the box removes it (toggle) and filters again", async () => {
+    const { calls } = mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    await userEvent.click(chip("site=sjc"));
+    await userEvent.click(chip("tier=a"));
+    await userEvent.click(chip("site=sjc"));
+    expect(selectorBox().value).toBe("tier=a");
+    await userEvent.click(chip("tier=a"));
+    expect(selectorBox().value).toBe("");
+    await waitFor(() => expect(lastUrl(calls)).toBe("/api/v1/setups"));
+  });
+
+  it("UI-9 terms are compared whole: a comma inside parentheses does not split a term and an 'in' term is not replaced", async () => {
+    mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    await userEvent.type(selectorBox(), "site in (sjc,ams)");
+    await userEvent.click(chip("site=sjc"));
+    expect(selectorBox().value).toBe("site in (sjc,ams),site=sjc");
+    // The other whole term can be toggled off without touching the 'in' term.
+    await userEvent.click(chip("site=sjc"));
+    expect(selectorBox().value).toBe("site in (sjc,ams)");
+    // A longer value that merely starts with the chip's term is a different term.
+    await userEvent.clear(selectorBox());
+    await userEvent.type(selectorBox(), "tier=ab");
+    await userEvent.click(chip("tier=a"));
+    expect(selectorBox().value).toBe("tier=a");
+  });
+
+  it("UI-9 a chip whose term is in the applied selector is selected; typing without applying selects nothing", async () => {
+    mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    await userEvent.type(selectorBox(), "site=ams");
+    expect(chip("site=ams")).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: "Filter" }));
+    await waitFor(() => expect(chip("site=ams")).toHaveAttribute("aria-pressed", "true"));
+    expect(chip("site=sjc")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("UI-9 a value with no term cannot be activated and says why", async () => {
+    const { calls } = mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    const before = calls.length;
+    const bad = screen.getByRole("button", { name: "tier=has space cannot be used in a selector" });
+    expect(bad).toHaveAttribute("aria-disabled", "true");
+    expect(bad).toHaveAttribute("title", expect.stringContaining("cannot be used in a selector"));
+    await userEvent.click(bad);
+    bad.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(selectorBox().value).toBe("");
+    expect(calls.length).toBe(before);
+    expect(screen.getByText(/cannot be used in a selector\./)).toBeInTheDocument();
+  });
+
+  it("UI-9 the placeholder is the first non-null term of the index", async () => {
+    mockApi(withIndex([{ key: "a", values: [{ value: "x y", selector: null }, term("a", "z")] }, { key: "b", values: [term("b", "1")] }]));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    expect(selectorBox()).toHaveAttribute("placeholder", "e.g. a=z");
+  });
+
+  it("UI-9 with an empty index there is no placeholder and the block says no setup has labels", async () => {
+    mockApi(withIndex([]));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    expect(selectorBox()).not.toHaveAttribute("placeholder");
+    expect(screen.getByText("No setup has labels.")).toBeInTheDocument();
+  });
+
+  it("UI-9 a key shows its first 12 values and '+N more' reveals the rest", async () => {
+    const values = Array.from({ length: 15 }, (_, i) => term("rack", `r${String(i).padStart(2, "0")}`));
+    mockApi(withIndex([{ key: "rack", values }]));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    const group = screen.getByRole("group", { name: "Label rack" });
+    expect(within(group).getAllByRole("button", { name: /^Filter by/ })).toHaveLength(12);
+    expect(within(group).queryByRole("button", { name: "Filter by rack=r12" })).not.toBeInTheDocument();
+    await userEvent.click(within(group).getByRole("button", { name: "+3 more" }));
+    expect(within(group).getAllByRole("button", { name: /^Filter by/ })).toHaveLength(15);
+    expect(within(group).queryByRole("button", { name: /more/ })).not.toBeInTheDocument();
+  });
+
+  it("UI-9 exactly 12 values show no '+N more'", async () => {
+    mockApi(withIndex([{ key: "rack", values: Array.from({ length: 12 }, (_, i) => term("rack", `r${i}`)) }]));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    expect(screen.queryByRole("button", { name: /more/ })).not.toBeInTheDocument();
+  });
+
+  it("UI-9 with more than 8 keys the block starts collapsed behind Show labels; with 8 it is open", async () => {
+    const keys = (n: number): IndexKey[] => Array.from({ length: n }, (_, i) => ({ key: `k${i}`, values: [term(`k${i}`, "v")] }));
+    mockApi(withIndex(keys(9)));
+    const first = mount();
+    await screen.findByRole("table", { name: "All setups" });
+    expect(screen.queryByRole("button", { name: "Filter by k0=v" })).not.toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "Show labels" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Filter by k0=v" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide labels" })).toHaveAttribute("aria-expanded", "true");
+    first.unmount();
+
+    mockApi(withIndex(keys(8)));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    expect(screen.queryByRole("button", { name: "Show labels" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filter by k0=v" })).toBeInTheDocument();
+  });
+
+  it("UI-9 a chip is a button reachable with Tab and activated with Enter and Space", async () => {
+    mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    const c = chip("site=ams");
+    expect(c.tagName).toBe("BUTTON");
+    c.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(selectorBox().value).toBe("site=ams");
+    await userEvent.keyboard(" ");
+    expect(selectorBox().value).toBe("");
+  });
+
+  it("UI-9 a chip for an empty value uses the term from the API (key=)", async () => {
+    mockApi(withIndex(labelIndex));
+    mount();
+    await screen.findByRole("table", { name: "All setups" });
+    await userEvent.click(chip("tier="));
+    expect(selectorBox().value).toBe("tier=");
   });
 });

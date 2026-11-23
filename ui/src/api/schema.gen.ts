@@ -1200,6 +1200,12 @@ export interface components {
         };
         SetupList: {
             setups: components["schemas"]["Setup"][];
+            /** @description Every label key and value over every setup the caller may see
+             *     (enabled setups for a developer, all setups for an admin),
+             *     ignoring `selector` like `summary`. Keys sorted, values sorted and
+             *     distinct. `[]` when no setup has a label (SET-8).
+             *      */
+            label_index: components["schemas"]["LabelIndexKey"][];
             /** @example [
              *       "tier"
              *     ] */
@@ -1212,6 +1218,24 @@ export interface components {
             };
             /** @description Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`. */
             metering_description: string | null;
+        };
+        LabelIndexKey: {
+            /** @example site */
+            key: string;
+            values: components["schemas"]["LabelIndexValue"][];
+        };
+        LabelIndexValue: {
+            /** @example sjc */
+            value: string;
+            /**
+             * @description The selector term that selects exactly the setups with this value
+             *     (`key=value`, `key=` for an empty value). Null when the value
+             *     cannot be written in a selector: it contains whitespace or one of
+             *     `, ( ) = !`.
+             *
+             * @example site=sjc
+             */
+            selector: string | null;
         };
         SetupInput: {
             /** @example lab-01 */

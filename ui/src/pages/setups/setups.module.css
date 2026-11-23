@@ -17,3 +17,14 @@
 .details { background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 12px; max-height: 50vh; overflow: auto; font-family: var(--font-mono); font-size: var(--fs-12); }
 .linkButton { background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent); text-decoration: underline; cursor: pointer; }
 .chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.labels { display: flex; flex-direction: column; gap: 8px; }
+.labelsHead { display: flex; align-items: baseline; gap: var(--gap-control); }
+.labelsTitle { margin: 0; font-size: var(--fs-14); }
+.labelKey { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.labelKeyName { font-weight: 600; font-size: var(--fs-14); min-width: 6em; }
+.chipList { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chip { font: inherit; font-size: var(--fs-12); padding: 2px 10px; border-radius: 999px; border: 1px solid var(--color-control-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; }
+.chip:hover { background: var(--color-panel); }
+.chipSelected { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+.chipSelected:hover { background: var(--color-accent); }
+.chipUnusable { color: var(--color-muted); text-decoration: line-through; cursor: not-allowed; border-style: dashed; }

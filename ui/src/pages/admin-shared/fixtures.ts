@@ -153,6 +153,7 @@ export function setupList(setups: Setup[]): SetupList {
   return {
     setups,
     display_label_keys: ["size"],
+    label_index: [],
     summary: { enabled: 1, deployed: 1, free: 0 },
     metering_description: "deployed or 2 h after acquire",
   };

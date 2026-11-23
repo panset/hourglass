@@ -256,3 +256,25 @@ func (p *parser) single(key string, o op) (requirement, error) {
 	}
 	return requirement{key: key, op: o, values: []string{v}}, nil
 }
+
+// LabelTerm returns the selector term that selects exactly the labels that
+// carry key with value: "key=value", or "key=" for an empty value. ok is false
+// when the pair cannot be written in a selector: the value contains
+// whitespace or one of `, ( ) = !`, is longer than MaxValueLength, or the key
+// is not a valid label key. It lives next to the parser so the grammar is in
+// one place; the term is checked against the parser before it is returned.
+func LabelTerm(key, value string) (term string, ok bool) {
+	if !validKey(key) || len([]rune(value)) > MaxValueLength {
+		return "", false
+	}
+	for i := 0; i < len(value); i++ {
+		if !isValueChar(value[i]) {
+			return "", false
+		}
+	}
+	term = key + "=" + value
+	if m, err := Match(term, map[string]string{key: value}); err != nil || !m {
+		return "", false
+	}
+	return term, true
+}
