@@ -12,4 +12,8 @@ exports_files([
     "ci.sh",  # read by //tools:tools_test (CMP-2)
     "api/openapi.yaml",
     "docs/SPEC.md",  # read by the permissions meta-test (//internal/api:api_test)
+    # Recorded from the release at d96a950: the upgrade tests (UPG-1 to UPG-3) read these.
+    "testdata/upgrade-d96a950/hourglass.sqlite3",
+    "testdata/upgrade-d96a950/openapi.yaml",
+    "testdata/upgrade-d96a950/responses.json",
 ])

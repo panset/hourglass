@@ -4,17 +4,23 @@
 
 ## What the test does
 
-One Playwright test (`e2e/browser/tests/acceptance.spec.ts`, Chromium, one worker) with steps A0 to A9. It drives the UI as two users: alice (Keycloak sign-in) and the local admin. In order:
+One Playwright test (`e2e/browser/tests/acceptance.spec.ts`, Chromium, one worker) with steps A0 to A9 and the steps A2g, A2f, A2p, A7g, A8p and A8c added by the ledger, labels and onboarding change. It drives the UI as three users: alice (Keycloak sign-in), dave (pre-approved, signs in once) and the local admin. In order:
 
 - A0 first run of the admin: forced password change, settings.
 - A1 alice signs in and sees the not-authorized page.
 - A2 the admin approves her.
+- A2g the top bar greets alice ("Hello, Alice Example") and the local admin ("Hello, admin").
+- A2f alice filters the setups with the label chips: add, replace and remove a term (the Setups page asks the API with the term).
+- A2p the admin pre-approves dave@example.com on Users; dave, who has never signed in, lands on My usage with 300 tokens and never sees the not-authorized page. Dave exists in `deploy/keycloak/realm-hourglass.json` for this step only.
 - A3 alice acquires a setup.
 - A4 the pool appears in the simulator and metering starts.
 - A5 the pressure moves across a band and the debit rate doubles.
 - A6 a third acquire is refused by the hold limit (the UI disables the control; the API call proves the server refuses too).
 - A7 release of a deployed setup is accepted but pending ("Releasing", HOLD-6) and completes by itself at the poll after the pool is gone (HOLD-7).
+- A7g the admin makes 23 one-token grants through Users, so the month's ledger has more than one page.
 - A8 the month rolls over with a negative balance and the debt carries into the new month.
+- A8p alice pages the old month's ledger with Older and Newer (20 rows a page), switches the view and the month from page two and lands on a first page.
+- A8c the test clock moves 9 more days; after a collector poll compacts them, the old month's debits of lab-03 are one row per day with "N polls", and the polls, the total charged and the closing balance are the same as before.
 - A9 the mode check: one origin, with page and API from the same container (bundled) or from the two containers (split).
 
 A failing step is recorded with a screenshot and the run goes on. The only things driven outside the UI are the simulator's control API (pool and pressure) and the clock control (the month jump); the clock control exists only in the test build images.

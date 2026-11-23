@@ -54,6 +54,15 @@
       "firstName": "Carol",
       "lastName": "Example",
       "credentials": [{"type": "password", "value": "dev-only-carol", "temporary": false}]
+    },
+    {
+      "username": "dave",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "dave@example.com",
+      "firstName": "Dave",
+      "lastName": "Example",
+      "credentials": [{"type": "password", "value": "dev-only-dave", "temporary": false}]
     }
   ]
 }

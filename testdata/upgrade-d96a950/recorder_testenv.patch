@@ -1,0 +1,35 @@
+diff --git a/internal/api/testenv_test.go b/internal/api/testenv_test.go
+index 47ade46..86ef9b1 100644
+--- a/internal/api/testenv_test.go
++++ b/internal/api/testenv_test.go
+@@ -82,6 +82,8 @@ type backendOpts struct {
+ 	startEvents bool
+ 	// keepMustChange leaves the local admin's forced password change in place.
+ 	keepMustChange bool
++	dbPath         string
++	emitter        auth.Emitter
+ }
+ 
+ func newBackend(t *testing.T, o backendOpts) *backend {
+@@ -90,7 +92,11 @@ func newBackend(t *testing.T, o backendOpts) *backend {
+ 	if o.start.IsZero() {
+ 		o.start = time.Now()
+ 	}
+-	st, err := store.Open(filepath.Join(t.TempDir(), "api.db"))
++	dbp := filepath.Join(t.TempDir(), "api.db")
++	if o.dbPath != "" {
++		dbp = o.dbPath
++	}
++	st, err := store.Open(dbp)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -101,7 +107,7 @@ func newBackend(t *testing.T, o backendOpts) *backend {
+ 	if o.oidcIssuer != "" {
+ 		cfg.OIDC = auth.OIDCConfig{IssuerURL: o.oidcIssuer, ClientID: "cid", ClientSecret: "csecret", RedirectURL: "http://app.test/auth/callback"}
+ 	}
+-	svc, err := auth.New(cfg, st, nil, log)
++	svc, err := auth.New(cfg, st, o.emitter, log)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}

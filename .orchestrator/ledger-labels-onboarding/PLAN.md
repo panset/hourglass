@@ -23,8 +23,8 @@ when the one before returns. Task numbers continue from the previous job (72).
 | 82 | 7 | Pre-approval: store, sign-in step via injected interface, admin routes, file overlay, permissions test (PRE-1..8) | build | opus | 81 | `internal/store/`, `internal/auth/`, `internal/api/`, `internal/config/`, `internal/app/`, `api/`, `deploy/config.sample.yaml` | verified |
 | 83 | 7 | Admin > Users pre-approval UI (UI-11) | build | sonnet | 82 | `ui/` | verified |
 | 84 | 7 | Independent verification of M6-M7, with a security read of the sign-in path | verify | opus | 83 | (read-only) | done (0 high, 1 medium, 5 low: 84b) |
-| 85 | 8 | End-to-end scenarios (paging, chip, greeting, pre-approved first sign-in, compaction via test clock), Keycloak user, UPG-2, UPG-3 | build | sonnet | 84 | `e2e/`, `deploy/keycloak/`, `internal/` tests | running |
-| 86 | 8 | Docs: `deploying.md` (upgrade, retention, config reference, pre-approval with commands run, timezone, disk), `ui-notes.md`, `progress.md`, `README.md` | build | sonnet | 85 | `docs/`, `README.md` | pending |
+| 85 | 8 | End-to-end scenarios (paging, chip, greeting, pre-approved first sign-in, compaction via test clock), Keycloak user, UPG-2, UPG-3 | build | sonnet | 84 | `e2e/`, `deploy/keycloak/`, `internal/` tests | partial: tests and steps written, ci green; e2e runs blocked on ports 8081 and 8990 (owner asked) |
+| 86 | 8 | Docs: `deploying.md` (upgrade, retention, config reference, pre-approval with commands run, timezone, disk), `ui-notes.md`, `progress.md`, `README.md` | build | sonnet | 85 | `docs/`, `README.md` | running (86a: parts that need no stack) |
 | 87 | 8 | Final verification: requirement-to-test table, `./ci.sh`, `e2e/run.sh both`, integration scenario, guide commands re-run | verify | opus | 86 | (read-only) | pending |
 | 88 | 9 | Release preparation: what the released binary reports as its version; owner report | write | sonnet | 87 | task folder | pending |
 | 89 | 9 | After go-ahead: merge to main, push, tag, watch the image workflow | - | orchestrator | owner | git | pending |

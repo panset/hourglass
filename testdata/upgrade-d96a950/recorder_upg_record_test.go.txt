@@ -1,0 +1,273 @@
+// SPDX-License-Identifier: MIT
+
+package api
+
+// Temporary recorder, run only in the throwaway worktree of commit d96a950.
+// It builds the upgrade fixture and records what the release code answers.
+
+import (
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/panset/hourglass/internal/auth"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+type recIssuer struct {
+	srv    *httptest.Server
+	mu     sync.Mutex
+	nonce  string
+	claims map[string]any
+}
+
+func newRecIssuer(t *testing.T) *recIssuer {
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	p := &recIssuer{}
+	enc := base64.RawURLEncoding.EncodeToString
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		u := p.srv.URL
+		_ = json.NewEncoder(w).Encode(map[string]any{"issuer": u, "authorization_endpoint": u + "/authorize",
+			"token_endpoint": u + "/token", "jwks_uri": u + "/jwks", "response_types_supported": []string{"code"},
+			"subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{"RS256"}})
+	})
+	mux.HandleFunc("GET /jwks", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]string{{"kty": "RSA", "kid": "k1", "use": "sig",
+			"alg": "RS256", "n": enc(key.PublicKey.N.Bytes()), "e": enc(big.NewInt(int64(key.PublicKey.E)).Bytes())}}})
+	})
+	mux.HandleFunc("POST /token", func(w http.ResponseWriter, _ *http.Request) {
+		p.mu.Lock()
+		now := time.Now()
+		c := map[string]any{"iss": p.srv.URL, "aud": "cid", "nonce": p.nonce, "iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix()}
+		for k, v := range p.claims {
+			c[k] = v
+		}
+		p.mu.Unlock()
+		h, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": "k1"})
+		cb, _ := json.Marshal(c)
+		in := enc(h) + "." + enc(cb)
+		sum := sha256.Sum256([]byte(in))
+		sig, _ := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "at-not-real", "token_type": "Bearer",
+			"expires_in": 300, "id_token": in + "." + enc(sig)})
+	})
+	p.srv = httptest.NewServer(mux)
+	t.Cleanup(p.srv.Close)
+	return p
+}
+
+type recEm struct {
+	mu  sync.Mutex
+	evs []hourglass.Event
+}
+
+func (r *recEm) Emit(e hourglass.Event) { r.mu.Lock(); r.evs = append(r.evs, e); r.mu.Unlock() }
+
+func TestRecordUpgradeFixture(t *testing.T) {
+	out := os.Getenv("RECORD_DIR")
+	if out == "" {
+		t.Skip("RECORD_DIR not set")
+	}
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+	start := time.Date(2026, 11, 2, 21, 0, 0, 0, time.UTC)
+	dbp := filepath.Join(t.TempDir(), "api.db")
+	b := newBackend(t, backendOpts{start: start, loc: berlin, dbPath: dbp,
+		runtime: Runtime{PressureSource: "fake-pressure", MeteringPolicy: "fake-policy"}})
+	b.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "test reason"})
+	e := &uenv{b}
+	// The world of the ledger test (ledger_view_test.go, newLedgerWorld), in the same order.
+	e.rateRule("tier=a", 600)
+	s1 := e.setup("lab-01", true, map[string]string{"tier": "a"})
+	s2 := e.setup("lab-02", true, map[string]string{"tier": "a"})
+	dev := e.dev("dev", store.RoleDeveloper)
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "lab-01"}, hourglass.Allocation{ResourceName: "lab-02"})
+	h1 := e.acquire(&dev, s1)
+	h2 := e.acquire(&dev, s2)
+	e.poll()
+	for i := 0; i < 6; i++ {
+		e.step(5 * time.Minute)
+	}
+	if _, err := e.led.Grant(uBg, e.admin.ID, dev.user.ID, 50000, "mid-day"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 19; i++ {
+		e.step(5 * time.Minute)
+	}
+	if rec := e.post("/api/v1/holds/"+uItoa(h2)+"/release", &dev, ""); rec.Code != 202 {
+		t.Fatalf("release: %d %s", rec.Code, rec.Body)
+	}
+	e.prov.SetAllocations(hourglass.Allocation{ResourceName: "lab-01"})
+	e.step(5 * time.Minute)
+	e.step(5 * time.Minute)
+	e.clk.Advance(9*24*time.Hour + 9*time.Hour + 45*time.Minute)
+	e.poll()
+	for i := 0; i < 3; i++ {
+		e.step(5 * time.Minute)
+	}
+	// Created after the ledger, so they change no ledger id: a second developer
+	// with no activity, a disabled setup with other labels, a user with no role.
+	other := e.dev("other", store.RoleDeveloper)
+	e.setup("lab-03", false, map[string]string{"tier": "b", "zone": "east"})
+	e.setup("lab-04", true, map[string]string{"zone": "west"})
+	nor := e.pending("norole")
+	adm := e.adminSess()
+	now := e.clk.Now()
+
+	golden := map[string]any{"recorded_from": "d96a950", "now": now.UTC().Format(time.RFC3339Nano)}
+
+	// Facts read through the store.
+	users := []store.User{b.admin, dev.user, other.user, nor.user}
+	bal, sums := map[string]int64{}, map[string]int64{}
+	for _, u := range users {
+		cur, _ := b.st.GetUser(uBg, u.ID)
+		bal[uItoa(u.ID)] = cur.BalanceMT
+		for _, p := range []string{"2026-10", "2026-11"} {
+			s, err := b.st.SumLedger(uBg, u.ID, p, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			sums[uItoa(u.ID)+"/"+p] = s
+		}
+	}
+	ch, err := b.st.HoldCharges(uBg, []int64{h1, h2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	charges := map[string]int64{}
+	for k, v := range ch {
+		charges[uItoa(k)] = v
+	}
+	golden["facts"] = map[string]any{"balances_mt": bal, "period_sums_mt": sums, "hold_charges_mt": charges,
+		"hold_ids": []int64{h1, h2}, "user_ids": map[string]int64{"admin": b.admin.ID, "dev": dev.user.ID, "other": other.user.ID, "norole": nor.user.ID}}
+
+	b.st.Close()
+	db, _ := os.ReadFile(dbp)
+	if _, err := os.Stat(dbp + "-wal"); err == nil {
+		t.Fatal("a WAL file is left; the copy would be incomplete")
+	}
+	_ = os.MkdirAll(out, 0o755)
+	_ = os.WriteFile(filepath.Join(out, "release_d96a950.db"), db, 0o644)
+
+	// Phase B: the first SSO sign-in of a new user on a copy of that database.
+	copyPath := filepath.Join(t.TempDir(), "copy.db")
+	_ = os.WriteFile(copyPath, db, 0o644)
+	iss := newRecIssuer(t)
+	em := &recEm{}
+	b2 := newBackend(t, backendOpts{start: now, loc: berlin, dbPath: copyPath, oidcIssuer: iss.srv.URL, emitter: em})
+	// Responses on the copy, in a fresh process state: no poll has run.
+	get := func(s *sess, path string) any {
+		rec := b2.serve("GET", path, s, false, "")
+		if rec.Code != 200 {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body)
+		}
+		var v any
+		_ = json.Unmarshal(rec.Body.Bytes(), &v)
+		return v
+	}
+	sessionOf := func(s *sess) any {
+		v := get(s, "/api/v1/session").(map[string]any)
+		v["csrf_token"] = "<csrf>"
+		return v
+	}
+	asUser := func(id int64) *sess {
+		u, err := b2.st.GetUser(uBg, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		x := b2.session(u)
+		return &x
+	}
+	devS, otherS, norS, admS := asUser(dev.user.ID), asUser(other.user.ID), asUser(nor.user.ID), asUser(b.admin.ID)
+	golden["ledger_dev"] = get(devS, "/api/v1/me/ledger")
+	golden["ledger_dev_period"] = get(devS, "/api/v1/me/ledger?period=2026-11")
+	golden["ledger_other"] = get(otherS, "/api/v1/me/ledger")
+	golden["setups_dev"] = get(devS, "/api/v1/setups")
+	golden["setups_dev_filtered"] = get(devS, "/api/v1/setups?selector=tier%3Da")
+	golden["setups_admin"] = get(admS, "/api/v1/setups")
+	golden["session_dev"] = sessionOf(devS)
+	golden["session_admin"] = sessionOf(admS)
+	golden["session_norole"] = sessionOf(norS)
+
+	start2 := httptest.NewRecorder()
+	b2.h.ServeHTTP(start2, httptest.NewRequest("GET", "http://app.test/auth/oidc/start", nil))
+	loc, _ := url.Parse(start2.Header().Get("Location"))
+	var flow *http.Cookie
+	for _, c := range start2.Result().Cookies() {
+		if c.Name == "hourglass_oidc" {
+			flow = c
+		}
+	}
+	iss.mu.Lock()
+	iss.nonce = loc.Query().Get("nonce")
+	iss.claims = map[string]any{"sub": "sub-new", "email": "new.user@example.test", "name": "New User"}
+	iss.mu.Unlock()
+	req := httptest.NewRequest("GET", "http://app.test/auth/callback?code=c1&state="+url.QueryEscape(loc.Query().Get("state")), nil)
+	req.AddCookie(&http.Cookie{Name: flow.Name, Value: flow.Value})
+	rec := httptest.NewRecorder()
+	b2.h.ServeHTTP(rec, req)
+	signin := map[string]any{"status": rec.Code, "location": rec.Header().Get("Location")}
+	var cookie string
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.SessionCookie && c.Value != "" {
+			cookie = c.Value
+		}
+	}
+	signin["session_cookie_set"] = cookie != ""
+	u, err := b2.st.GetUserBySub(context.Background(), "sub-new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	roles, _ := b2.st.GetUserRoles(uBg, u.ID)
+	signin["user"] = map[string]any{"id": u.ID, "status": u.Status, "name": u.Name, "email": u.Email, "balance_mt": u.BalanceMT, "roles": roles}
+	if cookie != "" {
+		sreq := httptest.NewRequest("GET", "/api/v1/session", nil)
+		sreq.Header.Set("Cookie", auth.SessionCookie+"="+cookie)
+		srec := httptest.NewRecorder()
+		b2.h.ServeHTTP(srec, sreq)
+		var sv map[string]any
+		_ = json.Unmarshal(srec.Body.Bytes(), &sv)
+		signin["session_status"] = srec.Code
+		sv["csrf_token"] = "<csrf>"
+		signin["session"] = sv
+	}
+	var evs []any
+	for _, ev := range em.evs {
+		bs, _ := json.Marshal(ev)
+		var v any
+		_ = json.Unmarshal(bs, &v)
+		evs = append(evs, v)
+	}
+	signin["events"] = evs
+	au, _ := b2.st.ListAudit(uBg, store.AuditFilter{})
+	var aus []any
+	for i := len(au) - 1; i >= 0; i-- {
+		a := au[i]
+		aus = append(aus, map[string]any{"action": a.Action, "target": a.Target, "actor_id": a.ActorID, "actor_service": a.ActorService,
+			"before": a.BeforeJSON, "after": a.AfterJSON, "created_at": a.CreatedAt.UTC().Format(time.RFC3339Nano)})
+	}
+	signin["audit"] = aus
+	golden["signin_new_user"] = signin
+
+	bs, _ := json.MarshalIndent(golden, "", " ")
+	_ = os.WriteFile(filepath.Join(out, "release_d96a950_responses.json"), append(bs, '\n'), 0o644)
+	_ = io.Discard
+	_ = adm
+	_ = nor
+}

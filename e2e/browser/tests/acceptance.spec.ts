@@ -4,6 +4,8 @@
 //   A1 not-authorized (AUTH-5), A2 admin approves (ADM-1), A3 acquire (HOLD-1), A4 pool + metering (MET-1, MET-4),
 //   A5 pressure band (MET-2, MET-3), A6 hold limit (HOLD-3), A7 release of a deployed setup is pending until teardown (HOLD-2, HOLD-6, HOLD-7),
 //   A8 month rollover with debt (LED-3).
+// Added with the ledger, labels and onboarding change (design "Tests"): A2g the greeting (UI-10), A2f the label chips (UI-9),
+//   A2p a pre-approved user's first sign-in (PRE-1), A8p ledger paging and views (UI-8), A8c compaction through the real stack (LED-7, LED-8).
 // Only two things are driven outside the UI, as they stand in for the outside world: the simulator control API
 // (pool and pressure) and the e2e clock control (month jump).
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
@@ -20,6 +22,8 @@ const CLOCK = process.env.E2E_CLOCK_URL ?? "http://localhost:8091";
 const ADMIN_INITIAL = "dev-only-not-a-secret";
 const ADMIN_NEW = "dev-only-e2e-admin-password";
 const ALICE = { user: "alice", password: "dev-only-alice" };
+// Dave is in the realm for this file only: no other scenario signs him in, so the admin can pre-approve him before his first sign-in (A2p).
+const DAVE = { user: "dave", password: "dev-only-dave", email: "dave@example.com" };
 
 const SETUP_A = "lab-03"; // size=large, weight 2 (rate rule size=large)
 const SETUP_B = "lab-04"; // size=large
@@ -239,6 +243,49 @@ async function balance(page: Page): Promise<number> {
 
 const pill = async (page: Page) => (await page.locator("header").getByText(/^Lab \d+%/).innerText()).replace(/\s+/g, " ");
 
+/** My usage after a reload; signs in again (the SSO session of Keycloak is still valid) when the clock moves made the session expire. */
+async function openUsage(page: Page) {
+  await page.goto("/usage");
+  if (new URL(page.url()).pathname === "/login" || (await page.getByRole("link", { name: "Sign in with SSO" }).count())) {
+    await page.getByRole("link", { name: "Sign in with SSO" }).click();
+    await finishKeycloak(page, ALICE);
+    await page.goto("/usage");
+  }
+  await expect(page.getByRole("heading", { name: "My usage" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Ledger" })).toBeVisible();
+}
+
+/** Seconds of a Go duration string such as "720h0m0s", "-1h0m0s" or "90.5s", as the clock control reports its offset. */
+function goDurationSeconds(d: string): number {
+  const m = /^(-)?(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?$/.exec(d);
+  if (!m) throw new Error(`not a Go duration: ${d}`);
+  const s = Number(m[2] ?? 0) * 3600 + Number(m[3] ?? 0) * 60 + Number(m[4] ?? 0);
+  return m[1] ? -s : s;
+}
+
+/** A grant through the Users page, the way A8 makes one. */
+async function grantViaUi(admin: Page, who: string, amount: number, reason: string) {
+  await admin.getByRole("button", { name: new RegExp(`^Grant to ${who}`) }).click();
+  const panel = admin.getByRole("complementary", { name: "Grant tokens" });
+  await panel.getByLabel("Amount").fill(String(amount));
+  await panel.getByLabel("Reason (required)").fill(reason);
+  await panel.getByRole("button", { name: "Grant tokens", exact: true }).click();
+  await expect(panel).toHaveCount(0); // the panel closes when the grant is stored
+}
+
+/** What the Ledger of one month says about the debits of one setup, from rows read oldest first. */
+function debitFacts(rows: LedgerRow[], setup: string) {
+  const d = rows.filter((r) => r.type.startsWith("Debit") && r.detail.startsWith(setup));
+  const polls = (r: LedgerRow) => Number(/(\d+) polls/.exec(r.detail)?.[1] ?? 1);
+  return {
+    rows: d.length,
+    polls: d.reduce((n, r) => n + polls(r), 0),
+    amount: d.reduce((n, r) => n + r.amount, 0),
+    rolledUp: d.filter((r) => polls(r) > 1),
+    closing: rows[rows.length - 1]!.balance, // the newest row's balance is the period's balance
+  };
+}
+
 // ---------------------------------------------------------------- the test
 
 test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, release, rollover", async ({ browser }) => {
@@ -332,6 +379,94 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await expect(q.locator("header")).toContainText("300 tokens");
     asserted("after approval alice lands on My usage; Tokens left card and top bar show 300");
     observe("tokens_left", await balance(q));
+  });
+
+  // ---- 2g: UI-10
+  await step("A2g", "the top bar greets an SSO user and the local admin by name", A, async () => {
+    const q = alice!;
+    await q.goto("/usage");
+    await expect(q.locator("header")).toContainText("Hello, Alice Example");
+    await expect(admin!.locator("header")).toContainText("Hello, admin");
+    asserted("the top bar of the approved SSO user shows \"Hello, Alice Example\" (name claim) and the local admin's shows \"Hello, admin\" (no name, so the username)");
+    observe("alice_greeting", (await q.locator("header").innerText()).replace(/\s+/g, " "));
+  });
+
+  // ---- 2f: UI-9, SET-8
+  await step("A2f", "a developer filters the setups with a label chip", A, async () => {
+    const p = alice!;
+    await nav(p, "Setups");
+    await expect(p.getByRole("heading", { name: "Setups" })).toBeVisible();
+    const rows = p.getByRole("table", { name: "All setups" }).locator("tbody tr");
+    await expect(rows).toHaveCount(6);
+    await expect(p.getByRole("group", { name: "Label size" })).toBeVisible();
+    const box = p.getByLabel("Label selector");
+    await expect(box).toHaveAttribute("placeholder", /^e\.g\. size=\w+$/);
+    const chip = (term: string) => p.getByRole("button", { name: `Filter by ${term}`, exact: true });
+    const click = async (term: string, sent: string) => {
+      const answered = p.waitForResponse((r) => {
+        const u = new URL(r.url());
+        return u.pathname === "/api/v1/setups" && (u.searchParams.get("selector") ?? "") === sent;
+      });
+      await chip(term).click();
+      expect((await answered).ok()).toBeTruthy();
+    };
+    await click("size=large", "size=large");
+    await expect(box).toHaveValue("size=large");
+    await expect(chip("size=large")).toHaveAttribute("aria-pressed", "true");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText("lab-03");
+    await expect(rows.nth(1)).toContainText("lab-04");
+    asserted("the chip size=large puts its term in the selector box, the page asks the API with it and lists only lab-03 and lab-04");
+    await click("size=medium", "size=medium");
+    await expect(box).toHaveValue("size=medium");
+    await expect(chip("size=large")).toHaveAttribute("aria-pressed", "false");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText("lab-01");
+    await expect(rows.nth(1)).toContainText("lab-02");
+    asserted("a chip of the same key replaces the term: size=medium, lab-01 and lab-02 only");
+    await click("size=medium", "");
+    await expect(box).toHaveValue("");
+    await expect(rows).toHaveCount(6);
+    asserted("activating the applied chip again removes the term: the box is empty and all six setups are listed");
+    observe("placeholder", await box.getAttribute("placeholder"));
+  });
+
+  // ---- 2p: PRE-1
+  await step("A2p", "a pre-approved user signs in for the first time and lands on My usage with a balance", D, async () => {
+    const a = admin!;
+    await a.goto("/admin/users");
+    const list = a.getByRole("table", { name: "Pre-approved users" });
+    await expect(list).toBeVisible();
+    await a.getByLabel("Emails to pre-approve").fill(DAVE.email);
+    await a.getByRole("button", { name: "Add", exact: true }).click();
+    const row = list.getByRole("row", { name: new RegExp(DAVE.email.replace(".", "\\.")) });
+    await expect(row).toContainText("Developer");
+    await expect(row).toContainText("Added here");
+    await expect(row).toContainText("Not yet");
+    asserted("the admin adds dave@example.com on Users > Pre-approved users: the row shows Developer, Added here, Not yet");
+    // Dave has never signed in: no account, no pending request.
+    await expect(a.getByRole("listitem").filter({ hasText: DAVE.email })).toHaveCount(0);
+    const ctx = await browser.newContext({ baseURL: BASE });
+    try {
+      const d = await ctx.newPage();
+      await signInSSO(d, DAVE);
+      await expect(d).toHaveURL(/\/usage$/);
+      await expect(d.getByRole("heading", { name: "My usage" })).toBeVisible();
+      await expect(d.locator('section[aria-label="Tokens left"]')).toContainText("300");
+      await expect(d.locator("header")).toContainText("300 tokens");
+      await expect(d.locator("header")).toContainText("Hello, Dave Example");
+      expect(await d.locator("body").innerText()).not.toContain("You are not authorized");
+      await expect(d.getByRole("navigation", { name: "Main" })).toBeVisible();
+      asserted("first sign-in: dave lands on My usage (/usage) with 300 tokens and his role's navigation, and the not-authorized page is never shown");
+      observe("dave_balance", await balance(d));
+      await a.reload();
+      const used = a.getByRole("table", { name: "Pre-approved users" }).getByRole("row", { name: new RegExp(DAVE.email.replace(".", "\\.")) });
+      await expect(used).not.toContainText("Not yet");
+      await expect(a.getByRole("listitem").filter({ hasText: DAVE.email })).toHaveCount(0);
+      asserted("afterwards the list shows the entry as used (no longer Not yet) and dave is not in the pending requests");
+    } finally {
+      await ctx.close();
+    }
   });
 
   // ---- 3
@@ -498,6 +633,14 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     asserted(`after the pool is destroyed and one poll the hold is released without a second click; ${SETUP_A} is Free on Setups; holds 1 of 2`);
   });
 
+  // ---- 7g: set-up for A8p
+  await step("A7g", "the admin tops up the user with 23 small grants so the old month's ledger fills more than one page", D, async () => {
+    const a = admin!;
+    await a.goto("/admin/users");
+    for (let i = 1; i <= 23; i++) await grantViaUi(a, "Alice", 1, `e2e paging ${i}`);
+    asserted("23 grants of 1 token through Users > Grant (each closes the panel, so each was stored); the ledger of the month now has more than 20 rows");
+  });
+
   // ---- 8
   await step("A8", "month rollover with a negative balance, the debt carries", A, async () => {
     const p = alice!;
@@ -568,6 +711,100 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     expect(l.every((r) => Math.abs(r.amount) < 5 || r === allow || r === carry)).toBeTruthy();
     observe("ledger_new_month", l.map((r) => `${r.type} ${r.amount} -> ${r.balance}`));
     observe("balance_after_rollover", bal);
+  });
+
+  // ---- 8p: UI-8, LED-13, LED-14
+  await step("A8p", "a developer pages the ledger with Older and Newer and switches the view", A, async () => {
+    const p = alice!;
+    // After the month jump the old month is the one with many rows (A7g): its allowance, grants and debits fill two pages
+    // in both views. The jump is the point where the admin's and the user's sessions may have expired, so sign in again if asked.
+    await openUsage(p);
+    const months = p.getByLabel("Month");
+    await months.selectOption({ index: 1 });
+    const older = p.getByRole("button", { name: "Older", exact: true });
+    const newer = p.getByRole("button", { name: "Newer", exact: true });
+    const rows = p.getByRole("table", { name: "Ledger" }).locator("tbody tr");
+    await expect(p.getByRole("button", { name: "By day", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(rows).toHaveCount(20);
+    await expect(newer).toBeDisabled();
+    await expect(older).toBeEnabled();
+    const first = await ledgerPageRows(p);
+    asserted("By day is the default view; page one shows 20 rows, Newer is disabled, Older is enabled");
+
+    const second = await ledgerClick(p, "Older", (q) => q.get("rollup") === "day" && q.has("cursor"));
+    const secondRows = await ledgerPageRows(p);
+    expect(secondRows.length).toBeGreaterThan(0);
+    expect(secondRows.length).toBeLessThanOrEqual(20);
+    await expect(newer).toBeEnabled();
+    if (second.next_cursor === null) await expect(older).toBeDisabled();
+    const edge = first[first.length - 1]!;
+    expect(Math.abs(edge.balance - (secondRows[0]!.balance + edge.amount))).toBeLessThanOrEqual(0.002);
+    asserted("Older shows the next page, Newer is enabled, and the first row of page two continues the balance of the last row of page one");
+
+    await ledgerClick(p, "Newer", (q) => q.get("rollup") === "day" && !q.has("cursor"));
+    expect(await ledgerPageRows(p)).toEqual(first);
+    await expect(newer).toBeDisabled();
+    asserted("Newer returns to the same first page and is disabled there");
+
+    // From page two, switching the view returns to the first page of the other view.
+    await ledgerClick(p, "Older", (q) => q.get("rollup") === "day" && q.has("cursor"));
+    await expect(newer).toBeEnabled();
+    await ledgerClick(p, "Every poll", (q) => !q.has("rollup") && !q.has("cursor"));
+    await expect(p.getByRole("button", { name: "Every poll", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(newer).toBeDisabled();
+    await expect(rows).toHaveCount(20);
+    await ledgerClick(p, "Older", (q) => !q.has("rollup") && q.has("cursor"));
+    await expect(newer).toBeEnabled();
+    asserted("switching to Every poll from page two shows its first page (Newer disabled); Older works there too");
+
+    // From page two, changing the month returns to the first page.
+    const changed = p.waitForResponse((r) => {
+      const u = new URL(r.url());
+      return u.pathname === "/api/v1/me/ledger" && u.searchParams.has("period") && !u.searchParams.has("cursor");
+    });
+    await months.selectOption({ index: 0 });
+    await changed;
+    await expect(newer).toBeDisabled();
+    asserted("changing the month from page two returns to a first page (Newer disabled)");
+  });
+
+  // ---- 8c: LED-7, LED-8
+  await step("A8c", "compaction through the real stack: a day with debits, more than 8 days later", A, async () => {
+    const p = alice!;
+    // The old month's Ledger in the Every poll view, oldest first. Debits are written in the old month only.
+    const oldMonth = async () => {
+      await openUsage(p);
+      await p.getByLabel("Month").selectOption({ index: 1 });
+      return readLedger(p);
+    };
+    const before = debitFacts(await oldMonth(), SETUP_A);
+    expect(before.polls, `${SETUP_A} must have been charged for several polls in the old month`).toBeGreaterThanOrEqual(4);
+    observe("before", { rows: before.rows, polls: before.polls, amount: before.amount, closing: before.closing });
+
+    // More than 8 days further on: every day with debits ended more than 7 days ago.
+    const clock = (await (await fetch(`${CLOCK}/clock`)).json()) as { offset: string };
+    const offsetS = goDurationSeconds(clock.offset) + 9 * 24 * 3600;
+    expect((await fetch(`${CLOCK}/clock`, { method: "PUT", body: JSON.stringify({ offset: `${offsetS}s` }) })).ok).toBeTruthy();
+    observe("clock_offset_s", offsetS);
+
+    let after = before;
+    await expect
+      .poll(
+        async () => {
+          after = debitFacts(await oldMonth(), SETUP_A);
+          return after.rows <= 2 && after.rolledUp.length > 0;
+        },
+        { message: "waiting for a poll that compacts the debits of the old month", timeout: 5 * 60_000, intervals: [15_000] },
+      )
+      .toBeTruthy();
+    observe("after", { rows: after.rows, polls: after.polls, amount: after.amount, closing: after.closing });
+    expect(after.rows, "one row per hold and day").toBeLessThan(after.polls);
+    expect(after.polls, "the rows stand for the same number of polls").toBe(before.polls);
+    expect(Math.abs(after.amount - before.amount), "the hold's total charge").toBeLessThanOrEqual(0.001 * (before.rows + 1));
+    expect(after.closing, "the period's closing balance").toBe(before.closing);
+    expect(after.rolledUp.every((r) => r.mult === undefined), "a rolled-up row shows no multiplier (LED-15)").toBeTruthy();
+    asserted(`${before.rows} single debits of ${SETUP_A} (${before.polls} polls) became ${after.rows} row(s) with "N polls" in their detail`);
+    asserted("the polls, the total charged and the period's closing balance are the same after compaction; rolled-up rows show no multiplier");
   });
 
   // ---- mode specific

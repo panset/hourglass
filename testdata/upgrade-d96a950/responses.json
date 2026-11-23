@@ -1,0 +1,1988 @@
+{
+ "facts": {
+  "balances_mt": {
+   "1": 0,
+   "2": -5250000,
+   "3": 300000,
+   "4": 0
+  },
+  "hold_charges_mt": {
+   "1": 3000000,
+   "2": 2600000
+  },
+  "hold_ids": [
+   1,
+   2
+  ],
+  "period_sums_mt": {
+   "1/2026-10": 0,
+   "1/2026-11": 0,
+   "2/2026-10": 0,
+   "2/2026-11": -5250000,
+   "3/2026-10": 0,
+   "3/2026-11": 300000,
+   "4/2026-10": 0,
+   "4/2026-11": 0
+  },
+  "user_ids": {
+   "admin": 1,
+   "dev": 2,
+   "norole": 4,
+   "other": 3
+  }
+ },
+ "ledger_dev": {
+  "available_periods": [
+   "2026-11"
+  ],
+  "entries": [
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -5250,
+    "created_at": "2026-11-12T09:15:00.000Z",
+    "hold_id": 1,
+    "id": 58,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -5150,
+    "created_at": "2026-11-12T09:10:00.000Z",
+    "hold_id": 1,
+    "id": 57,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -5050,
+    "created_at": "2026-11-12T09:05:00.000Z",
+    "hold_id": 1,
+    "id": 56,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4950,
+    "created_at": "2026-11-02T23:15:00.000Z",
+    "hold_id": 1,
+    "id": 55,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4850,
+    "created_at": "2026-11-02T23:10:00.000Z",
+    "hold_id": 2,
+    "id": 54,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4750,
+    "created_at": "2026-11-02T23:10:00.000Z",
+    "hold_id": 1,
+    "id": 53,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4650,
+    "created_at": "2026-11-02T23:05:00.000Z",
+    "hold_id": 2,
+    "id": 52,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4550,
+    "created_at": "2026-11-02T23:05:00.000Z",
+    "hold_id": 1,
+    "id": 51,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4450,
+    "created_at": "2026-11-02T23:00:00.000Z",
+    "hold_id": 2,
+    "id": 50,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4350,
+    "created_at": "2026-11-02T23:00:00.000Z",
+    "hold_id": 1,
+    "id": 49,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4250,
+    "created_at": "2026-11-02T22:55:00.000Z",
+    "hold_id": 2,
+    "id": 48,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4150,
+    "created_at": "2026-11-02T22:55:00.000Z",
+    "hold_id": 1,
+    "id": 47,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4050,
+    "created_at": "2026-11-02T22:50:00.000Z",
+    "hold_id": 2,
+    "id": 46,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3950,
+    "created_at": "2026-11-02T22:50:00.000Z",
+    "hold_id": 1,
+    "id": 45,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3850,
+    "created_at": "2026-11-02T22:45:00.000Z",
+    "hold_id": 2,
+    "id": 44,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3750,
+    "created_at": "2026-11-02T22:45:00.000Z",
+    "hold_id": 1,
+    "id": 43,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3650,
+    "created_at": "2026-11-02T22:40:00.000Z",
+    "hold_id": 2,
+    "id": 42,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3550,
+    "created_at": "2026-11-02T22:40:00.000Z",
+    "hold_id": 1,
+    "id": 41,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3450,
+    "created_at": "2026-11-02T22:35:00.000Z",
+    "hold_id": 2,
+    "id": 40,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3350,
+    "created_at": "2026-11-02T22:35:00.000Z",
+    "hold_id": 1,
+    "id": 39,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3250,
+    "created_at": "2026-11-02T22:30:00.000Z",
+    "hold_id": 2,
+    "id": 38,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3150,
+    "created_at": "2026-11-02T22:30:00.000Z",
+    "hold_id": 1,
+    "id": 37,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3050,
+    "created_at": "2026-11-02T22:25:00.000Z",
+    "hold_id": 2,
+    "id": 36,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2950,
+    "created_at": "2026-11-02T22:25:00.000Z",
+    "hold_id": 1,
+    "id": 35,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2850,
+    "created_at": "2026-11-02T22:20:00.000Z",
+    "hold_id": 2,
+    "id": 34,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2750,
+    "created_at": "2026-11-02T22:20:00.000Z",
+    "hold_id": 1,
+    "id": 33,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2650,
+    "created_at": "2026-11-02T22:15:00.000Z",
+    "hold_id": 2,
+    "id": 32,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2550,
+    "created_at": "2026-11-02T22:15:00.000Z",
+    "hold_id": 1,
+    "id": 31,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2450,
+    "created_at": "2026-11-02T22:10:00.000Z",
+    "hold_id": 2,
+    "id": 30,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2350,
+    "created_at": "2026-11-02T22:10:00.000Z",
+    "hold_id": 1,
+    "id": 29,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2250,
+    "created_at": "2026-11-02T22:05:00.000Z",
+    "hold_id": 2,
+    "id": 28,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2150,
+    "created_at": "2026-11-02T22:05:00.000Z",
+    "hold_id": 1,
+    "id": 27,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2050,
+    "created_at": "2026-11-02T22:00:00.000Z",
+    "hold_id": 2,
+    "id": 26,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1950,
+    "created_at": "2026-11-02T22:00:00.000Z",
+    "hold_id": 1,
+    "id": 25,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1850,
+    "created_at": "2026-11-02T21:55:00.000Z",
+    "hold_id": 2,
+    "id": 24,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1750,
+    "created_at": "2026-11-02T21:55:00.000Z",
+    "hold_id": 1,
+    "id": 23,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1650,
+    "created_at": "2026-11-02T21:50:00.000Z",
+    "hold_id": 2,
+    "id": 22,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1550,
+    "created_at": "2026-11-02T21:50:00.000Z",
+    "hold_id": 1,
+    "id": 21,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1450,
+    "created_at": "2026-11-02T21:45:00.000Z",
+    "hold_id": 2,
+    "id": 20,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1350,
+    "created_at": "2026-11-02T21:45:00.000Z",
+    "hold_id": 1,
+    "id": 19,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1250,
+    "created_at": "2026-11-02T21:40:00.000Z",
+    "hold_id": 2,
+    "id": 18,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1150,
+    "created_at": "2026-11-02T21:40:00.000Z",
+    "hold_id": 1,
+    "id": 17,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1050,
+    "created_at": "2026-11-02T21:35:00.000Z",
+    "hold_id": 2,
+    "id": 16,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -950,
+    "created_at": "2026-11-02T21:35:00.000Z",
+    "hold_id": 1,
+    "id": 15,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": "admin",
+    "amount_tokens": 50,
+    "balance_after_tokens": -850,
+    "created_at": "2026-11-02T21:30:00.000Z",
+    "hold_id": null,
+    "id": 14,
+    "multiplier": null,
+    "period": "2026-11",
+    "reason": "mid-day",
+    "setup_name": null,
+    "type": "grant"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -900,
+    "created_at": "2026-11-02T21:30:00.000Z",
+    "hold_id": 2,
+    "id": 13,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -800,
+    "created_at": "2026-11-02T21:30:00.000Z",
+    "hold_id": 1,
+    "id": 12,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -700,
+    "created_at": "2026-11-02T21:25:00.000Z",
+    "hold_id": 2,
+    "id": 11,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -600,
+    "created_at": "2026-11-02T21:25:00.000Z",
+    "hold_id": 1,
+    "id": 10,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -500,
+    "created_at": "2026-11-02T21:20:00.000Z",
+    "hold_id": 2,
+    "id": 9,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -400,
+    "created_at": "2026-11-02T21:20:00.000Z",
+    "hold_id": 1,
+    "id": 8,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -300,
+    "created_at": "2026-11-02T21:15:00.000Z",
+    "hold_id": 2,
+    "id": 7,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -200,
+    "created_at": "2026-11-02T21:15:00.000Z",
+    "hold_id": 1,
+    "id": 6,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -100,
+    "created_at": "2026-11-02T21:10:00.000Z",
+    "hold_id": 2,
+    "id": 5,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": 0,
+    "created_at": "2026-11-02T21:10:00.000Z",
+    "hold_id": 1,
+    "id": 4,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": 100,
+    "created_at": "2026-11-02T21:05:00.000Z",
+    "hold_id": 2,
+    "id": 3,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": 200,
+    "created_at": "2026-11-02T21:05:00.000Z",
+    "hold_id": 1,
+    "id": 2,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": 300,
+    "balance_after_tokens": 300,
+    "created_at": "2026-11-02T21:00:00.000Z",
+    "hold_id": null,
+    "id": 1,
+    "multiplier": null,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": null,
+    "type": "allowance"
+   }
+  ],
+  "period": "2026-11"
+ },
+ "ledger_dev_period": {
+  "available_periods": [
+   "2026-11"
+  ],
+  "entries": [
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -5250,
+    "created_at": "2026-11-12T09:15:00.000Z",
+    "hold_id": 1,
+    "id": 58,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -5150,
+    "created_at": "2026-11-12T09:10:00.000Z",
+    "hold_id": 1,
+    "id": 57,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -5050,
+    "created_at": "2026-11-12T09:05:00.000Z",
+    "hold_id": 1,
+    "id": 56,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4950,
+    "created_at": "2026-11-02T23:15:00.000Z",
+    "hold_id": 1,
+    "id": 55,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4850,
+    "created_at": "2026-11-02T23:10:00.000Z",
+    "hold_id": 2,
+    "id": 54,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4750,
+    "created_at": "2026-11-02T23:10:00.000Z",
+    "hold_id": 1,
+    "id": 53,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4650,
+    "created_at": "2026-11-02T23:05:00.000Z",
+    "hold_id": 2,
+    "id": 52,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4550,
+    "created_at": "2026-11-02T23:05:00.000Z",
+    "hold_id": 1,
+    "id": 51,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4450,
+    "created_at": "2026-11-02T23:00:00.000Z",
+    "hold_id": 2,
+    "id": 50,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4350,
+    "created_at": "2026-11-02T23:00:00.000Z",
+    "hold_id": 1,
+    "id": 49,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4250,
+    "created_at": "2026-11-02T22:55:00.000Z",
+    "hold_id": 2,
+    "id": 48,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4150,
+    "created_at": "2026-11-02T22:55:00.000Z",
+    "hold_id": 1,
+    "id": 47,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -4050,
+    "created_at": "2026-11-02T22:50:00.000Z",
+    "hold_id": 2,
+    "id": 46,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3950,
+    "created_at": "2026-11-02T22:50:00.000Z",
+    "hold_id": 1,
+    "id": 45,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3850,
+    "created_at": "2026-11-02T22:45:00.000Z",
+    "hold_id": 2,
+    "id": 44,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3750,
+    "created_at": "2026-11-02T22:45:00.000Z",
+    "hold_id": 1,
+    "id": 43,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3650,
+    "created_at": "2026-11-02T22:40:00.000Z",
+    "hold_id": 2,
+    "id": 42,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3550,
+    "created_at": "2026-11-02T22:40:00.000Z",
+    "hold_id": 1,
+    "id": 41,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3450,
+    "created_at": "2026-11-02T22:35:00.000Z",
+    "hold_id": 2,
+    "id": 40,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3350,
+    "created_at": "2026-11-02T22:35:00.000Z",
+    "hold_id": 1,
+    "id": 39,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3250,
+    "created_at": "2026-11-02T22:30:00.000Z",
+    "hold_id": 2,
+    "id": 38,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3150,
+    "created_at": "2026-11-02T22:30:00.000Z",
+    "hold_id": 1,
+    "id": 37,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -3050,
+    "created_at": "2026-11-02T22:25:00.000Z",
+    "hold_id": 2,
+    "id": 36,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2950,
+    "created_at": "2026-11-02T22:25:00.000Z",
+    "hold_id": 1,
+    "id": 35,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2850,
+    "created_at": "2026-11-02T22:20:00.000Z",
+    "hold_id": 2,
+    "id": 34,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2750,
+    "created_at": "2026-11-02T22:20:00.000Z",
+    "hold_id": 1,
+    "id": 33,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2650,
+    "created_at": "2026-11-02T22:15:00.000Z",
+    "hold_id": 2,
+    "id": 32,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2550,
+    "created_at": "2026-11-02T22:15:00.000Z",
+    "hold_id": 1,
+    "id": 31,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2450,
+    "created_at": "2026-11-02T22:10:00.000Z",
+    "hold_id": 2,
+    "id": 30,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2350,
+    "created_at": "2026-11-02T22:10:00.000Z",
+    "hold_id": 1,
+    "id": 29,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2250,
+    "created_at": "2026-11-02T22:05:00.000Z",
+    "hold_id": 2,
+    "id": 28,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2150,
+    "created_at": "2026-11-02T22:05:00.000Z",
+    "hold_id": 1,
+    "id": 27,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -2050,
+    "created_at": "2026-11-02T22:00:00.000Z",
+    "hold_id": 2,
+    "id": 26,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1950,
+    "created_at": "2026-11-02T22:00:00.000Z",
+    "hold_id": 1,
+    "id": 25,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1850,
+    "created_at": "2026-11-02T21:55:00.000Z",
+    "hold_id": 2,
+    "id": 24,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1750,
+    "created_at": "2026-11-02T21:55:00.000Z",
+    "hold_id": 1,
+    "id": 23,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1650,
+    "created_at": "2026-11-02T21:50:00.000Z",
+    "hold_id": 2,
+    "id": 22,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1550,
+    "created_at": "2026-11-02T21:50:00.000Z",
+    "hold_id": 1,
+    "id": 21,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1450,
+    "created_at": "2026-11-02T21:45:00.000Z",
+    "hold_id": 2,
+    "id": 20,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1350,
+    "created_at": "2026-11-02T21:45:00.000Z",
+    "hold_id": 1,
+    "id": 19,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1250,
+    "created_at": "2026-11-02T21:40:00.000Z",
+    "hold_id": 2,
+    "id": 18,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1150,
+    "created_at": "2026-11-02T21:40:00.000Z",
+    "hold_id": 1,
+    "id": 17,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -1050,
+    "created_at": "2026-11-02T21:35:00.000Z",
+    "hold_id": 2,
+    "id": 16,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -950,
+    "created_at": "2026-11-02T21:35:00.000Z",
+    "hold_id": 1,
+    "id": 15,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": "admin",
+    "amount_tokens": 50,
+    "balance_after_tokens": -850,
+    "created_at": "2026-11-02T21:30:00.000Z",
+    "hold_id": null,
+    "id": 14,
+    "multiplier": null,
+    "period": "2026-11",
+    "reason": "mid-day",
+    "setup_name": null,
+    "type": "grant"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -900,
+    "created_at": "2026-11-02T21:30:00.000Z",
+    "hold_id": 2,
+    "id": 13,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -800,
+    "created_at": "2026-11-02T21:30:00.000Z",
+    "hold_id": 1,
+    "id": 12,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -700,
+    "created_at": "2026-11-02T21:25:00.000Z",
+    "hold_id": 2,
+    "id": 11,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -600,
+    "created_at": "2026-11-02T21:25:00.000Z",
+    "hold_id": 1,
+    "id": 10,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -500,
+    "created_at": "2026-11-02T21:20:00.000Z",
+    "hold_id": 2,
+    "id": 9,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -400,
+    "created_at": "2026-11-02T21:20:00.000Z",
+    "hold_id": 1,
+    "id": 8,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -300,
+    "created_at": "2026-11-02T21:15:00.000Z",
+    "hold_id": 2,
+    "id": 7,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -200,
+    "created_at": "2026-11-02T21:15:00.000Z",
+    "hold_id": 1,
+    "id": 6,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": -100,
+    "created_at": "2026-11-02T21:10:00.000Z",
+    "hold_id": 2,
+    "id": 5,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": 0,
+    "created_at": "2026-11-02T21:10:00.000Z",
+    "hold_id": 1,
+    "id": 4,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": 100,
+    "created_at": "2026-11-02T21:05:00.000Z",
+    "hold_id": 2,
+    "id": 3,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-02",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": -100,
+    "balance_after_tokens": 200,
+    "created_at": "2026-11-02T21:05:00.000Z",
+    "hold_id": 1,
+    "id": 2,
+    "multiplier": 2,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": "lab-01",
+    "type": "debit"
+   },
+   {
+    "actor_name": null,
+    "amount_tokens": 300,
+    "balance_after_tokens": 300,
+    "created_at": "2026-11-02T21:00:00.000Z",
+    "hold_id": null,
+    "id": 1,
+    "multiplier": null,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": null,
+    "type": "allowance"
+   }
+  ],
+  "period": "2026-11"
+ },
+ "ledger_other": {
+  "available_periods": [
+   "2026-11"
+  ],
+  "entries": [
+   {
+    "actor_name": null,
+    "amount_tokens": 300,
+    "balance_after_tokens": 300,
+    "created_at": "2026-11-12T09:15:00.000Z",
+    "hold_id": null,
+    "id": 59,
+    "multiplier": null,
+    "period": "2026-11",
+    "reason": null,
+    "setup_name": null,
+    "type": "allowance"
+   }
+  ],
+  "period": "2026-11"
+ },
+ "now": "2026-11-12T09:15:00Z",
+ "recorded_from": "d96a950",
+ "session_admin": {
+  "auth_source": "local",
+  "csrf_token": "\u003ccsrf\u003e",
+  "email": "",
+  "is_local_admin": true,
+  "must_change_password": false,
+  "name": "admin",
+  "roles": [
+   "admin"
+  ],
+  "status": "active",
+  "user_id": 1,
+  "username": "admin"
+ },
+ "session_dev": {
+  "auth_source": "oidc",
+  "csrf_token": "\u003ccsrf\u003e",
+  "email": "dev@example.test",
+  "is_local_admin": false,
+  "must_change_password": false,
+  "name": "User dev",
+  "roles": [
+   "developer"
+  ],
+  "status": "active",
+  "user_id": 2,
+  "username": ""
+ },
+ "session_norole": {
+  "auth_source": "oidc",
+  "csrf_token": "\u003ccsrf\u003e",
+  "email": "norole@example.test",
+  "is_local_admin": false,
+  "must_change_password": false,
+  "name": "User norole",
+  "roles": [],
+  "status": "active",
+  "user_id": 4,
+  "username": ""
+ },
+ "setups_admin": {
+  "display_label_keys": [],
+  "metering_description": null,
+  "setups": [
+   {
+    "admin": {
+     "enabled": true,
+     "last_seen_at": null,
+     "matched_rule_selector": "tier=a"
+    },
+    "cost_per_hour_tokens": {
+     "at_peak": 1800,
+     "now": 1200
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": "2026-11-02T21:00:00.000Z",
+    "holder": {
+     "balance_tokens": -5250,
+     "hold_id": 1,
+     "is_you": false,
+     "name": "User dev",
+     "overdrawn": true,
+     "release_requested_at": null,
+     "user_id": 2
+    },
+    "id": 1,
+    "labels": {
+     "tier": "a"
+    },
+    "metering": {
+     "active": true,
+     "expected_start_at": null,
+     "reason": null,
+     "started_at": "2026-11-02T21:00:00.000Z"
+    },
+    "name": "lab-01",
+    "state": "held",
+    "weight": 600
+   },
+   {
+    "admin": {
+     "enabled": true,
+     "last_seen_at": null,
+     "matched_rule_selector": "tier=a"
+    },
+    "cost_per_hour_tokens": {
+     "at_peak": 1800,
+     "now": 1200
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": null,
+    "holder": null,
+    "id": 2,
+    "labels": {
+     "tier": "a"
+    },
+    "metering": null,
+    "name": "lab-02",
+    "state": "free",
+    "weight": 600
+   },
+   {
+    "admin": {
+     "enabled": false,
+     "last_seen_at": null,
+     "matched_rule_selector": null
+    },
+    "cost_per_hour_tokens": {
+     "at_peak": 3,
+     "now": 2
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": null,
+    "holder": null,
+    "id": 3,
+    "labels": {
+     "tier": "b",
+     "zone": "east"
+    },
+    "metering": null,
+    "name": "lab-03",
+    "state": "disabled",
+    "weight": 1
+   },
+   {
+    "admin": {
+     "enabled": true,
+     "last_seen_at": null,
+     "matched_rule_selector": null
+    },
+    "cost_per_hour_tokens": {
+     "at_peak": 3,
+     "now": 2
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": null,
+    "holder": null,
+    "id": 4,
+    "labels": {
+     "zone": "west"
+    },
+    "metering": null,
+    "name": "lab-04",
+    "state": "free",
+    "weight": 1
+   }
+  ],
+  "summary": {
+   "deployed": 0,
+   "enabled": 3,
+   "free": 2
+  }
+ },
+ "setups_dev": {
+  "display_label_keys": [],
+  "metering_description": null,
+  "setups": [
+   {
+    "admin": null,
+    "cost_per_hour_tokens": {
+     "at_peak": 1800,
+     "now": 1200
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": "2026-11-02T21:00:00.000Z",
+    "holder": {
+     "balance_tokens": -5250,
+     "hold_id": 1,
+     "is_you": true,
+     "name": "User dev",
+     "overdrawn": true,
+     "release_requested_at": null,
+     "user_id": 2
+    },
+    "id": 1,
+    "labels": {
+     "tier": "a"
+    },
+    "metering": {
+     "active": true,
+     "expected_start_at": null,
+     "reason": null,
+     "started_at": "2026-11-02T21:00:00.000Z"
+    },
+    "name": "lab-01",
+    "state": "held",
+    "weight": 600
+   },
+   {
+    "admin": null,
+    "cost_per_hour_tokens": {
+     "at_peak": 1800,
+     "now": 1200
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": null,
+    "holder": null,
+    "id": 2,
+    "labels": {
+     "tier": "a"
+    },
+    "metering": null,
+    "name": "lab-02",
+    "state": "free",
+    "weight": 600
+   },
+   {
+    "admin": null,
+    "cost_per_hour_tokens": {
+     "at_peak": 3,
+     "now": 2
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": null,
+    "holder": null,
+    "id": 4,
+    "labels": {
+     "zone": "west"
+    },
+    "metering": null,
+    "name": "lab-04",
+    "state": "free",
+    "weight": 1
+   }
+  ],
+  "summary": {
+   "deployed": 0,
+   "enabled": 3,
+   "free": 2
+  }
+ },
+ "setups_dev_filtered": {
+  "display_label_keys": [],
+  "metering_description": null,
+  "setups": [
+   {
+    "admin": null,
+    "cost_per_hour_tokens": {
+     "at_peak": 1800,
+     "now": 1200
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": "2026-11-02T21:00:00.000Z",
+    "holder": {
+     "balance_tokens": -5250,
+     "hold_id": 1,
+     "is_you": true,
+     "name": "User dev",
+     "overdrawn": true,
+     "release_requested_at": null,
+     "user_id": 2
+    },
+    "id": 1,
+    "labels": {
+     "tier": "a"
+    },
+    "metering": {
+     "active": true,
+     "expected_start_at": null,
+     "reason": null,
+     "started_at": "2026-11-02T21:00:00.000Z"
+    },
+    "name": "lab-01",
+    "state": "held",
+    "weight": 600
+   },
+   {
+    "admin": null,
+    "cost_per_hour_tokens": {
+     "at_peak": 1800,
+     "now": 1200
+    },
+    "deployed": false,
+    "details": {
+     "n": [
+      1,
+      2
+     ],
+     "note": "opaque"
+    },
+    "held_since": null,
+    "holder": null,
+    "id": 2,
+    "labels": {
+     "tier": "a"
+    },
+    "metering": null,
+    "name": "lab-02",
+    "state": "free",
+    "weight": 600
+   }
+  ],
+  "summary": {
+   "deployed": 0,
+   "enabled": 3,
+   "free": 2
+  }
+ },
+ "signin_new_user": {
+  "audit": [
+   {
+    "action": "ledger.grant",
+    "actor_id": 1,
+    "actor_service": "",
+    "after": "{\"amount_mt\":50000,\"balance_mt\":-850000,\"entry_id\":14,\"reason\":\"mid-day\"}",
+    "before": "{\"balance_mt\":-900000}",
+    "created_at": "2026-11-02T21:30:00Z",
+    "target": "user:2"
+   }
+  ],
+  "events": [
+   {
+    "data": {},
+    "hold": null,
+    "setup": null,
+    "time": "2026-11-23T21:59:20.494612Z",
+    "type": "user.pending",
+    "user": {
+     "email": "new.user@example.test",
+     "id": 5,
+     "name": "New User",
+     "roles": [],
+     "username": ""
+    }
+   }
+  ],
+  "location": "/",
+  "session": {
+   "auth_source": "oidc",
+   "csrf_token": "\u003ccsrf\u003e",
+   "email": "new.user@example.test",
+   "is_local_admin": false,
+   "must_change_password": false,
+   "name": "New User",
+   "roles": [],
+   "status": "pending",
+   "user_id": 5,
+   "username": ""
+  },
+  "session_cookie_set": true,
+  "session_status": 200,
+  "status": 302,
+  "user": {
+   "balance_mt": 0,
+   "email": "new.user@example.test",
+   "id": 5,
+   "name": "New User",
+   "roles": null,
+   "status": "pending"
+  }
+ }
+}

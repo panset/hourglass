@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -89,6 +90,9 @@ type backendOpts struct {
 	// internal/auth, user.approved from the pre-approval step) instead of
 	// the dispatcher.
 	emitter auth.Emitter
+	// dbCopy is a database file to start from: a copy of it is opened in the
+	// test's temporary directory (the upgrade tests, UPG-1 and UPG-2).
+	dbCopy string
 }
 
 func newBackend(t *testing.T, o backendOpts) *backend {
@@ -97,7 +101,17 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 	if o.start.IsZero() {
 		o.start = time.Now()
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "api.db"))
+	dbPath := filepath.Join(t.TempDir(), "api.db")
+	if o.dbCopy != "" {
+		raw, err := os.ReadFile(o.dbCopy)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dbPath, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := store.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -65,6 +65,7 @@ go_test(
         "service_testenv_test.go",
         "setups_label_index_test.go",
         "testenv_test.go",
+        "upgrade_compat_test.go",
         "user_test.go",
         "user_testenv_test.go",
     ],
@@ -76,6 +77,10 @@ go_test(
         # The LED-11 test compares with responses recorded from the handler as it
         # was before the ledger view parameters existed.
         "testdata/led11_pre_change_responses.json",
+        # The upgrade tests (UPG-2, UPG-3) read what the release at d96a950 answered and its contract.
+        "//:testdata/upgrade-d96a950/hourglass.sqlite3",
+        "//:testdata/upgrade-d96a950/openapi.yaml",
+        "//:testdata/upgrade-d96a950/responses.json",
         # The registration scan (registration_test.go) reads the sources of these packages.
         ":go_sources",
         "//cmd/hourglass-ui:go_sources",
