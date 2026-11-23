@@ -58,6 +58,20 @@ HOURGLASS_SCALE_TEST=1 go test ./internal/api -run NFR_ApiUnder500msAtSpecScale 
 
 Run it after changing a store query, a list handler or the ledger. `go test -race` runs the reduced version only.
 
+### Compaction scale test
+
+`TestLED10_ScaleYearOfDebitsCompactsInBoundedSteps` in `internal/api` (`perf_compaction_scale_test.go`) checks the ledger roll-up on a year of 5-minute debits. In a normal `go test` it uses 3 holds (about 315,000 debits). It requires every compaction step to stay well under a second, that finding the due groups is served by the partial index over raw debits and does not scan the ledger, and that a ledger page read stays fast before and after. It uses the same switch as the test above, and the full size runs 12 holds (about 1.26 million debits; seeding and compacting take a minute or two) and logs the figures:
+
+```sh
+HOURGLASS_SCALE_TEST=1 go test ./internal/api -run LED10_ScaleYearOfDebitsCompactsInBoundedSteps -v -count=1 -timeout 20m
+```
+
+Run it after changing the compaction queries, the collector's step budget or the ledger indexes.
+
+### Upgrade fixtures
+
+`testdata/upgrade-d96a950/` holds what the previous release (commit `d96a950`) wrote and answered, so the compatibility tests (UPG-1 to UPG-3) compare against that release's own output and not against the new code's: a database with ledger data (`hourglass.sqlite3`; the `.db` extension is git-ignored), the responses of the ledger, setups and session routes and of a new SSO sign-in (`responses.json`), and that release's `api/openapi.yaml`. Nothing in the folder is edited by hand. The recorder that produced them is committed beside them as text (`recorder_upg_record_test.go.txt` and `recorder_testenv.patch`); the README inside the folder has the exact steps: check out `d96a950` in a separate worktree, apply the patch, copy the recorder in as a test, run it, copy the two outputs back, and remove the worktree. Regenerate them only if the old release's behaviour was recorded wrongly, never to make a failing test pass (D78).
+
 ## Rules CI enforces
 
 | Rule | Check | Why |

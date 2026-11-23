@@ -7,3 +7,4 @@
 - 2026-11-23: Verification 79 (6 low) closed by 79b; D72 and D73 corrected in place (unpushed). Orchestrator directed one `LedgerEntry` schema with optional `entry_count` so customers' generated client types keep their name. Bundled e2e not run in 79: port 8081 is held by the owner's `hourglass-tls` stack; owner asked whether it may be stopped. Orchestrator.
 - 2026-11-23: 79b did not run its two new Go tests against a deliberate break and eslint is not installed locally; task 87 (final verification) to cover both. Orchestrator.
 - 2026-11-23: Verification 84 (1 medium, 5 low) closed by 84b; recorded as D77. For the owner report: the seed loader has the same strictness gaps as the pre-approval file had (second YAML document dropped, duplicate keys); left alone, out of scope. Orchestrator.
+- 2026-11-23: Owner chose (dialog) to have the orchestrator stop the hourglass-tls stack for the end-to-end runs and restart it afterwards. Stopped before task 85b. Owner.

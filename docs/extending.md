@@ -466,7 +466,7 @@ Hooks receive every event. `hourglass.EventTypes()` returns the list in this ord
 | `balance.low` | A balance first drops below 10% of the allowance | No | the user | null | null | `{"balance_tokens": number, "allowance_tokens": number}` |
 | `balance.overdrawn` | A balance first reaches zero or below | No | the user | null | null | `{"balance_tokens": number, "allowance_tokens": number}` |
 | `user.pending` | A new user signs in for the first time | No | the new user, `roles` empty | null | null | `{}` |
-| `user.approved` | An admin assigns a first role | No | the user, with the new roles | null | null | `{}` |
+| `user.approved` | An admin assigns a first role, or a pre-approved SSO user signs in and is approved | No | the user, with the new roles | null | null | `{}` |
 | `period.closed` | The monthly rollover finishes | No | null | null | null | `{"period": "2026-10", "next": "2026-11", "users": 12}` |
 | `poll.failed` | A collector run fails | No | null | null | null | `{"error": string}` |
 

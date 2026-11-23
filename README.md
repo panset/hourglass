@@ -4,6 +4,8 @@ Hourglass is an open-source token-management framework for shared lab setups. It
 
 **How tokens work.** An admin gives each setup a weight through label-based rate rules (for example `size=large` is 2). Every 5 minutes, each holder is debited `weight x multiplier x 5/60` tokens. The multiplier comes from lab pressure, a number from 0% to 100% that a pressure source reports and the core averages over 15 minutes: below 50% is free (0x), 50% to 75% is 1x, 75% to 90% is 2x, 90% and above is 3x. Bands and multipliers are admin-editable. Each user gets 300 tokens on the 1st of the month; surplus expires and debt carries over. At zero or below you cannot acquire new setups, but nothing you hold is torn down.
 
+**Ledger, labels and sign-in.** The ledger on My usage pages 20 rows at a time, by day or every poll; storage rolls the per-poll debits of days older than a week up to one row per hold and day, with the same totals. The Setups page lists every label as a clickable chip that fills the selector. The top bar greets the signed-in user by name. An admin can pre-approve SSO users by email, in Admin, Users or with a file, so that a listed person gets their role at the first sign-in instead of waiting; [docs/deploying.md](docs/deploying.md#pre-approving-sso-users) explains how to load a list.
+
 **Status: v1, tested against a simulator.** All vSphere code is built and tested against mocks and the govmomi simulator. It has not been run against a real vCenter, and the first run needs the [checklist](docs/deploying.md#first-run-checklist-against-a-real-vcenter). Hourglass runs as one process with one SQLite file and has no high availability.
 
 ## Quick start with Docker and Bazel
@@ -25,7 +27,7 @@ This starts Hourglass, Keycloak as the login provider, and a simulator standing 
 3. Open <http://localhost:8080>.
 4. Sign in as the local admin: username `admin`, password `dev-only-not-a-secret`. That password comes from `HOURGLASS_ADMIN_PASSWORD` in the compose file and is read only when the account is first created. Hourglass makes you choose a new password of at least 12 characters before it shows anything else. Without that variable, Hourglass generates a password and prints it once in its log.
 5. Open Admin, Settings and set the one thing the seed file cannot set: the display label keys to `size`.
-6. Sign in as a realm user. Open a private window at <http://localhost:8080>, choose Sign in with SSO and use `alice` with password `dev-only-alice` (`bob` and `carol` work too). Alice sees "You are not authorized to use Hourglass." That is correct: new users have no role. Use a private window because signing out of Hourglass does not end the Keycloak session.
+6. Sign in as a realm user. Open a private window at <http://localhost:8080>, choose Sign in with SSO and use `alice` with password `dev-only-alice` (`bob` and `carol` work too; `dave` is kept for the pre-approval end-to-end test, so leave him unused). Alice sees "You are not authorized to use Hourglass." That is correct: new users have no role. Use a private window because signing out of Hourglass does not end the Keycloak session.
 7. Approve her. In the admin window open Admin, Users. Alice is listed under pending requests. Give her the `developer` role.
 8. Acquire a setup. In Alice's window reload, open Setups and acquire `lab-03`. Metering starts when the provider reports the setup's resource pool, or after 2 hours. To start it now, create the pool in the simulator and wait for the next poll (polls run every 5 minutes). If Alice releases while the pool exists, the hold is marked Releasing and stays metered until the pool is gone, so delete the pool and wait for another poll to finish the release:
 
@@ -148,7 +150,7 @@ The prerequisites and what CI enforces are in [CONTRIBUTING.md](CONTRIBUTING.md)
 
 The integration API is for a lab that already has its own tooling. A customer's own service reports what is deployed and how contended the lab is over a token-authenticated HTTP API, and receives webhooks when a hold is acquired or released, with no Go required. [docs/integrating.md](docs/integrating.md) walks through it.
 
-- [docs/deploying.md](docs/deploying.md): bundled and split mode, images, configuration reference, OIDC, vSphere, backup, metrics, upgrade.
+- [docs/deploying.md](docs/deploying.md): bundled and split mode, images, configuration reference, OIDC, pre-approving SSO users, vSphere, backup, metrics, upgrade, data retention.
 - [docs/integrating.md](docs/integrating.md): connect an existing lab stack without writing Go. Your service reports what is deployed and how contended the lab is over a token-authenticated HTTP API, and receives webhooks for acquire and release.
 - [docs/extending.md](docs/extending.md): the four interfaces, events, hooks, building your own binary.
 - [CONTRIBUTING.md](CONTRIBUTING.md): building, testing and the rules CI enforces.

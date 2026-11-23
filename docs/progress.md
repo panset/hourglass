@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-20
+Last updated: 2026-11-23
 
 Status of Hourglass v1 against the spec in [SPEC.md](SPEC.md). Decisions are
 in [decisions.md](decisions.md). The task-by-task record (briefs, results,
@@ -63,6 +63,31 @@ Built to [design/integration-api.md](design/integration-api.md) (D42 to D63). Th
 - OIDC users have an empty `username` in event JSON and in the state response; the email is the stable key.
 - The integration end-to-end scenario is not part of `bazel test //...` (D63).
 - `docs/SPEC.md` and the spec's source still describe the old HOLD-2 and lack the integration requirements (D42).
+
+## Ledger roll-up, labels, greeting, pre-approved users (owner-directed, 2026-11-23)
+
+Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to [design/ledger-labels-onboarding.md](design/ledger-labels-onboarding.md) (D69 to D78). The task record is under `.orchestrator/ledger-labels-onboarding/`. Nothing here is merged to `main`, tagged or released: that waits for the owner's go-ahead and version number. `docs/SPEC.md` is not edited; the edits its source needs are listed in the job report and are to be recorded in `decisions.md` by the orchestrator.
+
+**Built**
+
+- Ledger roll-up: migration `0006` (a `rollup_count` column, a marker table, a delete trigger that allows only the compaction of debit rows, two partial indexes) and a bounded daily compaction step run by the collector: per-poll debits of days earlier than seven days before today become one row per user, hold and day, with the same total, id order and balances (LED-7 to LED-10, LED-15; D70, D71).
+- `GET /api/v1/me/ledger`: `rollup=day`, `limit`, `cursor`, `entry_count`, `next_cursor`; without the new parameters it answers as before (LED-11 to LED-14; D72). My usage pages the ledger 20 rows at a time, By day or Every poll (UI-8; D73).
+- Label discovery: `label_index` on `GET /api/v1/setups` and "Available labels" chips on Setups (SET-8, UI-9; D74).
+- Greeting: name fallback claims at sign-in, `display_name` in the session and "Hello, {name}" in the top bar (AUTH-9, UI-10; D75).
+- Pre-approved SSO users: migration `0007`, the sign-in step, three admin routes, the optional `preapproved_users_file`, and the Pre-approved users section on Users (PRE-1 to PRE-8, UI-11; D76, D77).
+- Compatibility tests against fixtures recorded from the previous release (`testdata/upgrade-d96a950/`) (UPG-1 to UPG-3; D78).
+- Independent verification ran after milestones 3, 5 and 7 and its findings were fixed in their own commits.
+- Documentation: `docs/deploying.md` (upgrade entry for migrations 0006 and 0007, data retention and disk space, the timezone note, the configuration reference, the "Pre-approving SSO users" section), `docs/ui-notes.md`, `README.md`, `deploy/README.md` (a fourth development user, `dave`) and `CONTRIBUTING.md` (the compaction scale test and the upgrade fixtures).
+
+**Not finished, not verified, or left as is**
+
+- The commands in "Pre-approving SSO users" in `docs/deploying.md` (the file and the scripted way) are marked `<!-- 86b: run and correct -->`: they were written from the code and have not been run against the bundled stack. The job is not done until they have been.
+- The new end-to-end steps (A2g, A2f, A2p, A7g, A8p, A8c) type-check and list but had not run in a browser when their task finished, because the owner's `hourglass-tls` project held ports 8081 and 8990. `e2e/run.sh both` and `e2e/run.sh integration` have to pass before a release.
+- The roll-up window (seven days) is fixed. Compacted rows cannot be expanded again, and an older binary refuses the upgraded database; the way back is the backup taken before the upgrade.
+- Disk: the file stops growing at the old rate but does not shrink until an offline `VACUUM`.
+- The release itself (merge, version number, tag, image workflow) has not been done. No version tag exists yet, and `internal/version` has not been checked for what the released binary reports.
+- `docs/SPEC.md` and the spec's source still lack the new requirements and table rows.
+- `docs/extending.md` still says `user.approved` is emitted when an admin assigns a first role; it is now also emitted for a pre-approved sign-in, with the same payload.
 
 ## Milestones
 

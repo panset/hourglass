@@ -115,6 +115,7 @@ Configuration is a YAML file plus environment variables. The file comes from `-c
 | `metering` | none | the binary's default (`default`) | `{type, config}` |
 | `hooks` | none | `[]` | List of `{type, config}`, in delivery order |
 | `seed` | none | empty | Path of the [seed file](#seed-file) |
+| `preapproved_users_file` | `HOURGLASS_PREAPPROVED_USERS_FILE` | empty | Path of the optional [pre-approved users file](#pre-approved-users-file): SSO users listed in it get a role at their first sign-in. Read once at start |
 | `ui.serve` | `HOURGLASS_UI_SERVE` | `true` | Serve the bundled UI at `/`. `false` for split mode. A boolean |
 | `cors.allowed_origins` | `HOURGLASS_CORS_ALLOWED_ORIGINS` | empty | Comma-separated origins allowed credentialed CORS. Only for UI development from another origin |
 | `metrics.listen` | `HOURGLASS_METRICS_LISTEN` | empty (off) | Address of the metrics listener. Must differ from `listen` |
@@ -128,6 +129,25 @@ Rules:
 - `provider`, `pressure`, `metering` and each hook allow only `type` and `config`.
 - A `provider` block with a `config` but no `type` is an error.
 - Changing `timezone` across a month boundary can move ledger entries between months, because each entry's month is taken from the configured zone. Change it just after a rollover, early in a month, so that no month boundary lies between the old and the new zone's time.
+- The ledger roll-up (see [Data retention](#data-retention)) also cuts days in the configured zone, and it does so when it runs: a day is cut in the timezone that is configured at that moment, and a compacted day is never cut again. If you change `timezone`, days already rolled up keep the boundaries of the old zone, and only days not yet rolled up follow the new one. The per-poll rows of the last week are not affected until they are compacted.
+
+### Pre-approved users file
+
+`preapproved_users_file` (environment `HOURGLASS_PREAPPROVED_USERS_FILE`) names an optional file that lists SSO users to approve at their first sign-in. It is empty by default, and with no file and no entries added in the admin page, sign-in behaves as before. The path is shown in the logged and redacted configuration; the file holds no secret. The whole guide to using it is under [Pre-approving SSO users](#pre-approving-sso-users). The file itself:
+
+```yaml
+users:
+  - email: alice@example.com
+    roles: [developer]
+  - email: bob@example.com        # roles default to [developer]
+```
+
+- A path ending in `.json` is read as JSON, anything else as YAML.
+- It is decoded strictly, like the seed file, and a little more strictly than the seed: it must be one document, a key may not repeat, and keys must be spelled exactly (`users`, `email`, `roles`; `Email` is an error). An unknown key is an error. An empty file is valid and holds no entries.
+- Limits: at most 10,000 entries. Each email follows the rules of the admin route (at most 254 characters after trimming, exactly one `@` with text on both sides, no whitespace, comma or `*`, no control or invisible character). A role set must hold only `developer` and `admin`; an entry with no `roles` key gets `[developer]`, and an empty `roles` list is an error. The same email twice is an error. Emails are compared after trimming and lower-casing ASCII letters.
+- The file is read once, at start, before the database is opened. An unreadable or invalid file stops the start with a message that names the entry by position (`users[3]`) and never repeats a valid address. A change takes effect at the next restart; to add someone without a restart, use the admin page.
+- The file is never written to and never copied into the database. Remove an entry and restart, and the pre-approval is gone; people it already approved keep their role.
+- The log line at start is `pre-approved users file read` with the path and the number of entries, never the addresses.
 
 ### Extensions in the config file
 
@@ -190,7 +210,7 @@ Hourglass works with any OIDC provider that supports discovery and the authoriza
 
 5. Hourglass finds the endpoints through `<issuer>/.well-known/openid-configuration`. It contacts the issuer on the first sign-in attempt, not at start-up, so a wrong issuer does not stop the process. Check with a browser, or run `curl -si https://<host>/auth/oidc/start`: a `302` to your provider means discovery worked, and a `500` means it did not (see the log).
 
-A user is identified by the `sub` claim. `email` and `name` are stored for display and refreshed at every sign-in. The ID token must verify against the issuer's keys and carry the nonce Hourglass sent.
+A user is identified by the `sub` claim. `email` and the name are stored for display and refreshed at every sign-in. The stored name is the first non-empty of the `name` claim, the `given_name` and `family_name` claims joined by a space, and `preferred_username`; if all are empty the name stays empty. The top bar greets the user with "Hello" and their name, else their username, else their email, so a provider that sends no name still gives a greeting. No scope is added: `profile` already covers these claims. The ID token must verify against the issuer's keys and carry the nonce Hourglass sent.
 
 What the first sign-in looks like:
 
@@ -199,9 +219,94 @@ What the first sign-in looks like:
 3. An admin opens Admin, Users. Pending requests are listed oldest first with name, email and first sign-in time, and the navigation shows the count. The admin assigns `developer` or `admin` to approve, or rejects. A rejected user keeps seeing the same page and can be approved later.
 4. The user reloads and lands on My usage (`/usage`). The monthly allowance is credited when the first role is assigned, not at sign-in.
 
+If the user's email is on the pre-approved list, steps 2 to 4 do not happen: the user is active with the listed role and the allowance at the end of the first sign-in and lands on My usage. See [Pre-approving SSO users](#pre-approving-sso-users).
+
 Signing out of Hourglass ends only the Hourglass session. It does not sign the user out of the identity provider, so a second sign-in in the same browser can be silent and use the same identity. To test with several users, use separate private windows.
 
 Roles live in Hourglass, not in the identity provider.
+
+## Pre-approving SSO users
+
+By default a new SSO user waits for an admin to give them a role. If you already hold a list of people who should get in, load it and they are approved at their first sign-in instead. A **pre-approval** is an email address and a non-empty set of roles (`developer`, `admin`). It comes from the list in the database (managed in the admin page or with the admin API) or from the optional file; the roles for an email that is in both are the union of the two.
+
+When a pre-approval applies, the user is active with the listed roles and the monthly allowance by the end of that sign-in, and their first page is My usage. They never see the not-authorized page. It applies when all of these hold:
+
+1. The user signs in with SSO (the local admin is never matched) and their status is `pending`: a new user, or one who signed in before and was never approved or rejected.
+2. The ID token's `email` claim is not empty. No other claim is used.
+3. The `email_verified` claim is not false. It may be a boolean or the string `"true"` or `"false"`; a claim that is absent counts as verified, because several enterprise providers never send it, and any other value counts as not verified.
+4. A pre-approval exists for the email, compared after trimming and lower-casing both sides (ASCII letters only).
+
+What it does not do:
+
+- A user who is `active` (even with no roles) or `rejected` is never changed. An admin who removed someone's roles, or rejected them, is not overridden at the next sign-in.
+- Deleting an entry, or removing it from the file, changes nobody who was already approved. There is no way to remove access through this list.
+- An entry is not consumed. It stays in the list with the date of its first use, and a second SSO identity that later signs in with the same email is approved too.
+- Adding an entry for someone who is already pending does not approve them at once. They are approved at their next sign-in, or by an admin in Users, as before.
+- If the approval itself fails, the sign-in still succeeds and the user stays pending, as without a pre-approval. The error is logged.
+
+Each approval is written to the audit log as `user.preapprove` with no actor (shown as "system") and the sources that matched (`database`, `config` or both), and emits the existing `user.approved` event with the payload it always has. A pre-approved new user gets no `user.pending` event. Adding and removing entries are audited as `preapproval.add` and `preapproval.delete`.
+
+### Three ways to load the list
+
+**1. The admin page.** Sign in as an admin, open Admin, Users, and find "Pre-approved users". Paste the emails (commas, spaces or new lines between them), choose the role (Developer is the default), and choose Add. Each row shows the email, roles, where the entry came from (Added here or Config file), who added it, and when the person first signed in ("Not yet" until then). Remove deletes an entry that was added here, after a confirmation; rows from the file have no Remove button.
+
+**2. The file.** Write the file in the format shown under [Pre-approved users file](#pre-approved-users-file), make it readable by the user the process runs as (uid 65532 in the images), mount it into the container, set `preapproved_users_file` or `HOURGLASS_PREAPPROVED_USERS_FILE` to its path inside the container, and restart. The entries then appear in Users with the source "Config file" and cannot be removed there. The file is read once at start, so a change to it needs another restart. Check the start-up log for `pre-approved users file read` and the entry count; an invalid file stops the start and the message names the entry.
+
+<!-- 86b: run and correct -->
+```sh
+cat > preapproved-users.yaml <<'EOF'
+users:
+  - email: alice@example.com
+    roles: [developer]
+  - email: bob@example.com
+EOF
+chmod 644 preapproved-users.yaml            # the container's user (65532) must be able to read it
+
+docker run -d --name hourglass -p 8080:8080 -v hourglass-data:/data \
+  -v "$PWD/preapproved-users.yaml:/etc/hourglass/preapproved-users.yaml:ro" \
+  -e HOURGLASS_PREAPPROVED_USERS_FILE=/etc/hourglass/preapproved-users.yaml \
+  -e HOURGLASS_ADMIN_PASSWORD="choose-a-long-password" \
+  -e HOURGLASS_SESSION_KEY="$(head -c 32 /dev/urandom | base64)" \
+  hourglass:dev
+docker logs hourglass 2>&1 | grep 'pre-approved users file read'
+```
+
+**3. Scripted, into the database.** Use this to load a long list without the admin page. It takes three calls with a cookie jar. The local admin must have changed its first-run password first (see [Local admin account](#local-admin-account)); until then the admin routes answer `password_change_required`. The session cookie is `Secure`, so the base URL must be HTTPS or `localhost` (see [Cookies](#cookies)).
+
+1. `POST /auth/local` as the local admin. The cookie jar keeps the session cookie.
+2. `GET /api/v1/session` and read `csrf_token`. (A password change replaces the session and the token: read it again afterwards.)
+3. `POST /api/v1/admin/preapprovals` with the `X-CSRF-Token` header and the body `{"emails": [...], "roles": [...]}`. It takes 1 to 1,000 emails and one role set for all of them, so a longer list goes in several calls, grouped by role. Any invalid email or role is a 400 `validation` that names the first bad value, and nothing is stored. The answer is `{"added": N, "updated": M}`: an email already in the list gets the new roles and keeps its use record, so the call can be repeated safely. `GET /api/v1/admin/preapprovals` lists every entry from both sources.
+
+<!-- 86b: run and correct -->
+```sh
+export HOURGLASS=http://localhost:8080      # HTTPS, or localhost: the cookie is Secure
+
+curl -sS -c jar -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"choose-a-long-password"}' $HOURGLASS/auth/local
+CSRF=$(curl -sS -b jar $HOURGLASS/api/v1/session | jq -r .csrf_token)
+
+curl -sS -b jar -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"emails":["alice@example.com","bob@example.com"],"roles":["developer"]}' \
+  $HOURGLASS/api/v1/admin/preapprovals
+curl -sS -b jar $HOURGLASS/api/v1/admin/preapprovals | jq .
+```
+
+<!-- 86b: run and correct -->
+```sh
+# From a file with one email per line, 1,000 at a time:
+split -l 1000 emails.txt part-
+for f in part-*; do
+  jq -R . "$f" | jq -s '{emails: ., roles: ["developer"]}' |
+    curl -sS -b jar -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+      -d @- $HOURGLASS/api/v1/admin/preapprovals
+done
+```
+
+### What to know before you rely on it
+
+- **Matching is by the `email` claim of the ID token and nothing else.** The identity provider must release that claim, and it should be a provider that controls its users' email addresses: whoever can sign in with an address on the list gets the listed role. Some providers send the address only in another claim unless they are configured otherwise. A user whose provider sends no `email` stays pending and is approved by hand in Users.
+- **A pre-approval can grant `admin`.** Anyone who signs in with that address becomes an admin. Check the list before you load it.
+- **Editing the SQLite file by hand is not supported.** Writing to the database directly bypasses the audit log. The admin page and the admin API are the supported ways to load the list into the database.
 
 ## Local admin account
 
@@ -454,6 +559,18 @@ Migration 0005 adds the service account, token and report tables and three colum
 
 **Release behaviour changed.** A user's release of a setup that the provider still reports (with `release_requires_teardown` on) used to be refused with 409 `still_deployed`; the user had to tear the setup down, wait a poll and click again. Now the first click is accepted (202): the hold is marked Releasing, keeps metering, fires the new `hold.releasing` event, and ends at the first successful poll in which the setup is no longer reported. That poll's interval is still charged. A pending release cannot be cancelled, and clicking again changes nothing. This applies to every provider, `vsphere` included. The `still_deployed` error code no longer exists, so scripts that matched it must stop. If no poll has succeeded since the process started, the release is immediate, as before. Hooks that treated `hold.released` as the only end-of-hold signal keep working; `hold.releasing` is new and optional.
 
+### Upgrading to the ledger roll-up and pre-approved users (migrations 0006 and 0007)
+
+This release adds two migrations. `0006` adds a column to the ledger (`rollup_count`), a one-row marker table, two partial indexes over per-poll debit rows, and replaces the ledger's delete trigger. `0007` adds the `preapprovals` table. No configuration change is needed: the one new setting, `preapproved_users_file`, is optional, and an existing config file and environment start the new version unchanged. Existing API calls answer as before (see below for the one that gets shorter).
+
+- **Back up first, and keep the backup.** There is no down migration. Once `0006` has run, an older binary refuses the database (`database schema version N is newer than this binary`), and rows that the roll-up has compacted cannot be expanded again. The way back is the backup taken before the upgrade, which loses what was written since. See [Backup and restore](#backup-and-restore).
+- **The first start can take longer on a large ledger.** Migration `0006` builds its two indexes over every per-poll debit row, so the time grows with the ledger. How long it takes was not measured on a large ledger, so allow for a pause before the server listens. Each migration runs in one transaction, so an interrupted one leaves the database at the old version.
+- **The roll-up runs by itself after the first start.** Right after the first poll the collector starts compacting. In each cycle (after the poll and the daily prune) it runs at most 20 steps, each of at most 2,000 rows taken as whole roll-up groups (a single larger group is taken alone), and it holds the collector lock for one step at a time, so a poll and any user request that writes can run between two steps. The time a cycle spends compacting is taken off the wait before the next poll, so a backlog adds nothing to the gap between polls. A cycle therefore replaces up to about 40,000 rows; at the default 5-minute interval, a ledger with a million per-poll rows takes a few hours of cycles to work off (arithmetic from these limits, not a measurement). The slowest step measured 60 ms on 1.26 million debit rows, so one cycle spends about a second and a quarter compacting at most. The log shows `compacted ledger` with `rows` (rows removed) and `groups` whenever a step removed something. A step that fails is logged as an error and retried on the next cycle; it never fails a poll. When nothing is due any more, the check runs once a day with the other pruning. A restart starts the search again from the oldest day, which costs little because the indexes hold only the rows that are still per-poll.
+- **What changes for users.** Nothing changes in anyone's balance, per-hold charges, the tokens-per-day chart, month-to-date burn or the admin totals. On My usage the ledger now shows 20 rows at a time, by day by default, with a switch to Every poll. See [Data retention](#data-retention) for what is kept.
+- **`GET /api/v1/me/ledger` without the new parameters** still returns one entry per stored row, unpaged, in the same order, with the same fields plus `entry_count` and `next_cursor` (null). After compaction the stored rows of older days are the rolled-up ones, so the answer gets shorter for those days, and the running balance shown against a grant or other entry in the middle of a compacted day no longer includes that day's earlier debits for the same hold. Each row's balance still equals the previous row's balance plus its own amount, and the balance after the last entry of every day is unchanged.
+- **Two other responses each gain one field:** `GET /api/v1/setups` returns `label_index` and `GET /api/v1/session` returns `display_name`. Nothing is removed or renamed.
+- **Sign-in is unchanged** until you add a pre-approval: with none, a new SSO user is `pending` and gets `user.pending`, as before.
+
 ## Data retention
 
 | Data | Kept |
@@ -461,9 +578,30 @@ Migration 0005 adds the service account, token and report tables and three colum
 | Usage samples | 13 months |
 | Event deliveries | 90 days |
 | Expired sessions | Deleted daily and at each sign-in |
-| Ledger, audit log, outages, pressure samples, collector runs | Kept (not pruned in v1) |
+| Ledger: debits | One row per poll for the current day and the seven days before it; older days are rolled up to one row per user, hold and day (see below) |
+| Ledger: allowance, grant, reset and every other entry | Kept as written, never pruned or changed |
+| Audit log, outages, pressure samples, collector runs | Kept (not pruned in v1) |
+| Pre-approvals | Kept until an admin removes them. A used entry stays |
 
 Pruning runs once a day, from the collector.
+
+### The ledger roll-up
+
+The ledger is no longer kept forever in full detail. The per-poll debits of a hold are rolled up once their local day is earlier than seven days before today's date, both taken in the configured timezone (so the current day and the seven before it still have a row per poll). All the per-poll debits of one user, hold, month and local day are replaced by one debit row. The new row carries the total, the `id` and time of the newest row it replaced, and the number of rows replaced, which My usage shows as "N polls". Only debits that belong to a hold are rolled up. Grants, resets, allowances, debits with no hold, rows of the last eight days and rows already rolled up are never changed, and a group of a single row is left as it is. Rolling up is final: a rolled-up row is never opened up again, and compacted rows cannot be expanded.
+
+The sums do not change. Per user, month and type, per hold, and per user and day, the totals are the same before and after, and so are balances.
+
+- **What users see.** My usage shows the ledger by day by default, one row per hold and day. The Every poll view shows single debits with their multipliers for the days that have not been rolled up yet, and the rolled-up row, with its poll count and no multiplier, for older days. The ledger can show 20 rows at a time and reach the oldest entry with Older.
+- **Per-poll detail is not lost from the database.** The detail of every poll (weight, pressure, multiplier and debit) stays in `usage_samples` for 13 months. It is no longer shown on the ledger.
+- **The ledger stays append-only.** The database still refuses every update, every replace, every delete of a non-debit row and every delete made outside the roll-up. The roll-up is the one exception, for the debit rows of one hold and day, and it keeps the same total.
+
+### Disk space
+
+The roll-up stops the database file growing at the old rate: a hold that is held all day wrote 288 rows a day at the default interval, and every day older than a week now keeps one. It does not shrink the file. SQLite keeps the pages the roll-up frees and reuses them for new rows, so the file stays as large as it got until it is compacted, and then grows slowly. To get the space back, take the file offline and run `VACUUM`: stop Hourglass, take a backup (see [Backup and restore](#backup-and-restore)), run the command below on the stopped database, and start Hourglass again. `VACUUM` needs free disk space about the size of the database while it runs, and the time grows with the file. Do it after the backlog has been worked off, or the file will grow again before it has been used.
+
+```sh
+sqlite3 /data/hourglass.db "VACUUM"
+```
 
 ## Known limits
 
@@ -471,6 +609,8 @@ Pruning runs once a day, from the collector.
 - TLS is optional and static: one certificate, read at start, no reload and no automatic issuing (ACME). In split mode the UI container cannot reach an API that serves a self-signed certificate.
 - The event queue is in memory: events still queued at shutdown are lost, and nothing is retried.
 - The local admin password cannot be reset without database access.
+- The ledger roll-up age (seven days) is fixed: there is no setting and no way to turn the roll-up off, and compacted rows cannot be expanded again.
+- Pre-approval matches the `email` claim only, by whole address (no wildcard or domain entries). The file is read at start only.
 - vSphere: clusters in host sub-folders are not discovered, and nothing has been run against a real vCenter.
 - Images are built and smoke-tested on arm64. The amd64 `hourglass` image has only been started under emulation; the other amd64 images have not been run.
 - The release workflow publishes the images on a `v*` git tag without running the tests. There is no Helm chart and no Dockerfile.

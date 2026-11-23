@@ -39,7 +39,7 @@ The browser runs on the host; Hourglass runs in a container. The OIDC issuer is 
 
 ## Signing in
 - Local admin: username `admin`, password `dev-only-not-a-secret` (from `HOURGLASS_ADMIN_PASSWORD` in the compose file; read only when the account is first created). Hourglass makes you change it at first sign-in.
-- Keycloak users (realm `hourglass`, client `hourglass`): `alice` / `dev-only-alice`, `bob` / `dev-only-bob`, `carol` / `dev-only-carol`. A new OIDC user lands on the not-authorized page until the admin gives them a role.
+- Keycloak users (realm `hourglass`, client `hourglass`): `alice` / `dev-only-alice`, `bob` / `dev-only-bob`, `carol` / `dev-only-carol`, and `dave` / `dev-only-dave`. A new OIDC user lands on the not-authorized page until the admin gives them a role. `dave` (`dave@example.com`) is reserved for the pre-approval end-to-end step: the admin pre-approves his address and he signs in for the first time with a role already in place. No other scenario signs him in, so keep him unused if you want to repeat that step by hand.
 - Keycloak admin console: http://keycloak.localhost:8081, `admin` / `dev-only-not-a-secret`.
 
 ## First-run admin steps
