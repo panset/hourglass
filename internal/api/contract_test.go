@@ -555,11 +555,20 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		w.status(w.get("/api/v1/me/holds?state=released", s), 200)
 		w.status(w.get("/api/v1/me/ledger", s), 200)
 		w.status(w.get("/api/v1/me/ledger?period=2026-11", s), 200)
+		w.status(w.get("/api/v1/me/ledger?rollup=day", s), 200)
+		w.status(w.get("/api/v1/me/ledger?limit=1", s), 200)
+		w.status(w.get("/api/v1/me/ledger?rollup=day&limit=2&period=2026-11", s), 200)
 		w.status(w.get("/api/v1/me/usage", s), 200)
 		w.status(w.get("/api/v1/pressure", s), 200)
 		w.status(w.get("/api/v1/setups", s), 200)
 		w.status(w.get("/api/v1/setups?selector=tier%3Da", s), 200)
 		w.status(w.get("/api/v1/session", s), 200)
+	}
+	// A ledger page with a real cursor (LED-13).
+	if nc, _ := w.must(200, "GET", "/api/v1/me/ledger?limit=1", &w.devA, "")["next_cursor"].(string); nc != "" {
+		w.status(w.get("/api/v1/me/ledger?limit=1&cursor="+nc, &w.devA), 200)
+	} else {
+		t.Error("ledger?limit=1: no next_cursor for a ledger with more than one entry")
 	}
 	// The local admin: no balance, no holds.
 	for _, p := range []string{"/api/v1/me", "/api/v1/me/holds", "/api/v1/me/ledger", "/api/v1/me/usage", "/api/v1/session", "/api/v1/setups", "/api/v1/pressure"} {
@@ -649,6 +658,10 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		{400, "GET", "/api/v1/admin/audit?limit=0", &w.adm, ""},
 		{400, "GET", "/api/v1/me/holds?state=bogus", &w.devA, ""},
 		{400, "GET", "/api/v1/me/ledger?period=nope", &w.devA, ""},
+		{400, "GET", "/api/v1/me/ledger?rollup=week", &w.devA, ""},
+		{400, "GET", "/api/v1/me/ledger?limit=0", &w.devA, ""},
+		{400, "GET", "/api/v1/me/ledger?cursor=5", &w.devA, ""},
+		{400, "GET", "/api/v1/me/ledger?limit=5&cursor=abc", &w.devA, ""},
 		{404, "POST", "/api/v1/setups/99999/acquire", &w.devA, ""},
 		{409, "POST", fmt.Sprintf("/api/v1/setups/%d/acquire", w.setupA), &w.devB, ""},
 		{409, "POST", fmt.Sprintf("/api/v1/setups/%d/acquire", w.setupA+3), &w.devB, ""},

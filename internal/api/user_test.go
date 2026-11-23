@@ -217,7 +217,7 @@ func TestLED2_MyLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	l := uWantOK(t, e.get("/api/v1/me/ledger", &dev), 200)
-	uWantKeys(t, "ledger", l, "period", "available_periods", "entries")
+	uWantKeys(t, "ledger", l, "period", "available_periods", "entries", "next_cursor")
 	if l["period"] != "2026-11" {
 		t.Errorf("period %v", l["period"])
 	}
@@ -232,7 +232,7 @@ func TestLED2_MyLedger(t *testing.T) {
 	// Newest first: debit, debit, allowance. Running balance 100, 200, 300.
 	first, last := es[0].(ujobj), es[2].(ujobj)
 	uWantKeys(t, "entry", first, "id", "created_at", "period", "type", "amount_tokens", "balance_after_tokens", "multiplier",
-		"setup_name", "hold_id", "actor_name", "reason")
+		"setup_name", "hold_id", "actor_name", "reason", "entry_count")
 	if first["type"] != "debit" || !uNear(uNum(t, first, "amount_tokens"), -100) || !uNear(uNum(t, first, "balance_after_tokens"), 100) ||
 		uNum(t, first, "multiplier") != 2 || first["setup_name"] != "lab-01" || int64(uNum(t, first, "hold_id")) != hid ||
 		first["actor_name"] != nil || first["created_at"] != "2026-11-19T10:10:00.000Z" {

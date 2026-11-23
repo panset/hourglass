@@ -47,6 +47,7 @@ go_test(
         "contract_test.go",
         "helpers_test.go",
         "integration_reports_test.go",
+        "ledger_view_test.go",
         "perf_compaction_scale_test.go",
         "perf_scale_test.go",
         "permissions_test.go",
@@ -66,6 +67,9 @@ go_test(
         # spec's table; both are found by walking up from the runfiles directory.
         "//:api/openapi.yaml",
         "//:docs/SPEC.md",
+        # The LED-11 test compares with responses recorded from the handler as it
+        # was before the ledger view parameters existed.
+        "testdata/led11_pre_change_responses.json",
         # The registration scan (registration_test.go) reads the sources of these packages.
         ":go_sources",
         "//cmd/hourglass-ui:go_sources",

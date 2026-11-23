@@ -103,9 +103,10 @@ const ledger: LedgerResponse = {
   period: "2026-11",
   available_periods: ["2026-11", "2026-10"],
   entries: [
-    { id: 3, created_at: "2026-11-18T17:30:00Z", period: "2026-11", type: "debit", amount_tokens: -0.17, balance_after_tokens: 142, multiplier: 2, setup_name: "setup-04", hold_id: 7, actor_name: null, reason: null },
-    { id: 2, created_at: "2026-11-12T10:02:00Z", period: "2026-11", type: "grant", amount_tokens: 40, balance_after_tokens: 213.5, multiplier: null, setup_name: null, hold_id: null, actor_name: "Riley Admin", reason: "release week" },
+    { id: 3, created_at: "2026-11-18T17:30:00Z", period: "2026-11", type: "debit", amount_tokens: -0.17, balance_after_tokens: 142, multiplier: 2, setup_name: "setup-04", hold_id: 7, actor_name: null, reason: null, entry_count: 1 },
+    { id: 2, created_at: "2026-11-12T10:02:00Z", period: "2026-11", type: "grant", amount_tokens: 40, balance_after_tokens: 213.5, multiplier: null, setup_name: null, hold_id: null, actor_name: "Riley Admin", reason: "release week", entry_count: 1 },
   ],
+  next_cursor: null,
 };
 
 const okRoutes = () => ({

@@ -7,6 +7,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -233,6 +236,116 @@ type ledgerEntryJSON struct {
 	HoldID       *int64   `json:"hold_id"`
 	ActorName    *string  `json:"actor_name"`
 	Reason       *string  `json:"reason"`
+	EntryCount   int      `json:"entry_count"`
+}
+
+// Ledger view parameters (design A4).
+const (
+	ledgerRollupDay = "day"
+	ledgerMaxLimit  = 200
+)
+
+// ledgerQuery is the parsed rollup, limit and cursor of GET /api/v1/me/ledger.
+// A zero limit means no paging; a zero cursor means the first page.
+type ledgerQuery struct {
+	rollup string
+	limit  int
+	cursor int64
+}
+
+// ledgerCursor is the encoding of next_cursor: the decimal id of the last
+// entry of the page, so a cursor means "entries of this view whose id is
+// lower than this". Clients treat it as opaque.
+var ledgerCursor = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)
+
+// parseLedgerQuery validates the view parameters; a parameter that is present
+// with an empty value counts as given (and is invalid). On a bad value it
+// writes 400 validation naming the parameter and returns false.
+func parseLedgerQuery(w http.ResponseWriter, r *http.Request) (ledgerQuery, bool) {
+	q := r.URL.Query()
+	var lq ledgerQuery
+	bad := func(field, msg string) (ledgerQuery, bool) {
+		apierr.WriteField(w, http.StatusBadRequest, apierr.Validation, msg, field)
+		return ledgerQuery{}, false
+	}
+	if q.Has("rollup") {
+		if lq.rollup = q.Get("rollup"); lq.rollup != ledgerRollupDay {
+			return bad("rollup", "rollup must be day")
+		}
+	}
+	if q.Has("limit") {
+		n, err := strconv.Atoi(q.Get("limit"))
+		if err != nil || n < 1 || n > ledgerMaxLimit {
+			return bad("limit", "limit must be an integer from 1 to 200")
+		}
+		lq.limit = n
+	}
+	if q.Has("cursor") {
+		if lq.limit == 0 {
+			return bad("cursor", "cursor requires limit")
+		}
+		v := q.Get("cursor")
+		n, err := strconv.ParseInt(v, 10, 64)
+		if !ledgerCursor.MatchString(v) || err != nil {
+			return bad("cursor", "cursor is not a next_cursor of this route")
+		}
+		lq.cursor = n
+	}
+	return lq, true
+}
+
+// ledgerViewEntry is one entry of a ledger view before it is formatted: a
+// stored row, or (rollup=day) the debit rows of one hold and local day
+// merged. row is the newest row the entry stands for; balance is the running
+// sum of the view up to and including the entry.
+type ledgerViewEntry struct {
+	row      store.LedgerEntry
+	amountMT int64
+	count    int
+	merged   bool
+	balance  int64
+}
+
+// ledgerView builds the entries of a view from a period's rows in id order
+// and returns them in id order with their running balances (design A4). With
+// rollup=day every debit row with a hold, raw or rolled up, is merged with
+// the other debit rows of the same hold and local day (in loc) into one entry
+// at the position, id and created_at of the newest of them; every other row
+// is an entry of its own. Without rollup every row is an entry. An entry's
+// count is the number of polls it stands for: a row's rollup_count, else 1.
+func ledgerView(rows []store.LedgerEntry, rollup string, loc *time.Location) []ledgerViewEntry {
+	polls := func(e store.LedgerEntry) int {
+		if e.RollupCount > 0 {
+			return e.RollupCount
+		}
+		return 1
+	}
+	type dayKey struct {
+		hold int64
+		day  string
+	}
+	out := make([]ledgerViewEntry, 0, len(rows))
+	group := map[dayKey]int{} // index into out
+	for _, e := range rows {
+		if rollup == ledgerRollupDay && e.Type == string(ledger.TypeDebit) && e.HoldID != nil {
+			k := dayKey{*e.HoldID, e.CreatedAt.In(loc).Format("2006-01-02")}
+			if i, ok := group[k]; ok {
+				g := &out[i]
+				g.row, g.amountMT, g.count, g.merged = e, g.amountMT+e.AmountMT, g.count+polls(e), true
+				continue
+			}
+			group[k] = len(out)
+		}
+		out = append(out, ledgerViewEntry{row: e, amountMT: e.AmountMT, count: polls(e)})
+	}
+	// A merged entry sits at its newest row's id: restore id order.
+	sort.Slice(out, func(i, j int) bool { return out[i].row.ID < out[j].row.ID })
+	var running int64
+	for i := range out {
+		running += out[i].amountMT
+		out[i].balance = running
+	}
+	return out
 }
 
 // availablePeriods lists the user's periods with ledger entries, newest
@@ -260,8 +373,13 @@ func (a *API) availablePeriods(r *http.Request, userID int64, current string) ([
 	return out, nil
 }
 
-// listMyLedger is GET /api/v1/me/ledger[?period=YYYY-MM], newest first. The
-// running balance is the sum of the period's entries up to each entry (LED-2).
+// listMyLedger is GET /api/v1/me/ledger[?period=YYYY-MM][&rollup=day]
+// [&limit=N[&cursor=C]], newest first (by id). Without rollup every stored
+// row is an entry, and without limit every entry is returned, as before the
+// parameters existed (LED-11). The running balance of an entry is the sum of
+// the view's entries of the period up to it in id order (LED-2, LED-14), so
+// it is computed over the whole period before the page is cut. The cursor
+// applies to the view's entries after merging, never to stored rows (LED-13).
 func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 	u, ok := userCaller(w, r)
 	if !ok {
@@ -269,6 +387,10 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 	}
 	current := ledger.PeriodOf(a.d.Clock.Now(), a.d.Location)
 	period, ok := periodParam(w, r, current)
+	if !ok {
+		return
+	}
+	lq, ok := parseLedgerQuery(w, r)
 	if !ok {
 		return
 	}
@@ -298,15 +420,33 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 	for _, s := range setups {
 		setupName[s.ID] = s.Name
 	}
+	view := ledgerView(rows, lq.rollup, a.d.Location)
+	// The page: newest first, below the cursor, at most limit entries.
+	end := len(view) // view[:end] are the entries below the cursor
+	if lq.cursor > 0 {
+		end = sort.Search(len(view), func(i int) bool { return view[i].row.ID >= lq.cursor })
+	}
+	begin := 0
+	var next *string
+	if lq.limit > 0 && end > lq.limit {
+		begin = end - lq.limit
+		c := strconv.FormatInt(view[begin].row.ID, 10)
+		next = &c
+	}
 	actors := map[int64]string{}
 	holdSetup := map[int64]string{}
-	entries := make([]ledgerEntryJSON, len(rows))
-	var running int64
-	for i, e := range rows {
-		running += e.AmountMT
+	entries := make([]ledgerEntryJSON, 0, end-begin)
+	for i := end - 1; i >= begin; i-- {
+		ve := view[i]
+		e := ve.row
 		v := ledgerEntryJSON{ID: e.ID, CreatedAt: ts(e.CreatedAt), Period: e.Period, Type: e.Type,
-			Amount: tokens(e.AmountMT), BalanceAfter: tokens(running), HoldID: e.HoldID, Reason: nullIfEmpty(e.Reason)}
-		if m, ok := mults[e.ID]; ok {
+			Amount: tokens(ve.amountMT), BalanceAfter: tokens(ve.balance), HoldID: e.HoldID, EntryCount: ve.count}
+		if !ve.merged {
+			v.Reason = nullIfEmpty(e.Reason)
+		}
+		// A multiplier is one poll's (LED-12, LED-15): none for an entry that
+		// stands for more than one.
+		if m, ok := mults[e.ID]; ok && ve.count == 1 {
 			v.Multiplier = &m
 		}
 		if e.HoldID != nil {
@@ -322,7 +462,7 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 			}
 			v.SetupName = nullIfEmpty(name)
 		}
-		if e.ActorID != nil {
+		if e.ActorID != nil && !ve.merged {
 			name, seen := actors[*e.ActorID]
 			if !seen {
 				au, err := st.GetUser(ctx, *e.ActorID)
@@ -335,9 +475,10 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 			}
 			v.ActorName = nullIfEmpty(name)
 		}
-		entries[len(rows)-1-i] = v // newest first
+		entries = append(entries, v)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"period": period, "available_periods": periods, "entries": entries})
+	writeJSON(w, http.StatusOK, map[string]any{"period": period, "available_periods": periods, "entries": entries,
+		"next_cursor": next})
 }
 
 // ---- GET /api/v1/me/usage ----
