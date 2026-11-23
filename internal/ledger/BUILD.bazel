@@ -19,6 +19,7 @@ go_library(
 go_test(
     name = "ledger_test",
     srcs = [
+        "compact_test.go",
         "ledger_test.go",
         "service_test.go",
     ],

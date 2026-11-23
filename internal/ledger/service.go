@@ -58,6 +58,14 @@ type Service struct {
 	// current period differs from it, RolloverDue rebuilds (see there).
 	cacheMu     sync.Mutex
 	cachePeriod string
+
+	// compactMu serialises CompactDue and guards compactFrom, the position
+	// the next compaction step searches from (zero: the beginning).
+	compactMu   sync.Mutex
+	compactFrom time.Time
+	// compactRows is the row bound of one compaction step
+	// (store.LedgerCompactionStepRows; tests may lower it).
+	compactRows int
 }
 
 // NewService returns a ledger service. A nil loc means UTC and a nil emitter
@@ -66,7 +74,70 @@ func NewService(st *store.Store, emit Emitter, clock Clock, loc *time.Location) 
 	if loc == nil {
 		loc = time.UTC
 	}
-	return &Service{st: st, emit: emit, clock: clock, loc: loc}
+	return &Service{st: st, emit: emit, clock: clock, loc: loc, compactRows: store.LedgerCompactionStepRows}
+}
+
+// CompactionStep is what one CompactDue step did.
+type CompactionStep struct {
+	Groups   int // roll-up groups compacted
+	Replaced int // raw debit rows replaced
+	// Removed is the number of rows the ledger lost: Replaced - Groups.
+	Removed int
+	// More reports that the search stopped at the step bound before the end
+	// of the due history: call CompactDue again (in a later step) to go on.
+	More bool
+}
+
+// CompactDue runs one bounded step of the ledger roll-up (design A1, LED-7,
+// LED-10): in one transaction it finds the next due roll-up groups, whole
+// groups up to store.LedgerCompactionStepRows rows (a single larger group
+// alone), and replaces each with one debit row. It does not go through
+// AppendLedger and does not touch users.balance_mt: no period's sum changes.
+//
+// The search resumes where the previous step stopped. When a step finds
+// nothing more due, the position goes back to the beginning, so the next
+// check also sees raw rows that landed behind it (a clock stepped back).
+// A failed step changes nothing and leaves the position where it was, so a
+// retry redoes the same groups. Calling it when nothing is due changes
+// nothing.
+func (s *Service) CompactDue(ctx context.Context) (CompactionStep, error) {
+	s.compactMu.Lock()
+	defer s.compactMu.Unlock()
+	now := s.clock.Now()
+	var (
+		out  CompactionStep
+		next time.Time
+	)
+	err := s.st.Tx(ctx, func(tx *store.Tx) error {
+		out = CompactionStep{}
+		due, err := tx.DueLedgerGroups(ctx, now, s.loc, s.compactFrom, s.compactRows)
+		if err != nil {
+			return fmt.Errorf("find due ledger groups: %w", err)
+		}
+		for _, g := range due.Groups {
+			n, err := tx.CompactLedgerGroup(ctx, g)
+			if err != nil {
+				return fmt.Errorf("compact ledger group (user %d, hold %d, %s): %w", g.UserID, g.HoldID, g.DayStart.Format(time.DateOnly), err)
+			}
+			if n > 0 {
+				out.Groups++
+				out.Replaced += n
+			}
+		}
+		next = due.Next
+		out.More = next.Before(store.LedgerCompactionCutoff(now, s.loc))
+		return nil
+	})
+	if err != nil {
+		return CompactionStep{}, err
+	}
+	out.Removed = out.Replaced - out.Groups
+	if out.More {
+		s.compactFrom = next
+	} else {
+		s.compactFrom = time.Time{}
+	}
+	return out, nil
 }
 
 // CurrentPeriod is the period (YYYY-MM) of the clock in the configured zone.

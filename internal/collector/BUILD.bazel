@@ -24,6 +24,7 @@ go_test(
     srcs = [
         "cache_led2_test.go",
         "collector_test.go",
+        "compact_led10_test.go",
         "pending_test.go",
     ],
     embed = [":collector"],

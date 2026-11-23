@@ -33,6 +33,11 @@ const (
 	UsageRetentionMonths = 13
 	EventRetention       = 90 * 24 * time.Hour
 	PruneEvery           = 24 * time.Hour
+	// CompactStepsPerCycle is the most ledger compaction steps one collector
+	// cycle runs (design A1, LED-10). Each step is one transaction of at most
+	// store.LedgerCompactionStepRows rows and holds runMu alone; a backlog
+	// larger than this is worked off over the following cycles.
+	CompactStepsPerCycle = 20
 )
 
 // Clock supplies the time; production passes a wall clock, tests a fake.
@@ -45,6 +50,7 @@ type Emitter interface{ Emit(hourglass.Event) }
 type Ledger interface {
 	DebitTx(tx *store.Tx, userID, holdID, amountMT int64, at time.Time) (ledger.BalanceCrossings, error)
 	RolloverDue(ctx context.Context) ([]string, error)
+	CompactDue(ctx context.Context) (ledger.CompactionStep, error)
 }
 
 // Deps are the collector's collaborators. Provider, Events, Logger and After
@@ -117,9 +123,14 @@ type Collector struct {
 	d   Deps
 	log *slog.Logger
 
-	runMu     sync.Mutex // serialises polls and prunes
+	runMu     sync.Mutex // serialises polls, prunes and compaction steps
 	lastSeen  map[string]time.Time
 	lastPrune time.Time
+	// compactPending is set by the daily prune and cleared when a compaction
+	// step finds nothing more due; guarded by runMu.
+	compactPending bool
+	// compactSteps is the step budget of one cycle (CompactStepsPerCycle).
+	compactSteps int
 	// lastInterval is the poll interval in force at the previous successful
 	// poll of this process (zero after a restart).
 	lastInterval time.Duration
@@ -139,7 +150,8 @@ func New(d Deps) *Collector {
 	if d.After == nil {
 		d.After = time.After
 	}
-	return &Collector{d: d, log: d.Logger.With("component", "collector"), lastSeen: map[string]time.Time{}}
+	return &Collector{d: d, log: d.Logger.With("component", "collector"), lastSeen: map[string]time.Time{},
+		compactSteps: CompactStepsPerCycle}
 }
 
 // LastPoll returns a copy of the latest successful poll's view.
@@ -151,7 +163,8 @@ func (c *Collector) LastPoll() PollView {
 
 // Run polls immediately, then every poll interval (re-read each cycle) until
 // ctx ends. RunOnce runs the ledger rollover before each poll; once a day it
-// prunes old rows. It returns ctx.Err().
+// prunes old rows and starts the ledger compaction, which then runs a bounded
+// number of steps after each poll until nothing is due. It returns ctx.Err().
 func (c *Collector) Run(ctx context.Context) error {
 	for {
 		if ctx.Err() != nil {
@@ -159,6 +172,7 @@ func (c *Collector) Run(ctx context.Context) error {
 		}
 		_ = c.RunOnce(ctx) // failures are recorded, logged and emitted by RunOnce
 		c.pruneIfDue(ctx)
+		c.compactIfDue(ctx)
 		interval := settings.Defaults().PollInterval
 		if cfg, err := settings.Load(ctx, c.d.Store); err != nil {
 			c.log.Error("load settings for poll interval", "err", err, "fallback", interval)
@@ -181,6 +195,7 @@ func (c *Collector) pruneIfDue(ctx context.Context) {
 		return
 	}
 	c.lastPrune = now
+	c.compactPending = true // checked by compactIfDue, after this lock is released
 	st := c.d.Store
 	if n, err := st.PruneUsageSamples(ctx, now.AddDate(0, -UsageRetentionMonths, 0)); err != nil {
 		c.log.Error("prune usage samples", "err", err)
@@ -197,6 +212,44 @@ func (c *Collector) pruneIfDue(ctx context.Context) {
 	} else if n > 0 {
 		c.log.Info("deleted expired sessions", "rows", n)
 	}
+}
+
+// compactIfDue runs the pending ledger compaction (design A1, LED-10): at most
+// compactSteps steps, each holding runMu for that one step only, so a poll
+// (or another writer) can run between two steps. It stops early when nothing
+// more is due or a step fails. A failed step is logged and retried on the next
+// cycle; it never fails a poll. The compaction becomes pending once a day,
+// with the prune, and stays pending across cycles until a step finds nothing
+// more due.
+func (c *Collector) compactIfDue(ctx context.Context) {
+	for i := 0; i < c.compactSteps; i++ {
+		if !c.compactStep(ctx) {
+			return
+		}
+	}
+}
+
+// compactStep runs one compaction step under runMu and reports whether the
+// cycle may run another.
+func (c *Collector) compactStep(ctx context.Context) bool {
+	c.runMu.Lock()
+	defer c.runMu.Unlock()
+	if !c.compactPending || ctx.Err() != nil {
+		return false
+	}
+	st, err := c.d.Ledger.CompactDue(ctx)
+	if err != nil {
+		c.log.Error("ledger compaction step failed; retried next cycle", "err", err)
+		return false
+	}
+	if st.Removed > 0 {
+		c.log.Info("compacted ledger", "rows", st.Removed, "groups", st.Groups)
+	}
+	if !st.More {
+		c.compactPending = false
+		return false
+	}
+	return true
 }
 
 // RunOnce performs one poll at T = clock.Now(). Any error fails the whole

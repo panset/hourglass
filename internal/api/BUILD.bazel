@@ -47,6 +47,7 @@ go_test(
         "contract_test.go",
         "helpers_test.go",
         "integration_reports_test.go",
+        "perf_compaction_scale_test.go",
         "perf_scale_test.go",
         "permissions_test.go",
         "registration_test.go",
