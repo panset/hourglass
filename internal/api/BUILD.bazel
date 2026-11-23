@@ -53,6 +53,7 @@ go_test(
         "perf_compaction_scale_test.go",
         "perf_scale_test.go",
         "permissions_test.go",
+        "preapproval_recheck_test.go",
         "preapproval_routes_test.go",
         "preapproval_signin_test.go",
         "race_off_test.go",

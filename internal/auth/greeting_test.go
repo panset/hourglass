@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -107,5 +108,56 @@ func TestAUTH9_DisplayNameRule(t *testing.T) {
 		if got := DisplayName(c.u); got != c.want {
 			t.Errorf("DisplayName(%+v) = %q, want %q", c.u, got, c.want)
 		}
+	}
+}
+
+// TestAUTH9_NonStringFallbackClaimsNeverFailSignIn: given_name, family_name
+// and preferred_username that are not strings count as empty and never refuse
+// a sign-in; commit d96a950 ignored them.
+func TestAUTH9_NonStringFallbackClaimsNeverFailSignIn(t *testing.T) {
+	cases := []struct {
+		label  string
+		claims map[string]any
+		want   string
+	}{
+		{"numbers", map[string]any{"given_name": 7, "family_name": 8, "preferred_username": 9}, ""},
+		{"objects and arrays", map[string]any{"given_name": map[string]any{"a": 1}, "family_name": []any{"x"}, "preferred_username": true}, ""},
+		{"nulls", map[string]any{"given_name": json.RawMessage("null"), "family_name": json.RawMessage("null"), "preferred_username": json.RawMessage("null")}, ""},
+		{"string family still used next to a bad given", map[string]any{"given_name": 5, "family_name": "Lovelace"}, "Lovelace"},
+		{"bad given and family fall to a string preferred", map[string]any{"given_name": 5, "family_name": []any{}, "preferred_username": "ada.l"}, "ada.l"},
+	}
+	for _, c := range cases {
+		t.Run(c.label, func(t *testing.T) {
+			e, iss := newOIDCEnv(t)
+			iss.set(func(f *fakeIssuer) { f.name = ""; f.claims = c.claims })
+			r := signIn(t, e)
+			if r.location != "/" || r.session == nil {
+				t.Fatalf("sign-in refused: %q", r.location)
+			}
+			u, err := e.st.GetUserBySub(e.ctx(), "sub-alice")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if u.Name != c.want {
+				t.Fatalf("stored name %q, want %q", u.Name, c.want)
+			}
+		})
+	}
+}
+
+// TestAUTH9_NameClaimBehavesAsBefore: a non-string name still fails the
+// sign-in, as at d96a950, and null or absent is an empty name.
+func TestAUTH9_NameClaimBehavesAsBefore(t *testing.T) {
+	for label, v := range map[string]any{"number": 42, "object": map[string]any{"a": 1}, "array": []any{"x"}, "bool": true} {
+		t.Run(label, func(t *testing.T) {
+			e, iss := newOIDCEnv(t)
+			iss.set(func(f *fakeIssuer) { f.claims = map[string]any{"name": v} })
+			wantFailure(t, signIn(t, e))
+		})
+	}
+	e, iss := newOIDCEnv(t)
+	iss.set(func(f *fakeIssuer) { f.claims = map[string]any{"name": json.RawMessage("null")} })
+	if r := signIn(t, e); r.location != "/" || r.session == nil {
+		t.Fatalf("null name refused: %q", r.location)
 	}
 }

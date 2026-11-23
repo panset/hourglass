@@ -248,11 +248,13 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var claims struct {
-		Email             string `json:"email"`
-		Name              string `json:"name"`
-		GivenName         string `json:"given_name"`
-		FamilyName        string `json:"family_name"`
-		PreferredUsername string `json:"preferred_username"`
+		Email string `json:"email"`
+		Name  string `json:"name"` // a non-string fails sign-in, as at d96a950
+		// The fallback claims never fail a sign-in: a value that is not a
+		// string counts as empty (AUTH-9).
+		GivenName         json.RawMessage `json:"given_name"`
+		FamilyName        json.RawMessage `json:"family_name"`
+		PreferredUsername json.RawMessage `json:"preferred_username"`
 		// EmailVerified is a boolean or the string "true" / "false"; absent
 		// counts as verified (D1).
 		EmailVerified json.RawMessage `json:"email_verified"`
@@ -267,7 +269,7 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.now()
 	su, created, err := s.st.UpsertOIDCLogin(r.Context(), idt.Subject, claims.Email,
-		storedName(claims.Name, claims.GivenName, claims.FamilyName, claims.PreferredUsername), now)
+		storedName(claims.Name, claimString(claims.GivenName), claimString(claims.FamilyName), claimString(claims.PreferredUsername)), now)
 	if err != nil {
 		s.log.Error("storing oidc user failed", "err", err)
 		callbackError(w, r, apierr.Internal)
@@ -358,6 +360,15 @@ func truncate(s string, n int) string {
 // first non-empty of name; given_name and family_name joined by a space and
 // trimmed; preferred_username. Whitespace-only claims count as empty. All
 // empty gives an empty name.
+// claimString is a claim's value when it is a JSON string, else "".
+func claimString(raw json.RawMessage) string {
+	var s string
+	if len(raw) == 0 || json.Unmarshal(raw, &s) != nil {
+		return ""
+	}
+	return s
+}
+
 func storedName(name, given, family, preferred string) string {
 	if strings.TrimSpace(name) != "" {
 		return name // stored exactly as sent, as before

@@ -210,6 +210,10 @@ func TestPRE5_AddValidatesEveryEmailAndRoleAllOrNothing(t *testing.T) {
 		"comma":            "a@example.test,b@example.test",
 		"star":             "*@example.test",
 		"wildcard domain":  "user@*.example.test",
+		"zero-width space": "user@exa\u200Bmple.test",
+		"byte order mark":  "\uFEFFuser@example.test",
+		"control char":     "us\x01er@example.test",
+		"bidi override":    "user@example.\u202Etest",
 	}
 	for name, email := range bad {
 		t.Run(name, func(t *testing.T) {

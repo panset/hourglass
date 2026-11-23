@@ -308,6 +308,47 @@ func TestPRE2_MatchIgnoresCaseAndSurroundingWhitespace(t *testing.T) {
 	e.wantActive("sub-file", store.RoleDeveloper)
 }
 
+// PRE-2: only ASCII letters are case-folded, on both sides. A look-alike
+// (U+212A KELVIN SIGN, U+0130 dotted capital I) matches only itself, never
+// the ASCII letter it lower-cases to in Unicode.
+func TestPRE2_FoldsASCIICaseOnlyLookAlikesNeverMatch(t *testing.T) {
+	if got := NormalizeEmail("  KATE@Example.TEST "); got != "kate@example.test" {
+		t.Fatalf("NormalizeEmail = %q", got)
+	}
+	if got := NormalizeEmail("\u212Aate@example.test"); got == "kate@example.test" {
+		t.Fatalf("Kelvin sign folded to ASCII k: %q", got)
+	}
+	e := newPreEnv(t, PreapprovalEntry{Email: "kim@example.test", Roles: []string{store.RoleAdmin}})
+	e.add(`["admin"]`, "kate@example.test", "ilan@example.test")
+	e.mustSignIn(claimsFor("sub-kelvin", "\u212Aate@example.test")) // Kate with a Kelvin sign
+	e.wantPending("sub-kelvin")
+	e.mustSignIn(claimsFor("sub-kelvin-file", "\u212Aim@example.test"))
+	e.wantPending("sub-kelvin-file")
+	e.mustSignIn(claimsFor("sub-dotted", "\u0130lan@example.test"))
+	e.wantPending("sub-dotted")
+	// The look-alike as an entry matches only itself.
+	e.add(`["developer"]`, "\u212Aara@example.test")
+	e.mustSignIn(claimsFor("sub-kara-ascii", "kara@example.test"))
+	e.wantPending("sub-kara-ascii")
+	e.mustSignIn(claimsFor("sub-kara-kelvin", "\u212Aara@example.test"))
+	e.wantActive("sub-kara-kelvin", store.RoleDeveloper)
+}
+
+// PRE-2: a claim holding a control or format character never matches, and
+// surrounding ordinary whitespace is still ignored.
+func TestPRE2_ClaimWithInvisibleCharacterNeverMatches(t *testing.T) {
+	e := newPreEnv(t)
+	e.add(`["developer"]`, "lena@example.test")
+	for i, claim := range []string{"lena\u200B@example.test", "\uFEFFlena@example.test", "lena@example.test\u200D",
+		"le\x00na@example.test", "lena@exam\u202Eple.test", "\u2060lena@example.test"} {
+		sub := "sub-inv-" + string(rune('a'+i))
+		e.mustSignIn(claimsFor(sub, claim))
+		e.wantPending(sub)
+	}
+	e.mustSignIn(claimsFor("sub-lena", " \tlena@example.test \n"))
+	e.wantActive("sub-lena", store.RoleDeveloper)
+}
+
 // PRE-2: no match without a verified, non-empty email claim; an address in
 // another claim never matches; a different address does not match.
 func TestPRE2_NoMatchWithoutAVerifiedNonEmptyEmailClaim(t *testing.T) {

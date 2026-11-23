@@ -55,9 +55,27 @@ type PreapprovalEntry struct {
 }
 
 // NormalizeEmail is the form pre-approval emails are stored and compared in:
-// surrounding whitespace trimmed, lower case. The ID token's email claim is
-// compared in the same form.
-func NormalizeEmail(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+// surrounding whitespace trimmed, ASCII letters lower-cased. Only ASCII is
+// folded, so a look-alike such as U+212A KELVIN SIGN matches only itself and
+// never an ASCII "k". The route, the file loader and the ID token's email
+// claim all use this one function.
+func NormalizeEmail(s string) string { return asciiLower(strings.TrimSpace(s)) }
+
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
+}
+
+// hasInvisible reports whether s holds a control or format character
+// (Unicode categories Cc and Cf), such as U+200B or U+FEFF.
+func hasInvisible(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return unicode.In(r, unicode.Cc, unicode.Cf) })
+}
 
 // ParsePreapprovalEmail validates one email of a pre-approval (D3) and returns
 // it normalised: at most 254 characters after trimming, exactly one "@" with
@@ -77,6 +95,8 @@ func ParsePreapprovalEmail(s string) (string, error) {
 		return bad(fmt.Sprintf("it is longer than %d characters", maxPreapprovalEmailCh))
 	case strings.ContainsFunc(e, unicode.IsSpace):
 		return bad("it contains whitespace")
+	case hasInvisible(e):
+		return bad("it contains a control or invisible character")
 	case strings.ContainsAny(e, ",*"):
 		return bad(`it contains "," or "*"`)
 	}
@@ -199,7 +219,9 @@ func (p *Preapprover) fileEntries() []PreapprovalEntry {
 // commit. approved is false, with no error, when nothing applied.
 func (p *Preapprover) ApplyPreapproval(ctx context.Context, userID int64, email string) (approved bool, err error) {
 	key := NormalizeEmail(email)
-	if key == "" {
+	// A claim with a control or invisible character never matches: no entry
+	// can hold one.
+	if key == "" || hasInvisible(key) {
 		return false, nil
 	}
 	now := p.d.Clock.Now()

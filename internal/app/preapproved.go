@@ -42,6 +42,76 @@ func preErrf(format string, a ...any) error {
 	return &PreapprovedFileError{Msg: fmt.Sprintf(format, a...)}
 }
 
+// checkJSONKeys makes the JSON decoding strict where encoding/json is not: a
+// key repeated in one object is an error (the decoder would keep the last
+// value), and a known key must be spelled exactly (the decoder matches keys
+// without regard to case).
+func checkJSONKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var walk func(level int, inUsers bool) error
+	walk = func(level int, inUsers bool) error {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		d, ok := tok.(json.Delim)
+		if !ok {
+			return nil
+		}
+		if d == '[' {
+			for dec.More() {
+				if err := walk(level, inUsers); err != nil {
+					return err
+				}
+			}
+			_, err := dec.Token()
+			return err
+		}
+		seen := map[string]bool{}
+		for dec.More() {
+			kt, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			k, _ := kt.(string)
+			if seen[k] {
+				return fmt.Errorf("duplicate key %q", shortenKey(k))
+			}
+			seen[k] = true
+			isUsers := false
+			switch {
+			case level == 0:
+				if !strings.EqualFold(k, "users") {
+					break
+				}
+				if k != "users" {
+					return fmt.Errorf("unknown field %q", shortenKey(k))
+				}
+				isUsers = true
+			case inUsers && level == 1:
+				for _, known := range []string{"email", "roles"} {
+					if k != known && strings.EqualFold(k, known) {
+						return fmt.Errorf("unknown field %q", shortenKey(k))
+					}
+				}
+			}
+			if err := walk(level+1, isUsers); err != nil {
+				return err
+			}
+		}
+		_, err = dec.Token()
+		return err
+	}
+	return walk(0, false)
+}
+
+func shortenKey(k string) string {
+	if r := []rune(k); len(r) > 40 {
+		return string(r[:40]) + "..."
+	}
+	return k
+}
+
 // LoadPreapprovedUsers reads and validates the file overlay: a .json file is
 // JSON, anything else YAML; unknown keys are errors; at most 10,000 entries;
 // each email and role set follows the admin route's rules; an email may
@@ -56,9 +126,12 @@ func LoadPreapprovedUsers(path string) ([]api.PreapprovalEntry, error) {
 	}
 	raw := json.RawMessage(data)
 	if strings.ToLower(filepath.Ext(path)) != ".json" {
-		if raw, err = config.YAMLToJSON(data); err != nil {
+		if raw, err = config.YAMLToJSONSingle(data); err != nil {
 			return nil, preErrf("%s: %v", path, err)
 		}
+	}
+	if err := checkJSONKeys(raw); err != nil {
+		return nil, preErrf("%s: %v", path, err)
 	}
 	var f preapprovedFile
 	dec := json.NewDecoder(bytes.NewReader(raw))

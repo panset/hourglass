@@ -417,6 +417,28 @@ func YAMLToJSON(data []byte) (json.RawMessage, error) {
 	return nodeToJSON(&n)
 }
 
+// YAMLToJSONSingle is YAMLToJSON for a stream that must hold one document: a
+// second document (after "---") is an error instead of being dropped. A
+// repeated mapping key is already an error in the YAML decoder.
+func YAMLToJSONSingle(data []byte) (json.RawMessage, error) {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	var n yaml.Node
+	if err := dec.Decode(&n); err != nil {
+		if errors.Is(err, io.EOF) {
+			return json.RawMessage("null"), nil
+		}
+		return nil, err
+	}
+	var extra yaml.Node
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New("more than one YAML document")
+	}
+	return nodeToJSON(&n)
+}
+
 func nodeToJSON(n *yaml.Node) (json.RawMessage, error) {
 	var v any
 	if err := n.Decode(&v); err != nil {

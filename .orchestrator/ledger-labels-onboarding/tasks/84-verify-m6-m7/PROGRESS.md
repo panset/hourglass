@@ -1,0 +1,12 @@
+# 84 progress
+- 2026-11-23 read BRIEF, INTENT, CONTRACT; starting design doc and diff read.
+- 2026-11-23 baseline go tests green at HEAD b69e395 (baseline.sha, baseline-go.log).
+- 2026-11-23 read design B/C/D, D74-D76, the M6/M7 code (auth/oidc.go, session.go, api/preapproval.go, store/preapprovals.go, app/preapproved.go, config, routes, UI chips/top bar/pre-approvals).
+- 2026-11-23 breaks done for SET-8 (x3), AUTH-9 (x2), PRE-1..PRE-8 (PRE-3 x4, PRE-5 x2 incl. route table, PRE-6 x3), UI-9 (x2), UI-10 (x2), UI-11; logs break-*.log; each file restored and git diff clean per file.
+- 2026-11-23 finding: removing the in-transaction status re-check (preapproval.go:214) leaves every test green (pre3a).
+- 2026-11-23 temporary probe tests (deleted after run): in-tx recheck rejects a rejected user; 8 concurrent ApplyPreapproval give 1 approval/1 audit/1 allowance; Kelvin sign claim matches kate@ entry; stale pending session gains roles. Loader probes: JSON keys case-insensitive and duplicate keys last-wins; YAML second document silently ignored; zero-width chars accepted.
+- 2026-11-23 openapi d96a950..HEAD removes nothing (reformatting only); regenerated schema.gen.ts identical.
+- Next: check_core_generic, race run, ./ci.sh, uncached bazel test, then RESULT.md.
+- 2026-11-23 check_core_generic exit 0; go test -race auth/api/store ok, 0 data races (race.log). Next: ./ci.sh.
+- 2026-11-23 ./ci.sh exit 0 but all 39 bazel tests cached; running bazel test --nocache_test_results.
+- 2026-11-23 uncached bazel test 39/39 pass; git diff empty; RESULT.md written. Done.
