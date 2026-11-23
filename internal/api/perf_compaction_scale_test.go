@@ -45,6 +45,12 @@ var (
 // asks for "well under one second".
 const stepLimit = time.Second
 
+// timingBounded reports whether wall-clock bounds are enforced. The race
+// detector makes the code several times slower, so under -race the figures are
+// logged but the bounds are not checked; the bounds on rows, steps and query
+// plans still are.
+var timingBounded = !raceEnabled
+
 // backendDBPath returns the database file of the backend the test created.
 // newBackend puts it in its own t.TempDir(), and every TempDir of a test is a
 // numbered directory under one root.
@@ -113,6 +119,27 @@ func TestLED10_ScaleYearOfDebitsCompactsInBoundedSteps(t *testing.T) {
 			}
 		}
 		ins.Close()
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Old history that never compacts: a single raw debit a day for 400 days
+	// before the year, so every such day is a one-row group. One search step
+	// must not walk them all (store.LedgerCompactionStepDays).
+	oldDays := 400
+	oldFirst := start.AddDate(0, 0, -oldDays)
+	{
+		tx, err := raw.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for d := 0; d < oldDays; d++ {
+			p := oldFirst.AddDate(0, 0, d).Add(time.Hour)
+			if _, err := tx.Exec(`INSERT INTO ledger (user_id, period, type, amount_mt, hold_id, actor_id, reason, created_at)
+				VALUES (?, ?, 'debit', -333, ?, NULL, '', ?)`, holds[0].user, ledger.PeriodOf(p, time.UTC), holds[0].id, store.FormatTime(p)); err != nil {
+				t.Fatal(err)
+			}
+		}
 		if err := tx.Commit(); err != nil {
 			t.Fatal(err)
 		}
@@ -198,7 +225,7 @@ func TestLED10_ScaleYearOfDebitsCompactsInBoundedSteps(t *testing.T) {
 			if rec != 200 {
 				t.Fatalf("%s %s: status %d", when, path, rec)
 			}
-			if ds[len(ds)-1] > 500*time.Millisecond {
+			if timingBounded && ds[len(ds)-1] > 500*time.Millisecond {
 				t.Errorf("%s compaction: %s took %s (over 500 ms)", when, path, ds[len(ds)-1])
 			}
 			t.Logf("%-6s compaction: GET %-36s %6d entries  median %6.1f ms  worst %6.1f ms", when, path, n,
@@ -217,6 +244,20 @@ func TestLED10_ScaleYearOfDebitsCompactsInBoundedSteps(t *testing.T) {
 		balanceBefore[i] = got.BalanceMT
 	}
 
+	// The first search step meets only one-row days: it finds nothing, walks at
+	// most LedgerCompactionStepDays days and says where to go on, instead of
+	// walking all oldDays of them in one transaction.
+	t1 := time.Now()
+	probe, err := b.st.DueLedgerGroups(ctx, now, time.UTC, time.Time{}, store.LedgerCompactionStepRows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if walked := probe.Next.Sub(oldFirst); len(probe.Groups) != 0 || walked > store.LedgerCompactionStepDays*24*time.Hour {
+		t.Errorf("first search step: %d groups, walked %s (%d days); want none and at most %d days",
+			len(probe.Groups), walked, int(walked.Hours()/24), store.LedgerCompactionStepDays)
+	}
+	t.Logf("first search step over %d days of one-row groups: %.1f ms, next %s", oldDays, ms(time.Since(t1)), probe.Next.Format(time.DateOnly))
+
 	// Compact the whole backlog step by step, timing each step.
 	var steps []time.Duration
 	removed := 0
@@ -233,7 +274,7 @@ func TestLED10_ScaleYearOfDebitsCompactsInBoundedSteps(t *testing.T) {
 		if s.Replaced > store.LedgerCompactionStepRows && s.Groups != 1 {
 			t.Errorf("step %d: %d rows in %d groups, over the bound", len(steps), s.Replaced, s.Groups)
 		}
-		if d > stepLimit {
+		if timingBounded && d > stepLimit {
 			t.Errorf("step %d (%d rows) took %s", len(steps), s.Replaced, d)
 		}
 		if !s.More {
@@ -251,13 +292,24 @@ func TestLED10_ScaleYearOfDebitsCompactsInBoundedSteps(t *testing.T) {
 	}
 
 	// The idle check once the backlog is gone.
-	t1 := time.Now()
-	s, err := b.led.CompactDue(ctx)
-	if err != nil || s != (ledger.CompactionStep{}) {
-		t.Fatalf("idle check: %+v %v", s, err)
+	// The idle check once the backlog is gone: it changes nothing. The old
+	// one-row days are walked again, a bounded number per step.
+	t1 = time.Now()
+	idleSteps := 0
+	for {
+		s, err := b.led.CompactDue(ctx)
+		if err != nil || s.Groups != 0 || s.Replaced != 0 || s.Removed != 0 {
+			t.Fatalf("idle check: %+v %v", s, err)
+		}
+		if idleSteps++; idleSteps > oldDays/store.LedgerCompactionStepDays+3 {
+			t.Fatalf("idle check still going after %d steps", idleSteps)
+		}
+		if !s.More {
+			break
+		}
 	}
-	t.Logf("idle check over the compacted year: %.1f ms", ms(time.Since(t1)))
-	if d := time.Since(t1); d > stepLimit {
+	t.Logf("idle check over the compacted year: %.1f ms in %d steps", ms(time.Since(t1)), idleSteps)
+	if d := time.Since(t1); timingBounded && d > stepLimit {
 		t.Errorf("idle check took %s", d)
 	}
 

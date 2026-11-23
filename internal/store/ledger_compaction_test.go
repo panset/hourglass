@@ -53,7 +53,13 @@ func compactAll(t *testing.T, s *Store, now time.Time, loc *time.Location) int {
 		}
 		due := must(s.DueLedgerGroups(ctx, now, loc, from, LedgerCompactionStepRows))
 		if len(due.Groups) == 0 {
-			return rows
+			// A step bounded by days may find nothing and still have more to
+			// search; it is done only when the search reached the cutoff.
+			if !due.Next.Before(LedgerCompactionCutoff(now, loc)) {
+				return rows
+			}
+			from = due.Next
+			continue
 		}
 		err := s.Tx(ctx, func(tx *Tx) error {
 			for _, g := range due.Groups {
@@ -992,5 +998,113 @@ func TestUPG1_Schema5LedgerUpgradesAndCompacts(t *testing.T) {
 	}
 	if after := allLedger(t, s); len(after) >= rows {
 		t.Errorf("rows %d after compaction, %d before", len(after), rows)
+	}
+}
+
+// LED-10 (A1): one search step looks at a bounded number of local days, however
+// much one-row-group history lies in front of the first group to compact, so a
+// step's cost does not grow with history. The search resumes where it stopped
+// and still finds the group.
+func TestLED10_DueSearchStepIsBoundedByDays(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	h := must(s.CreateHold(ctx, newSetup(t, s, "a"), u.ID, t0)).ID
+	first := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	const oneRowDays = 200
+	for d := 0; d < oneRowDays; d++ { // one raw row a day: never compacted
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-01", Type: "debit", AmountMT: -1, HoldID: &h},
+			"2026-01", first.AddDate(0, 0, d).Add(time.Hour)))
+	}
+	for k := 0; k < 3; k++ { // then a day with a group to compact
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-01", Type: "debit", AmountMT: -1, HoldID: &h},
+			"2026-01", first.AddDate(0, 0, oneRowDays).Add(time.Duration(k+1)*time.Hour)))
+	}
+	now := first.AddDate(0, 0, oneRowDays+30)
+	cutoff := LedgerCompactionCutoff(now, nil)
+	var from time.Time
+	found, calls := 0, 0
+	for from.Before(cutoff) {
+		if calls++; calls > 20 {
+			t.Fatal("the search does not advance")
+		}
+		d := must(s.DueLedgerGroups(ctx, now, nil, from, LedgerCompactionStepRows))
+		if from.IsZero() {
+			from = first
+		}
+		if walked := d.Next.Sub(from); walked > LedgerCompactionStepDays*24*time.Hour {
+			t.Fatalf("call %d walked %s (%d days), over the bound of %d days", calls, walked, int(walked.Hours()/24), LedgerCompactionStepDays)
+		}
+		found += len(d.Groups)
+		from = d.Next
+	}
+	if found != 1 {
+		t.Fatalf("found %d groups, want 1", found)
+	}
+	if want := (oneRowDays + LedgerCompactionStepDays) / LedgerCompactionStepDays; calls < want {
+		t.Fatalf("%d calls, want at least %d: the first call did not stop at the day bound", calls, want)
+	}
+	if n := compactAll(t, s, now, nil); n != 3 {
+		t.Fatalf("compacted %d rows, want 3", n)
+	}
+}
+
+// LED-7: a spring-forward day has 23 hours and is one group; its neighbours
+// are their own groups, whichever side of the clock change a row falls on.
+func TestLED7_SpringForwardDayIsOneGroup(t *testing.T) {
+	la := losAngeles(t)
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	h := must(s.CreateHold(ctx, newSetup(t, s, "a"), u.ID, t0)).ID
+	at := func(d, hh, mm int) time.Time { return time.Date(2026, time.March, d, hh, mm, 0, 0, la) }
+	// March 8, 2026: 02:00 PST became 03:00 PDT.
+	whens := []time.Time{at(7, 23, 30), at(7, 23, 50), at(8, 0, 30), at(8, 1, 30), at(8, 3, 30), at(8, 23, 30), at(9, 0, 10), at(9, 0, 20)}
+	var rows []LedgerEntry
+	for i, w := range whens {
+		rows = append(rows, must(s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-03", Type: "debit", AmountMT: -int64(i + 1), HoldID: &h}, "2026-03", w)))
+	}
+	if got := at(9, 0, 0).Sub(at(8, 0, 0)); got != 23*time.Hour {
+		t.Fatalf("March 8 is %s long, the fixture is wrong", got)
+	}
+	now := at(25, 12, 0)
+	want := [][]int64{{rows[0].ID, rows[1].ID}, {rows[2].ID, rows[3].ID, rows[4].ID, rows[5].ID}, {rows[6].ID, rows[7].ID}}
+	if got := modelGroups(allLedger(t, s), LedgerCompactionCutoff(now, la), la); !reflect.DeepEqual(got, want) {
+		t.Fatalf("model groups %v, want %v", got, want)
+	}
+	before := allLedger(t, s)
+	if n := compactAll(t, s, now, la); n != len(whens) {
+		t.Fatalf("replaced %d rows, want %d", n, len(whens))
+	}
+	diffLedger(t, allLedger(t, s), expectMerge(before, want))
+}
+
+// LED-7: the day boundary is the one in force when a step runs. After a
+// timezone change a row already rolled up stays as it is; the new zone only
+// decides about rows that are still raw.
+func TestLED7_TimezoneChangeLeavesRolledUpRowsAlone(t *testing.T) {
+	la := losAngeles(t)
+	s := openTemp(t)
+	u := newUser(t, s, "u")
+	h := must(s.CreateHold(ctx, newSetup(t, s, "a"), u.ID, t0)).ID
+	// 23:30 and 00:30 in Los Angeles are one UTC day (06:30 and 07:30 on the
+	// 11th) and two Los Angeles days.
+	a := time.Date(2026, time.March, 10, 23, 30, 0, 0, la)
+	b := time.Date(2026, time.March, 11, 0, 30, 0, 0, la)
+	for i, w := range []time.Time{a, b, a.Add(-2 * time.Hour), b.Add(2 * time.Hour)} { // each LA day has two rows
+		must(s.AppendLedger(ctx, LedgerEntry{UserID: u.ID, Period: "2026-03", Type: "debit", AmountMT: -int64(i + 1), HoldID: &h}, "2026-03", w))
+	}
+	now := time.Date(2026, time.March, 25, 12, 0, 0, 0, time.UTC)
+	sum := func() int64 { return must(s.SumLedger(ctx, u.ID, "2026-03", "")) }
+	total := sum()
+	if n := compactAll(t, s, now, la); n != 4 { // two groups of two in Los Angeles
+		t.Fatalf("Los Angeles replaced %d rows, want 4", n)
+	}
+	if n := compactAll(t, s, now, time.UTC); n != 0 { // all rolled up: final
+		t.Fatalf("UTC pass replaced %d rows after a Los Angeles pass, want 0", n)
+	}
+	if got := sum(); got != total {
+		t.Fatalf("sum %d -> %d", total, got)
+	}
+	if n := len(allLedger(t, s)); n != 2 {
+		t.Fatalf("%d rows, want the 2 roll-ups", n)
 	}
 }

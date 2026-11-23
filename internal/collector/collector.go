@@ -164,7 +164,9 @@ func (c *Collector) LastPoll() PollView {
 // Run polls immediately, then every poll interval (re-read each cycle) until
 // ctx ends. RunOnce runs the ledger rollover before each poll; once a day it
 // prunes old rows and starts the ledger compaction, which then runs a bounded
-// number of steps after each poll until nothing is due. It returns ctx.Err().
+// number of steps after each poll until nothing is due; the time those steps
+// take is deducted from the wait, so compaction never stretches the gap
+// between polls. It returns ctx.Err().
 func (c *Collector) Run(ctx context.Context) error {
 	for {
 		if ctx.Err() != nil {
@@ -172,12 +174,19 @@ func (c *Collector) Run(ctx context.Context) error {
 		}
 		_ = c.RunOnce(ctx) // failures are recorded, logged and emitted by RunOnce
 		c.pruneIfDue(ctx)
+		compactStart := c.d.Clock.Now()
 		c.compactIfDue(ctx)
+		compacting := c.d.Clock.Now().Sub(compactStart)
 		interval := settings.Defaults().PollInterval
 		if cfg, err := settings.Load(ctx, c.d.Store); err != nil {
 			c.log.Error("load settings for poll interval", "err", err, "fallback", interval)
 		} else {
 			interval = cfg.PollInterval
+		}
+		// Time spent compacting comes out of the wait, so a backlog adds
+		// nothing to the gap between two polls (LED-10).
+		if compacting > 0 {
+			interval = max(interval-compacting, 0)
 		}
 		select {
 		case <-ctx.Done():

@@ -12,10 +12,10 @@ when the one before returns. Task numbers continue from the previous job (72).
 | # | M | Task | Kind | Model | Depends on | Writes to | Status |
 |---|---|---|---|---|---|---|---|
 | 73 | 1 | Record D69 in `docs/decisions.md` | - | orchestrator | - | `docs/decisions.md` | done |
-| 74 | 2 | Migration 0006, store: `rollup_count`, delete trigger + marker, compaction queries, `DebitMultipliers` filter, before/after reader test, schema-5 migration test (LED-7, 8, 9, 15, UPG-1) | build | opus | 73 | `internal/store/` | done (verify: 76) |
-| 75 | 3 | `ledger.Service.CompactDue` and collector: bounded steps, lock release, scale test (LED-10) | build | opus | 74 | `internal/ledger/`, `internal/collector/`, `internal/api/perf_scale*` | done (verify: 76) |
-| 76 | 3 | Independent verification of M2-M3 | verify | opus | 75 | (read-only) | running |
-| 77 | 4 | Ledger API: `rollup`, `limit`, `cursor`, `entry_count`, `next_cursor`, balances; OpenAPI, contract test, generated types (LED-11..14) | build | opus | 76 | `internal/api/`, `internal/store/`, `api/`, `ui/src/api/schema.gen.ts` | pending |
+| 74 | 2 | Migration 0006, store: `rollup_count`, delete trigger + marker, compaction queries, `DebitMultipliers` filter, before/after reader test, schema-5 migration test (LED-7, 8, 9, 15, UPG-1) | build | opus | 73 | `internal/store/` | verified |
+| 75 | 3 | `ledger.Service.CompactDue` and collector: bounded steps, lock release, scale test (LED-10) | build | opus | 74 | `internal/ledger/`, `internal/collector/`, `internal/api/perf_scale*` | verified |
+| 76 | 3 | Independent verification of M2-M3 | verify | opus | 75 | (read-only) | done (0 high, 1 medium, 4 low: 76b) |
+| 77 | 4 | Ledger API: `rollup`, `limit`, `cursor`, `entry_count`, `next_cursor`, balances; OpenAPI, contract test, generated types (LED-11..14) | build | opus | 76 | `internal/api/`, `internal/store/`, `api/`, `ui/src/api/schema.gen.ts` | running |
 | 78 | 5 | Ledger UI (UI-8) and the acceptance scenario's `readLedger` helper | build | sonnet | 77 | `ui/src/pages/usage/`, `e2e/browser/tests/acceptance.spec.ts` | pending |
 | 79 | 5 | Independent verification of M4-M5 | verify | opus | 78 | (read-only) | pending |
 | 80 | 6 | Labels: `label_index`, selector term in `internal/rules`, chips (SET-8, UI-9) | build | sonnet | 79 | `internal/rules/`, `internal/api/`, `api/`, `ui/` | pending |

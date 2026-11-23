@@ -59,8 +59,12 @@ type lockedBuf struct {
 	b  bytes.Buffer
 }
 
-func (w *lockedBuf) Write(p []byte) (int, error) { w.mu.Lock(); defer w.mu.Unlock(); return w.b.Write(p) }
-func (w *lockedBuf) String() string               { w.mu.Lock(); defer w.mu.Unlock(); return w.b.String() }
+func (w *lockedBuf) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+func (w *lockedBuf) String() string { w.mu.Lock(); defer w.mu.Unlock(); return w.b.String() }
 
 // runner drives Collector.Run one cycle at a time: a cycle is the poll, the
 // prune, the compaction and the wait, which ends when Run asks for the wait.
@@ -75,6 +79,8 @@ type runner struct {
 	cancel context.CancelFunc
 	done   chan error
 	steps  []int // CompactDue calls made in each cycle
+	// lastWait is the duration Run asked to wait at the end of the last cycle.
+	lastWait time.Duration
 }
 
 // startRun starts Run with the given step budget and returns once the first
@@ -88,7 +94,7 @@ func (e *env) startRun(stepsPerCycle int, before func(r *runner, n int)) *runner
 	}
 	r.c = New(Deps{Store: e.st, Pressure: e.pressure, Policy: e.policy, Events: e.rec, Ledger: r.led, Clock: e.clk,
 		Logger: slog.New(slog.NewTextHandler(r.logs, nil)),
-		After:  func(time.Duration) <-chan time.Time { return r.afterWait() }})
+		After:  func(d time.Duration) <-chan time.Time { return r.afterWait(d) }})
 	r.c.compactSteps = stepsPerCycle
 	ctx, cancel := context.WithCancel(bg)
 	r.cancel = cancel
@@ -98,8 +104,8 @@ func (e *env) startRun(stepsPerCycle int, before func(r *runner, n int)) *runner
 	return r
 }
 
-func (r *runner) afterWait() <-chan time.Time {
-	r.waits <- 0
+func (r *runner) afterWait(d time.Duration) <-chan time.Time {
+	r.waits <- d
 	return r.ticks
 }
 
@@ -110,7 +116,7 @@ func (r *runner) wait() {
 		before += n
 	}
 	select {
-	case <-r.waits:
+	case r.lastWait = <-r.waits:
 	case <-time.After(30 * time.Second):
 		r.t.Fatal("cycle did not end")
 	}
@@ -386,5 +392,62 @@ func TestLED10_IdleCheckRunsOnceADay(t *testing.T) {
 	r.cycle(poll)
 	if got := r.lastCycleSteps(); got != 0 {
 		t.Fatalf("checked again %d times after the daily check", got)
+	}
+}
+
+// TestLED10_CompactionDoesNotStretchThePollInterval drives Run as production
+// does (one loop, nothing else polling) with a backlog of many steps and steps
+// that each take time on the clock: the wait Run asks for is the poll interval
+// less the time the cycle spent compacting, so the next poll starts one
+// interval after the compaction began, however long the backlog makes it run.
+func TestLED10_CompactionDoesNotStretchThePollInterval(t *testing.T) {
+	const stepTime = 7 * time.Second
+	e := newEnv(t, false)
+	holds := e.twoHolds()
+	e.backlog(holds, 12, 288) // 6,912 rows: several steps per cycle
+	r := e.startRun(CompactStepsPerCycle, func(r *runner, n int) { e.clk.Advance(stepTime) })
+	// The first cycle's steps ran on the fake clock; check each cycle until
+	// the backlog is gone: compaction time plus wait is exactly one interval.
+	for cycles := 0; ; cycles++ {
+		steps := r.lastCycleSteps()
+		if want := poll - time.Duration(steps)*stepTime; r.lastWait != want {
+			t.Fatalf("cycle %d: %d steps of %s, Run waited %s, want %s (the interval less the compaction time)",
+				cycles, steps, stepTime, r.lastWait, want)
+		}
+		if steps < 2 && cycles == 0 {
+			t.Fatalf("the backlog took %d steps: the test needs several", steps)
+		}
+		if e.dueGroups() == 0 {
+			break
+		}
+		if cycles == 5 {
+			t.Fatalf("backlog not finished after %d cycles", cycles)
+		}
+		r.cycle(poll)
+	}
+}
+
+// TestLED10_LongCompactionNeverWaitsPastTheInterval: when the compaction alone
+// runs longer than the interval, Run does not add a further wait on top, and
+// the wait is never negative.
+func TestLED10_LongCompactionNeverWaitsPastTheInterval(t *testing.T) {
+	e := newEnv(t, false)
+	holds := e.twoHolds()
+	e.backlog(holds, 12, 288)
+	r := e.startRun(CompactStepsPerCycle, func(r *runner, n int) { e.clk.Advance(2 * poll) })
+	if r.lastCycleSteps() < 1 || r.lastWait != 0 {
+		t.Fatalf("%d steps, wait %s: want a zero wait after a compaction longer than the interval", r.lastCycleSteps(), r.lastWait)
+	}
+}
+
+// TestLED10_NoCompactionKeepsTheFullInterval: a cycle that does not compact
+// waits the whole interval, as before the roll-up existed.
+func TestLED10_NoCompactionKeepsTheFullInterval(t *testing.T) {
+	e := newEnv(t, false)
+	e.twoHolds()
+	r := e.startRun(CompactStepsPerCycle, nil)
+	r.cycle(poll)
+	if r.lastCycleSteps() != 0 || r.lastWait != poll {
+		t.Fatalf("%d steps, wait %s, want 0 steps and %s", r.lastCycleSteps(), r.lastWait, poll)
 	}
 }

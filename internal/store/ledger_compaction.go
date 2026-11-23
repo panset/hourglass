@@ -22,6 +22,13 @@ import (
 // At the default 5-minute poll a hold's day is 288 rows.
 const LedgerCompactionStepRows = 2000
 
+// LedgerCompactionStepDays is the most local days one DueLedgerGroups call
+// looks at. Days whose raw debits are all one-row groups hold nothing to
+// compact (and are never compacted, so they stay raw), and without this bound
+// a search would walk every such day since the oldest one in a single
+// transaction; with it a step costs the same however much history there is.
+const LedgerCompactionStepDays = 60
+
 // rawDebit is the predicate of a raw debit. It matches the WHERE clause of the
 // partial indexes of migration 0006 term for term, so queries using it can use
 // those indexes.
@@ -73,7 +80,9 @@ func localDay(t time.Time, loc *time.Location) (time.Time, time.Time) {
 // single larger group is returned alone). It searches raw debits with
 // from <= created_at < LedgerCompactionCutoff(now, loc); pass the zero time
 // to start from the beginning. Days whose raw debits are all one-row groups
-// are skipped. An empty Groups means nothing is due at or after from.
+// are skipped, but at most LedgerCompactionStepDays days are looked at per
+// call. Next is the position to continue from: an empty Groups means nothing
+// is due at or after from only when Next has reached the cutoff.
 //
 // Each day costs two statements on the partial index ledger_raw_debit_created
 // (the oldest raw debit at or after a position, then that day's groups), so
@@ -88,8 +97,9 @@ func (q *queries) DueLedgerGroups(ctx context.Context, now time.Time, loc *time.
 	}
 	cutoff := LedgerCompactionCutoff(now, loc)
 	out := DueLedgerGroups{Next: from}
-	total := 0
-	for out.Next.Before(cutoff) {
+	total, days := 0, 0
+	for out.Next.Before(cutoff) && days < LedgerCompactionStepDays {
+		days++
 		var first sql.NullString
 		if err := q.db.QueryRowContext(ctx, `SELECT MIN(created_at) FROM ledger
 			WHERE `+rawDebit+` AND created_at >= ? AND created_at < ?`,
