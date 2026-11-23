@@ -110,6 +110,15 @@ Top bar (admin), "Users · 2 pending" active, showing "300 tokens" and "Riley Ad
    - Grant panel (aside "Grant tokens", grey, bordered; opens when Grant is clicked): h2 "Grant tokens to Priya N."; sub-line "Balance −12 · burning 4.0 / hour on setup-02"; label "Amount" (text, `100`); label "Reason (required)" (text, "Release week, needs a large setup for soak test"); live line "New balance: 88. Unused tokens expire Nov 30; debt carries into December."; buttons primary "Grant 100 tokens", secondary "Reset to 300", secondary "Cancel".
    - Panel note: "Opens when Grant is clicked. Negative amounts correct mistakes. Reset sets the balance to the full allowance and clears carried debt; it needs a reason too. Both are written to the audit log."
 
+### Pre-approved users (UI-11, design D5)
+
+A section below the two-column area, h2 "Pre-approved users", loaded on its own from `GET /api/v1/admin/preapprovals` (a failure there does not hide the rest of the page; it shows its own error and Retry).
+
+- One-line note above the table: "Listed people get the chosen role the first time they sign in with SSO."
+- Table "Pre-approved users", columns: Email, Roles ("Developer, Admin"), Source ("Added here" for `database`, "Config file" for `config`), Added by (`created_by.name`, "—" for a file row), Signed in (the date with the signed-in user's name beneath, or "Not yet"), (blank action). An email in both sources shows two rows. Empty list: "No pre-approved users."
+- Database rows have a Remove button (aria-label "Remove <email>"); a confirmation dialog "Remove <email>?" with Cancel and a red Remove, then `DELETE /api/v1/admin/preapprovals/{id}`. File rows (id null) have no button.
+- Add form: text area "Emails to pre-approve" (hint: separate with commas, spaces or new lines), select "Role" (Developer default, Admin), primary "Add" (disabled while the text holds no email). The page splits the text on commas, whitespace and new lines, drops empty pieces and posts `{emails, roles: [role]}`; it does no other validation. A 400 shows the server's `error.message` under the text area and keeps the text. After a successful add the text area is cleared; after an add or a remove the list is refetched.
+
 ## Setup inventory (`/admin/setups`)
 
 Top bar (admin), "Setup inventory" active.

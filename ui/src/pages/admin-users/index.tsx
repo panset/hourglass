@@ -7,6 +7,7 @@ import { usePanelFocus } from "../../hooks/usePanelFocus";
 import { formatPerHour, formatTokens } from "../../lib/format";
 import { errorText, useAction } from "../admin-shared/useAction";
 import shared from "../admin-shared/admin.module.css";
+import { Preapprovals } from "./preapprovals";
 import { grantTokens, listPending, listUsers, rejectUser, resetBalance, setRoles, type AdminUser, type Role } from "./api";
 
 const ROLES: Role[] = ["developer", "admin"];
@@ -322,6 +323,8 @@ export default function Page() {
           />
         ) : null}
       </div>
+
+      <Preapprovals />
     </div>
   );
 }

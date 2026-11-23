@@ -21,8 +21,8 @@ when the one before returns. Task numbers continue from the previous job (72).
 | 80 | 6 | Labels: `label_index`, selector term in `internal/rules`, chips (SET-8, UI-9) | build | sonnet | 79 | `internal/rules/`, `internal/api/`, `api/`, `ui/` | done (verify: 84) |
 | 81 | 6 | Greeting: claims, shared display-name function, `display_name`, top bar (AUTH-9, UI-10) | build | sonnet | 80 | `internal/auth/`, `internal/api/`, `api/`, `ui/` | done (verify: 84) |
 | 82 | 7 | Pre-approval: store, sign-in step via injected interface, admin routes, file overlay, permissions test (PRE-1..8) | build | opus | 81 | `internal/store/`, `internal/auth/`, `internal/api/`, `internal/config/`, `internal/app/`, `api/`, `deploy/config.sample.yaml` | done (verify: 84) |
-| 83 | 7 | Admin > Users pre-approval UI (UI-11) | build | sonnet | 82 | `ui/` | running |
-| 84 | 7 | Independent verification of M6-M7, with a security read of the sign-in path | verify | opus | 83 | (read-only) | pending |
+| 83 | 7 | Admin > Users pre-approval UI (UI-11) | build | sonnet | 82 | `ui/` | done (verify: 84) |
+| 84 | 7 | Independent verification of M6-M7, with a security read of the sign-in path | verify | opus | 83 | (read-only) | running |
 | 85 | 8 | End-to-end scenarios (paging, chip, greeting, pre-approved first sign-in, compaction via test clock), Keycloak user, UPG-2, UPG-3 | build | sonnet | 84 | `e2e/`, `deploy/keycloak/`, `internal/` tests | pending |
 | 86 | 8 | Docs: `deploying.md` (upgrade, retention, config reference, pre-approval with commands run, timezone, disk), `ui-notes.md`, `progress.md`, `README.md` | build | sonnet | 85 | `docs/`, `README.md` | pending |
 | 87 | 8 | Final verification: requirement-to-test table, `./ci.sh`, `e2e/run.sh both`, integration scenario, guide commands re-run | verify | opus | 86 | (read-only) | pending |

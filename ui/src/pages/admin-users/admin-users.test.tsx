@@ -14,6 +14,7 @@ const pendingOnly = userList([morgan]);
 function routes(extra: Record<string, unknown> = {}) {
   return {
     "GET /api/v1/admin/users": ({ url }: { url: string }) => (url.includes("status=pending") ? pendingOnly : everyone),
+    "GET /api/v1/admin/preapprovals": { preapprovals: [] },
     ...extra,
   };
 }
