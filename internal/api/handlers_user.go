@@ -258,6 +258,10 @@ type ledgerQuery struct {
 // lower than this". Clients treat it as opaque.
 var ledgerCursor = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)
 
+// ledgerLimit is the accepted spelling of limit: decimal digits only, so a
+// sign, a decimal point or a space is 400 (the value is then checked 1..200).
+var ledgerLimit = regexp.MustCompile(`^[0-9]+$`)
+
 // parseLedgerQuery validates the view parameters; a parameter that is present
 // with an empty value counts as given (and is invalid). On a bad value it
 // writes 400 validation naming the parameter and returns false.
@@ -274,8 +278,9 @@ func parseLedgerQuery(w http.ResponseWriter, r *http.Request) (ledgerQuery, bool
 		}
 	}
 	if q.Has("limit") {
-		n, err := strconv.Atoi(q.Get("limit"))
-		if err != nil || n < 1 || n > ledgerMaxLimit {
+		v := q.Get("limit")
+		n, err := strconv.Atoi(v)
+		if !ledgerLimit.MatchString(v) || err != nil || n < 1 || n > ledgerMaxLimit {
 			return bad("limit", "limit must be an integer from 1 to 200")
 		}
 		lq.limit = n

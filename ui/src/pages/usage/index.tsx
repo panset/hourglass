@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // My usage (`/usage`): balance, burn, projection, pressure, holds, tokens per day, ledger. Every number is an API field (UI-1).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "../../api/client";
 import { getMe, getPressure } from "../../api/endpoints";
 import { Alert, Badge, Button, Chip, Select, Table, Time, useToast, zoneLabel } from "../../components";
@@ -38,7 +38,7 @@ const typeLabel = (e: LedgerEntry) => {
 };
 
 const detail = (e: LedgerEntry) => {
-  if (e.setup_name) return e.entry_count > 1 ? `${e.setup_name} · ${e.entry_count} polls` : e.setup_name;
+  if (e.setup_name) return (e.entry_count ?? 1) > 1 ? `${e.setup_name} · ${e.entry_count} polls` : e.setup_name;
   const parts = [e.actor_name, e.reason].filter(Boolean);
   return parts.join(": ");
 };
@@ -69,7 +69,14 @@ export default function UsagePage() {
   const holds = useApi(listActiveHolds, [], { ...poll, enabled: personal });
   const usage = useApi(() => getMyUsage(period), [period], { ...poll, enabled: personal });
   const cursor = cursors[cursors.length - 1];
-  const ledger = useApi(() => getMyLedgerPage(period, view, cursor), [period, view, cursor], { ...poll, enabled: personal });
+  // The page is returned with the request it answers, so a failed request for another page is never shown as the stale one.
+  const ledgerKey = `${period ?? ""}|${view}|${cursor ?? ""}`;
+  const ledger = useApi(
+    async () => ({ key: ledgerKey, page: await getMyLedgerPage(period, view, cursor) }),
+    [period, view, cursor],
+    { ...poll, enabled: personal },
+  );
+  const ledgerPage = ledger.data?.key === ledgerKey ? ledger.data.page : undefined;
   const changePeriod = (p: string) => {
     setPeriod(p);
     setCursors([]);
@@ -78,12 +85,16 @@ export default function UsagePage() {
     setView(v);
     setCursors([]);
   };
-  const nextCursor = ledger.data?.next_cursor ?? null;
+  const nextCursor = ledgerPage?.next_cursor ?? null;
 
   const currentPeriod = me.data?.period;
+  // On the default month the period is implicit, so a rollover changes it without the picker: the cursors of the old month are dropped.
+  useEffect(() => {
+    if (period === undefined) setCursors([]);
+  }, [currentPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
   const selected = period ?? currentPeriod ?? usage.data?.period ?? "";
   const options = Array.from(
-    new Set([currentPeriod, ...(usage.data?.available_periods ?? []), ...(ledger.data?.available_periods ?? [])]),
+    new Set([currentPeriod, ...(usage.data?.available_periods ?? []), ...(ledger.data?.page.available_periods ?? [])]),
   )
     .filter((p): p is string => !!p)
     .sort()
@@ -290,8 +301,8 @@ export default function UsagePage() {
 
               <section aria-label="Ledger section">
                 <h2 style={{ fontSize: 16, margin: "0 0 12px" }}>Ledger</h2>
-                {ledger.loading && !ledger.data ? <Loading /> : null}
-                {ledger.error && !ledger.data ? <Failed error={ledger.error} /> : null}
+                {ledger.loading && !ledgerPage ? <Loading /> : null}
+                {ledger.error && !ledger.loading && !ledgerPage ? <Failed error={ledger.error} /> : null}
                 <div className={styles.viewSwitch} role="group" aria-label="Ledger view">
                   <Button aria-pressed={view === "day"} onClick={() => changeView("day")}>
                     By day
@@ -300,10 +311,10 @@ export default function UsagePage() {
                     Every poll
                   </Button>
                 </div>
-                {ledger.data ? (
+                {ledgerPage ? (
                   <Table<LedgerEntry>
                     label="Ledger"
-                    rows={ledger.data.entries.slice(0, LEDGER_PAGE_SIZE)}
+                    rows={ledgerPage.entries.slice(0, LEDGER_PAGE_SIZE)}
                     rowKey={(e) => e.id}
                     emptyMessage="No ledger entries for this period."
                     columns={[

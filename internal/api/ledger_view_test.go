@@ -487,6 +487,8 @@ func TestLED13_PagingWalksEveryEntryOnce(t *testing.T) {
 		{"rollup=week", "rollup"}, {"rollup=", "rollup"}, {"rollup=DAY", "rollup"},
 		{"limit=0", "limit"}, {"limit=201", "limit"}, {"limit=abc", "limit"}, {"limit=-1", "limit"},
 		{"limit=1.5", "limit"}, {"limit=", "limit"},
+		{"limit=%2B5", "limit"}, {"limit=1.0", "limit"}, {"limit=%205", "limit"}, {"limit=5%20", "limit"},
+		{"limit=00", "limit"}, {"limit=99999999999999999999", "limit"},
 		{"cursor=5", "cursor"}, {"rollup=day&cursor=5", "cursor"},
 		{"limit=5&cursor=abc", "cursor"}, {"limit=5&cursor=", "cursor"}, {"limit=5&cursor=0", "cursor"},
 		{"limit=5&cursor=-3", "cursor"}, {"limit=5&cursor=007", "cursor"},
@@ -531,6 +533,133 @@ func TestLED14_BalancesHoldAcrossPages(t *testing.T) {
 						t.Errorf("compacted=%v view=%q limit=%d: entry %v (page %d) balance %v, older %v + amount %v",
 							compacted, view, limit, e["id"], i/limit, e["balance_after_tokens"], older, e["amount_tokens"])
 					}
+				}
+			}
+		}
+	}
+}
+
+// LED-13 (A4): the page is smaller than the number of holds that are metering,
+// and polls write between the requests. Every hold's entry of today moves to
+// the front of the day view each time, so a cursor is only safe if it is the id
+// of the page's own oldest entry. No entry may come twice, and an entry that
+// did not change while the walk ran must come exactly once.
+func TestLED13_PagingWithMoreActiveHoldsThanLimit(t *testing.T) {
+	e := newUserEnv(t, time.Date(2026, 11, 2, 20, 0, 0, 0, time.UTC), time.UTC)
+	e.rateRule("tier=a", 600)
+	dev := e.dev("dev", store.RoleDeveloper)
+	e.setting("max_holds_per_user", "5")
+	var holds []int64
+	var allocs []hourglass.Allocation
+	for _, n := range []string{"lab-01", "lab-02", "lab-03"} {
+		sid := e.setup(n, true, map[string]string{"tier": "a"})
+		allocs = append(allocs, hourglass.Allocation{ResourceName: n})
+		e.prov.SetAllocations(allocs...)
+		holds = append(holds, e.acquire(&dev, sid))
+	}
+	e.poll()
+	for i := 0; i < 60; i++ { // 5 h: across midnight, so each hold has two days
+		e.step(5 * time.Minute)
+	}
+	fetch := func(view, qs string) ujobj {
+		path := "/api/v1/me/ledger?" + view + qs
+		return uWantOK(t, e.get(path, &dev), 200)
+	}
+	for _, view := range []string{"", "rollup=day&"} {
+		for _, limit := range []int{1, 2} {
+			if limit >= len(holds) {
+				t.Fatal("the limit must be below the number of active holds")
+			}
+			before := map[int64]ujobj{}
+			for _, en := range ledgerEntries(t, fetch(view, "")) {
+				before[entryID(t, en)] = en
+			}
+			var got []ujobj
+			cursor := ""
+			for pages := 0; ; pages++ {
+				if pages > 1000 {
+					t.Fatal("walk does not end")
+				}
+				if pages > 0 {
+					e.step(5 * time.Minute)
+				}
+				qs := "limit=" + strconv.Itoa(limit)
+				if cursor != "" {
+					qs += "&cursor=" + url.QueryEscape(cursor)
+				}
+				page := fetch(view, qs)
+				es := ledgerEntries(t, page)
+				if len(es) > limit {
+					t.Fatalf("view=%q limit=%d: %d entries", view, limit, len(es))
+				}
+				got = append(got, es...)
+				if page["next_cursor"] == nil {
+					break
+				}
+				next, ok := page["next_cursor"].(string)
+				if !ok || next == "" || len(es) == 0 {
+					t.Fatalf("view=%q limit=%d: next_cursor %v on a page of %d", view, limit, page["next_cursor"], len(es))
+				}
+				cursor = next
+			}
+			final := map[int64]ujobj{}
+			for _, en := range ledgerEntries(t, fetch(view, "")) {
+				final[entryID(t, en)] = en
+			}
+			seen := map[int64]int{}
+			for _, en := range got {
+				seen[entryID(t, en)]++
+			}
+			for id, n := range seen {
+				if n > 1 {
+					t.Errorf("view=%q limit=%d: entry %d returned %d times", view, limit, id, n)
+				}
+			}
+			unchanged := 0
+			for id, en := range before {
+				if f, ok := final[id]; ok && reflect.DeepEqual(en, f) {
+					unchanged++
+					if seen[id] != 1 {
+						t.Errorf("view=%q limit=%d: unchanged entry %d returned %d times", view, limit, id, seen[id])
+					}
+				}
+			}
+			// Every active hold's newest entry may have changed; all others must be unchanged.
+			if unchanged < len(before)-len(holds) {
+				t.Errorf("view=%q limit=%d: only %d of %d entries unchanged", view, limit, unchanged, len(before))
+			}
+		}
+	}
+}
+
+// LED-14: the newest entry's balance is the period's balance also for a past
+// period, before and after compaction. The expected value is the sum of the
+// stored rows of that period, read from the store and not from the handler.
+func TestLED14_NewestBalanceInAPastPeriod(t *testing.T) {
+	w := newLedgerWorld(t)
+	w.clk.Advance(21 * 24 * time.Hour) // 2026-12-03: November is a past period
+	w.poll()
+	for _, compacted := range []bool{false, true} {
+		if compacted {
+			w.compact()
+		}
+		var want int64
+		for _, typ := range []string{"allowance", "grant", "debit", "expiry", "carryover", "reset"} {
+			n, err := w.st.SumLedger(uBg, w.dev.user.ID, "2026-11", typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want += n
+		}
+		for _, view := range []string{"period=2026-11", "period=2026-11&rollup=day"} {
+			for _, limit := range []int{1, 3, 200} {
+				es := w.walk(view, limit, nil)
+				if len(es) == 0 {
+					t.Fatalf("compacted=%v view=%q: no entries", compacted, view)
+				}
+				if !uNear(uNum(t, es[0], "balance_after_tokens"), tokens(want)) {
+					t.Errorf("compacted=%v view=%q limit=%d: newest balance %v, period balance %v",
+						compacted, view, limit, es[0]["balance_after_tokens"], tokens(want))
 				}
 			}
 		}

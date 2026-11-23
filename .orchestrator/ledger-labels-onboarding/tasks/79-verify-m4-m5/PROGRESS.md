@@ -1,0 +1,10 @@
+- 2026-11-23 read BRIEF, INTENT, CONTRACT. Next: design doc, diff.
+- e2e bundled started in background (e2e.log, e2e.done). Next: read API diff.
+- Fixture provenance: ran TestLED11 against d96a950 handler in scratch worktree; only entry_count/next_cursor errors, no diff vs golden (both before/after compaction). Worktree removed.
+- openapi: no removal; entries items now LedgerViewEntry (LedgerEntry kept, used by grant response). Regenerated schema.gen.ts: identical. Next: UI diff.
+- e2e bundled FAILED in 8 s at stack start: port 8081 already allocated by a pre-existing hourglass-tls stack (up 2 days, not started by me). Not caused by the change. Did not stop it (outside scope). Next: scratch A4 test, breaks.
+- Scratch test (3 active holds, LA zone, local midnight, grant mid-day, limit 1-4 < holds, polls between pages, one compaction step then full; plus ledgerView mixed rolled-up/raw group) PASSED; scratch file removed. Next: deliberate breaks.
+- Breaks done (all restored, go test red each): LED-11 reason dropped; LED-12 UTC day key; LED-12 multiplier on merged; LED-13 cursor > instead of >=; LED-13 cursor applied before merging; LED-13 limit max 1000; LED-14 page-local balance; LED-12/13/14 id sort removed. Next: UI breaks.
+- UI breaks done (all red, restored): no cursor reset on view; no 20-row slice; Newer enabled on first page; no cursor reset on month (+view); no ledger.reload after release. git status clean apart from pre-existing untracked files. Next: ./ci.sh.
+- ./ci.sh rc=0 (bazel 0/39 executed, all cached); then bazel test //... --nocache_test_results rc=0, 39/39 executed and passed. Next: decisions check, RESULT.md.
+- RESULT.md written. Final: git diff empty, worktree removed. Done.

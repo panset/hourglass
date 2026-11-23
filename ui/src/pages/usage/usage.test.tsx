@@ -397,6 +397,53 @@ describe("UI-8 Ledger paging", () => {
     expect(ledgerUrls(calls).slice(before).every((u) => u.endsWith("&cursor=c2"))).toBe(true);
   });
 
+  it("UI-8 a failed request for another page shows the error, not the previous page, and the controls still work", async () => {
+    let failC2 = true;
+    const { calls } = mockApi({
+      ...pagedRoutes(),
+      "GET /api/v1/me/ledger": ({ url }: { url: string }) => {
+        const c = new URL(url, "http://x").searchParams.get("cursor") ?? "";
+        return c === "c2" && failC2 ? errorResponse(500, "internal", "ledger is busy") : pages[c];
+      },
+    });
+    mount();
+    await screen.findByRole("table", { name: "Ledger" });
+    await userEvent.click(screen.getByRole("button", { name: "Older" }));
+    expect(await screen.findByText("ledger is busy")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Ledger" })).not.toBeInTheDocument();
+    // Nothing is offered that would push the failed cursor again; Newer goes back to the page before.
+    expect(screen.getByRole("button", { name: "Older" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Newer" }));
+    await waitFor(() => expect(lastLedgerUrl(calls)).toBe("/api/v1/me/ledger?rollup=day&limit=20"));
+    await waitFor(() => expect(ledgerRows()).toHaveLength(20));
+    expect(screen.queryByText("ledger is busy")).not.toBeInTheDocument();
+    failC2 = false;
+    await waitFor(() => expect(screen.getByRole("button", { name: "Older" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Older" }));
+    await waitFor(() => expect(lastLedgerUrl(calls)).toContain("cursor=c2"));
+    await waitFor(() => expect(ledgerRows()).toHaveLength(20));
+  });
+
+  it("UI-8 a month rollover while paged on the default month drops the old cursors and shows the first page", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let nowMe: Me = me;
+    const { calls } = mockApi({ ...pagedRoutes(), "GET /api/v1/me": () => nowMe });
+    mount();
+    await screen.findByRole("table", { name: "Ledger" });
+    await userEvent.click(screen.getByRole("button", { name: "Older" }));
+    await waitFor(() => expect(lastLedgerUrl(calls)).toContain("cursor=c2"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Newer" })).toBeEnabled());
+    nowMe = { ...me, period: "2026-12" };
+    await act(async () => void vi.advanceTimersByTime(60_000));
+    await waitFor(() => expect(lastLedgerUrl(calls)).toBe("/api/v1/me/ledger?rollup=day&limit=20"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Newer" })).toBeDisabled());
+    // Older then Newer must not bring back a cursor of the old month.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Older" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Older" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Newer" }));
+    await waitFor(() => expect(lastLedgerUrl(calls)).toBe("/api/v1/me/ledger?rollup=day&limit=20"));
+  });
+
   it("UI-8 Detail shows the poll count only when entry_count is above 1; Type shows the multiplier only when not null", async () => {
     mockApi({
       ...okRoutes(),

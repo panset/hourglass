@@ -7,7 +7,7 @@ import { formatDuration } from "../../lib/format";
 type S = components["schemas"];
 export type Hold = S["Hold"];
 export type LedgerResponse = S["LedgerResponse"];
-export type LedgerEntry = S["LedgerViewEntry"];
+export type LedgerEntry = S["LedgerEntry"];
 export type UsageResponse = S["UsageResponse"];
 export type SetupList = S["SetupList"];
 export type Setup = S["Setup"];

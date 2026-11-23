@@ -1044,28 +1044,8 @@ export interface components {
         };
         /** @enum {string} */
         LedgerEntryType: "allowance" | "grant" | "debit" | "expiry" | "carryover" | "reset";
+        /** @description A ledger entry: a stored ledger row, or, in `GET /api/v1/me/ledger` with `rollup=day`, the debit rows of one hold and local day merged. */
         LedgerEntry: {
-            /** Format: int64 */
-            id: number;
-            /** Format: date-time */
-            created_at: string;
-            /** @example 2026-11 */
-            period: string;
-            type: components["schemas"]["LedgerEntryType"];
-            /** @description Signed; debits are negative. */
-            amount_tokens: components["schemas"]["Tokens"];
-            balance_after_tokens: components["schemas"]["Tokens"];
-            /** @description Multiplier of the poll, for debits (shown as "Debit · 2×"). */
-            multiplier: number | null;
-            setup_name: string | null;
-            /** Format: int64 */
-            hold_id: number | null;
-            /** @description Granting or resetting admin. */
-            actor_name: string | null;
-            reason: string | null;
-        };
-        /** @description An entry of `GET /api/v1/me/ledger`: a stored ledger row, or with `rollup=day` the debit rows of one hold and local day merged. The fields of `LedgerEntry` plus `entry_count`. */
-        LedgerViewEntry: {
             /**
              * Format: int64
              * @description The stored row's id; for a merged `rollup=day` entry, the id of its newest row (the row storage compaction keeps).
@@ -1081,7 +1061,7 @@ export interface components {
             type: components["schemas"]["LedgerEntryType"];
             /** @description Signed; debits are negative. */
             amount_tokens: components["schemas"]["Tokens"];
-            /** @description Running sum of the view's entries of the period, in id order, up to and including this entry. */
+            /** @description On `GET /api/v1/me/ledger`, the running sum of the view's entries of the period, in id order, up to and including this entry. */
             balance_after_tokens: components["schemas"]["Tokens"];
             /** @description Multiplier of the poll, for debits (shown as "Debit · 2×"). Null when `entry_count` is above 1. */
             multiplier: number | null;
@@ -1092,14 +1072,14 @@ export interface components {
             actor_name: string | null;
             /** @description Null for a merged `rollup=day` entry. */
             reason: string | null;
-            /** @description Number of polls the entry stands for: 1 for a raw debit or a non-debit row, the stored roll-up count for a row compacted in storage, the sum over the merged rows in the `rollup=day` view. */
-            entry_count: number;
+            /** @description Always present on `GET /api/v1/me/ledger` entries, and absent on the admin grant and reset responses. The number of polls the entry stands for: 1 for a raw debit or a non-debit row, the stored roll-up count for a row compacted in storage, the sum over the merged rows in the `rollup=day` view. */
+            entry_count?: number;
         };
         LedgerResponse: {
             period: string;
             /** @description Periods with data, newest first (feeds the Month select). */
             available_periods: string[];
-            entries: components["schemas"]["LedgerViewEntry"][];
+            entries: components["schemas"]["LedgerEntry"][];
             /** @description Pass as `cursor` (with the same `period`, `rollup` and `limit`) for the next older page. Null when no older entry exists, and always null without `limit`. */
             next_cursor: string | null;
         };
