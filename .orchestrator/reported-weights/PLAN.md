@@ -18,7 +18,7 @@ Milestones follow the design's "Suggested task order". Build tasks run one at a 
 | 10 | M7b: e2e integration scenario with weights | build | sonnet | 08 | `e2e/` | done (integration run: 17 steps pass, W1-W6 and I9 among them; ci.sh exit 0) |
 | 11 | M7c: documentation (integrating with run examples, deploying, extending, README, ui-notes, progress) | build | sonnet | 09, 10 | docs, README | done (examples run on a host process; charge, UI and size limits not run by this task) |
 | 12 | Verify M7 and the whole (independent, requirement-by-requirement, mutation checks) | verify | opus | 11 | (read-only) | verified (1 medium, 6 low; 12b fixes; e2e not run) |
-| 13 | Release preparation: ci.sh, `e2e/run.sh both`, `e2e/run.sh integration`, report | build | sonnet | 12 | REPORT.md | running |
+| 13 | Release preparation: ci.sh, `e2e/run.sh both`, `e2e/run.sh integration`, report | build | sonnet | 12 | REPORT.md | done (all four runs exit 0 on a5a3d08) |
 | 14 | STOP: owner go-ahead and version number, then merge, tag, push, watch workflow | release | orchestrator | 13 | git | pending |
 
 Fix tasks (04b, 07b, 12b) are added when a verification finds something.
