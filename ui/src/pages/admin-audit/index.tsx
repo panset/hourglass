@@ -65,7 +65,7 @@ export default function Page() {
             <option value="">All actors</option>
             {(actors.data?.users ?? []).map((u) => (
               <option key={u.id} value={u.id}>
-                {u.name}
+                {u.name || u.username || u.email}
               </option>
             ))}
           </Select>

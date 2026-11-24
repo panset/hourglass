@@ -65,6 +65,18 @@ describe("ADM-3 audit log page", () => {
     expect(document.body).not.toHaveTextContent("grant.create");
   });
 
+  it("lists an actor with no name by their email in the Actor filter", async () => {
+    // An SSO user whose provider sends no name claim has an empty name.
+    mockApi({
+      ...routes(list([entry(1)])),
+      "GET /api/v1/admin/users": userList([priya, { ...sam, name: "", username: "", email: "noname@example.com" }]),
+    });
+    render(<Page />);
+    const select = await screen.findByLabelText("Actor");
+    expect(await within(select).findByRole("option", { name: "noname@example.com" })).toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: "" })).not.toBeInTheDocument();
+  });
+
   it("filters by actor and action through query parameters", async () => {
     const { calls } = mockApi(routes(list([entry(1)])));
     render(<Page />);

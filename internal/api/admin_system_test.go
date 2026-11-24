@@ -503,3 +503,32 @@ func TestADM3_EveryAuditActionCarriesBeforeAndAfter(t *testing.T) {
 		}
 	}
 }
+
+// An SSO admin whose provider sends no name claim has an empty stored name.
+// The audit list shows such an actor by the same display name as the session
+// does (name, else username, else email), never as an empty string (AUTH-9).
+func TestADM3_AuditActorWithNoNameShowsDisplayName(t *testing.T) {
+	e := newAdEnv(t)
+	u, err := e.st.CreateOIDCUser(uBg, "sub-noname", "noname@example.test", "", e.clk.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SetUserStatus(uBg, u.ID, store.StatusActive); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SetUserRoles(uBg, u.ID, []string{store.RoleAdmin}); err != nil {
+		t.Fatal(err)
+	}
+	s := e.session(u)
+	uWantOK(t, e.do("PUT", settingsPath, &s, true, fullSettings("")), 200)
+
+	b := uWantOK(t, e.get("/api/v1/admin/audit?action=settings.update"), 200)
+	es := adArr(t, b, "entries")
+	if len(es) != 1 {
+		t.Fatalf("entries = %v", es)
+	}
+	actor := adObjOf(t, adObjOf(t, es[0])["actor"])
+	if uNum(t, actor, "id") != float64(u.ID) || actor["name"] != "noname@example.test" {
+		t.Errorf("actor = %v, want id %d named by email", actor, u.ID)
+	}
+}

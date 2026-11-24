@@ -316,7 +316,7 @@ func (a *API) auditView(r *http.Request, f store.AuditFilter) (auditListOut, err
 		u, err := a.d.Store.GetUser(ctx, id)
 		switch {
 		case err == nil:
-			names[id] = u.Name
+			names[id] = userDisplayName(u) // name, else username, else email: never empty (AUTH-9)
 		case isNotFound(err):
 			names[id] = "unknown user"
 		default:
