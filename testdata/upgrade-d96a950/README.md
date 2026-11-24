@@ -18,3 +18,5 @@ How it was produced (2026-11-23):
     git worktree remove --force /tmp/old
 
 The recorder builds the world of `newLedgerWorld` in `internal/api/ledger_view_test.go` (same order, so the ledger ids are the same), then adds a second developer, two more setups and a user with no role, records the responses, closes the store (no WAL file is left), copies the database, and records the SSO sign-in on a copy of it.
+
+The database holds the local admin's password hash and a few hashed, long-expired session ids. The password is the unit tests' own. Never use a real password when recording this fixture again.

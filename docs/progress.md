@@ -66,7 +66,7 @@ Built to [design/integration-api.md](design/integration-api.md) (D42 to D63). Th
 
 ## Ledger roll-up, labels, greeting, pre-approved users (owner-directed, 2026-11-23)
 
-Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to [design/ledger-labels-onboarding.md](design/ledger-labels-onboarding.md) (D69 to D78). The task record is under `.orchestrator/ledger-labels-onboarding/`. Nothing here is merged to `main`, tagged or released: that waits for the owner's go-ahead and version number. `docs/SPEC.md` is not edited; the edits its source needs are listed in the job report and are to be recorded in `decisions.md` by the orchestrator.
+Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to [design/ledger-labels-onboarding.md](design/ledger-labels-onboarding.md) (D69 to D79). The task record is under `.orchestrator/ledger-labels-onboarding/`. Nothing here is merged to `main`, tagged or released: that waits for the owner's go-ahead and version number. `docs/SPEC.md` is not edited; the edits its source needs are listed in D79.
 
 **Built**
 
@@ -81,13 +81,12 @@ Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to
 
 **Not finished, not verified, or left as is**
 
-- The commands in "Pre-approving SSO users" in `docs/deploying.md` (the file and the scripted way) are marked `<!-- 86b: run and correct -->`: they were written from the code and have not been run against the bundled stack. The job is not done until they have been.
+- The commands in "Pre-approving SSO users" in `docs/deploying.md` were run against the bundled stack built from this branch and corrected where they failed (the first-run password change, blank lines in a pasted list).
 - The new end-to-end steps (A2g, A2f, A2p, A7g, A8p, A8c) have run in a browser: `e2e/run.sh both` passed 16 of 16 steps in bundled mode and 16 of 16 in split mode, and `e2e/run.sh integration` passed 11 of 11, on 2026-11-23.
 - The roll-up window (seven days) is fixed. Compacted rows cannot be expanded again, and an older binary refuses the upgraded database; the way back is the backup taken before the upgrade.
 - Disk: the file stops growing at the old rate but does not shrink until an offline `VACUUM`.
 - The release itself (merge, version number, tag, image workflow) has not been done. No version tag exists yet, and `internal/version` has not been checked for what the released binary reports.
-- `docs/SPEC.md` and the spec's source still lack the new requirements and table rows.
-- `docs/extending.md` still says `user.approved` is emitted when an admin assigns a first role; it is now also emitted for a pre-approved sign-in, with the same payload.
+- `docs/SPEC.md` and the spec's source still lack the new requirements and table rows; D79 lists the edits they need.
 
 ## Milestones
 

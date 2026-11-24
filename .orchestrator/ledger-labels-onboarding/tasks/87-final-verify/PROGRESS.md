@@ -1,0 +1,8 @@
+- 2026-11-23 16:25 read BRIEF, INTENT, CONTRACT; HEAD 5b0d35b, tracked tree clean. Next: ./ci.sh in background; breaks in a scratch copy.
+- 2026-11-23 breaks done in a scratch copy of HEAD (so ./ci.sh in the real tree is undisturbed); each restored with git checkout in the copy. Red: upg1-migration, upg1-holdcharges, upg2-no-pending-event, upg2-ledger-order, upg2-setups-field, upg3-param, pre3-recheck, pre2-ascii, led13-rows-first, led14-anchor-current. Green: upg2-session-name (fixture has no user with empty name; AUTH-9 tests catch it instead). Logs: break-*.log.
+- Next: existing-test diff review (item 3), docs (6), decisions (7) while ci.sh runs.
+- 2026-11-23 16:28 ./ci.sh exit 0 (Bazel 39/39 pass, cached). Next: bazel test //... --nocache_test_results.
+- 2026-11-23 16:32 bazel test //... --nocache_test_results exit 0 (39/39 executed); go test -count=1 -v ./... exit 0 (all 80 named Go tests PASS); vitest verbose 218 pass (47 named UI-8..11); tsc exit 0. Secret check (haiku agent) done: no live credentials. Next: e2e/run.sh both.
+- 2026-11-23 16:34 REQUIREMENTS.md written (26 ids). e2e both started 16:31.
+- 2026-11-23 16:43 Scope change from coordinator: full e2e reruns dropped; my e2e both stopped during bundled A5, its stack torn down (compose down -v). Premise b1872cc..HEAD = docs + .orchestrator only: confirmed. Host-vs-stack evidence gathered (Node/Chromium fallback probe, container logs). Guide commands run on own container (port 18080), all work; torn down. Next: RESULT.md.
+- 2026-11-23 16:45 RESULT.md written: not ready (1 high harness F1, 1 medium docs/progress.md F2, 4 low). git diff empty; no stacks of mine left running. Done.

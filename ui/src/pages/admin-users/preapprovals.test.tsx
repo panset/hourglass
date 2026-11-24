@@ -152,10 +152,10 @@ describe("UI-11 removing a database entry", () => {
 
 describe("UI-11 adding emails", () => {
   it.each([
-    ["commas", "a@x.com,b@x.com", ["a@x.com", "b@x.com"]],
-    ["spaces", "a@x.com b@x.com", ["a@x.com", "b@x.com"]],
-    ["new lines", "a@x.com\nb@x.com\r\nc@x.com", ["a@x.com", "b@x.com", "c@x.com"]],
-    ["mixed with empty pieces", " a@x.com ,, b@x.com;\n\n ,c@x.com, ", ["a@x.com", "b@x.com;", "c@x.com"]],
+    ["commas", "a@example.test,b@example.test", ["a@example.test", "b@example.test"]],
+    ["spaces", "a@example.test b@example.test", ["a@example.test", "b@example.test"]],
+    ["new lines", "a@example.test\nb@example.test\r\nc@example.test", ["a@example.test", "b@example.test", "c@example.test"]],
+    ["mixed with empty pieces", " a@example.test ,, b@example.test;\n\n ,c@example.test, ", ["a@example.test", "b@example.test;", "c@example.test"]],
     ["only separators", " , \n ,, ", []],
   ])("UI-11 splitEmails on %s", (_, text, want) => {
     expect(splitEmails(text)).toEqual(want);
@@ -176,13 +176,13 @@ describe("UI-11 adding emails", () => {
     await table();
     expect(screen.getByRole("combobox", { name: "Role" })).toHaveValue("developer");
     await userEvent.click(textarea());
-    await userEvent.paste("a@x.com, b@x.com\n\n c@x.com ,");
+    await userEvent.paste("a@example.test, b@example.test\n\n c@example.test ,");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await vi.waitFor(() => expect(textarea()).toHaveValue(""));
     const post = calls.find((c) => c.method === "POST")!;
     expect(post.url).toBe("/api/v1/admin/preapprovals");
     expect(post.headers.get("X-CSRF-Token")).toBe("csrf-admin");
-    expect(post.body).toEqual({ emails: ["a@x.com", "b@x.com", "c@x.com"], roles: ["developer"] });
+    expect(post.body).toEqual({ emails: ["a@example.test", "b@example.test", "c@example.test"], roles: ["developer"] });
     expect(await screen.findByText("alice@example.com")).toBeInTheDocument();
   });
 
@@ -191,10 +191,10 @@ describe("UI-11 adding emails", () => {
     render(<Page />);
     await table();
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role" }), "admin");
-    await userEvent.type(textarea(), "a@x.com");
+    await userEvent.type(textarea(), "a@example.test");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await vi.waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
-    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ emails: ["a@x.com"], roles: ["admin"] });
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ emails: ["a@example.test"], roles: ["admin"] });
   });
 
   it("UI-11 Add is disabled with no email in the text", async () => {
@@ -215,10 +215,10 @@ describe("UI-11 adding emails", () => {
     render(<Page />);
     await table();
     await userEvent.click(textarea());
-    await userEvent.paste("a@x.com nope");
+    await userEvent.paste("a@example.test nope");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     const msg = await screen.findByText(message);
-    expect(textarea()).toHaveValue("a@x.com nope");
+    expect(textarea()).toHaveValue("a@example.test nope");
     expect(textarea()).toHaveAccessibleDescription(expect.stringContaining(message));
     expect(msg).toBeInTheDocument();
     // a failed add does not refetch the list

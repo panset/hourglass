@@ -13,7 +13,7 @@ const (
 	EventBalanceLow          = "balance.low"           // a balance first drops below 10% of the allowance
 	EventBalanceOverdrawn    = "balance.overdrawn"     // a balance first reaches zero or below
 	EventUserPending         = "user.pending"          // a new user signs in for the first time
-	EventUserApproved        = "user.approved"         // an admin assigns a first role
+	EventUserApproved        = "user.approved"         // an admin assigns a first role, or a pre-approved SSO user signs in
 	EventPeriodClosed        = "period.closed"         // the monthly rollover finishes
 	EventPollFailed          = "poll.failed"           // a collector run fails
 )
