@@ -246,8 +246,11 @@ const pill = async (page: Page) => (await page.locator("header").getByText(/^Lab
 /** My usage after a reload; signs in again (the SSO session of Keycloak is still valid) when the clock moves made the session expire. */
 async function openUsage(page: Page) {
   await page.goto("/usage");
-  if (new URL(page.url()).pathname === "/login" || (await page.getByRole("link", { name: "Sign in with SSO" }).count())) {
-    await page.getByRole("link", { name: "Sign in with SSO" }).click();
+  // The app redirects to the sign-in page after the first answer of the API, so wait for either page before deciding.
+  const sso = page.getByRole("link", { name: "Sign in with SSO" });
+  await expect(page.getByRole("heading", { name: "My usage" }).or(sso)).toBeVisible();
+  if (await sso.count()) {
+    await sso.click();
     await finishKeycloak(page, ALICE);
     await page.goto("/usage");
   }
@@ -624,6 +627,8 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     const del = await fetch(`${SIM}/pools/${POOL_A}`, { method: "DELETE" });
     expect(del.status).toBe(204);
     await untilHome(p, `${SETUP_A} released by the poll`, async () => {
+      // The holds load apart from the ledger: count rows only once the section has rendered.
+      await expect(p.getByText(/Current holds · \d+ of 2 allowed/)).toBeVisible();
       return (await holds.getByRole("row", { name: new RegExp(SETUP_A) }).count()) === 0;
     });
     await expect(p.getByText("Current holds · 1 of 2 allowed")).toBeVisible();
