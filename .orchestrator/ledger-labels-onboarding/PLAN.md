@@ -27,7 +27,7 @@ when the one before returns. Task numbers continue from the previous job (72).
 | 86 | 8 | Docs: `deploying.md` (upgrade, retention, config reference, pre-approval with commands run, timezone, disk), `ui-notes.md`, `progress.md`, `README.md` | build | sonnet | 85 | `docs/`, `README.md` | verified (86a, 86b) |
 | 87 | 8 | Final verification: requirement-to-test table, `./ci.sh`, `e2e/run.sh both`, integration scenario, guide commands re-run | verify | opus | 86 | (read-only) | done (1 high harness risk reported, 1 medium and 3 low fixed; e2e reruns skipped by owner) |
 | 88 | 9 | Release preparation: what the released binary reports as its version; owner report | write | sonnet | 87 | task folder | done (`tasks/88-release-report/REPORT.md`); waiting for the owner |
-| 89 | 9 | After go-ahead: merge to main, push, tag, watch the image workflow | - | orchestrator | owner | git | pending |
+| 89 | 9 | After go-ahead: merge to main, push, tag, watch the image workflow | - | orchestrator | owner | git | running (tag v1.1.0) |
 
 Fix tasks after a verification are numbered with a letter (76b, ...).
 
