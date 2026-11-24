@@ -90,7 +90,7 @@ Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to
 
 ## Reported weights (owner-directed, 2026-11-23)
 
-Built on the branch `reported-weights`, cut from `main` at `753cc50` (release `v1.1.0`), to [design/reported-weights.md](design/reported-weights.md) (D80 to D88, and the entries after them). The task record is under `.orchestrator/reported-weights/`. Nothing here is merged to `main`, tagged or released: that waits for the owner's go-ahead and version number. `docs/SPEC.md` is not edited; the edits its source needs are listed in the last decision of this work.
+Built on the branch `reported-weights`, cut from `main` at `753cc50` (release `v1.1.0`), to [design/reported-weights.md](design/reported-weights.md) (D80 to D88, and the entries after them). The task record is under `.orchestrator/reported-weights/`. Nothing here is merged to `main`, tagged or released: that waits for the owner's go-ahead and version number. `docs/SPEC.md` is not edited; the edits its source needs are listed in D90, the last decision of this work.
 
 **Built**
 
@@ -99,7 +99,7 @@ Built on the branch `reported-weights`, cut from `main` at `753cc50` (release `v
 - Admin controls: the `reported_weights` setting (switch, minimum, maximum, `max_age`; off by default; audited; optional on `PUT`) and the per-setup `weight_override` (WGT-17, WGT-18).
 - Reading back: the weight fields on the state route, the Setups list, the admin setup views, holds and burn figures, ledger entries (`weight_min`, `weight_max`, `weight_sources`), and the collector view with the last accepted and last refused report (WGT-13, WGT-15, WGT-16, WGT-22, WGT-23).
 - UI: weight tag and attributes on Setups and the acquire dialog, weight on holds and ledger debits in My usage, weight and override on Setup inventory, the "Reported weights" section of Settings, and the fifth scope on Service accounts (UI-12 to UI-14).
-- Compatibility with `v1.1.0`: fixtures recorded from the tag (`testdata/upgrade-v1.1.0/`) and tests that a database from that release upgrades, charges and answers the same with the feature off, apart from the added fields and the two deliberate changes (WGT-19, WGT-20; D81, D88). The `d96a950` fixtures and their tests are unchanged except for the schema version number (D82).
+- Compatibility with `v1.1.0`: fixtures recorded from the tag (`testdata/upgrade-v1.1.0/`) and tests that a database from that release upgrades, charges and answers the same with the feature off, apart from the added fields and the two deliberate changes (WGT-19, WGT-20; D81, D88). The `d96a950` fixtures and their tests are unchanged except for the schema version number (D82) and, in `TestUPG2_...`, the requirement that the added setups, hold and ledger fields are present and are stripped before the unchanged whole-body comparison (D85(l)).
 - Documentation: `docs/integrating.md` has a fifth job, "Report weights", written from the code as built; every command and response in it was run against a real `hourglassd` built from this tree (transcript in `.orchestrator/reported-weights/tasks/11-m7c-docs/examples.log`). `docs/deploying.md` has the setting, what tightening the limits does, the override, the `max_age` advice and the upgrade entry for migration `0008`; `docs/extending.md`, the README and `docs/ui-notes.md` are current.
 
 **Not finished, not verified, or left as is**

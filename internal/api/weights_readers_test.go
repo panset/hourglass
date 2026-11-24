@@ -1001,3 +1001,26 @@ func TestWGT23_ReleasedHoldShowsItsLastCharge(t *testing.T) {
 		t.Errorf("released hold without a sample after an override: %v %v", m["weight"], m["weight_source"])
 	}
 }
+
+// UI-12 and WGT-14: the acquire dialog's warning depends on the top-level
+// reported_weights_enabled of GET /api/v1/setups. It follows the setting, for a
+// developer and for an admin, and does not depend on whether the setup has a
+// reported weight.
+func TestUI12_SetupsListReportsWhetherReportedWeightsAreOn(t *testing.T) {
+	e := newREnv(t, wStart, nil)
+	dev := e.newUser("dev-flag", store.StatusActive, store.RoleDeveloper)
+	check := func(step string, want bool) {
+		t.Helper()
+		for who, s := range map[string]*sess{"developer": &dev, "admin": &e.adm} {
+			got, ok := e.getOK("/api/v1/setups", s)["reported_weights_enabled"].(bool)
+			if !ok || got != want {
+				t.Errorf("%s, %s: reported_weights_enabled = %v (bool %v), want %v", step, who, got, ok, want)
+			}
+		}
+	}
+	check("setting on", true)
+	e.setting(`{"enabled":false,"min":0,"max":20,"max_age":"10m"}`)
+	check("setting off", false)
+	e.setting(`{"enabled":true,"min":0,"max":20,"max_age":"10m"}`)
+	check("setting on again, no report stored", true)
+}

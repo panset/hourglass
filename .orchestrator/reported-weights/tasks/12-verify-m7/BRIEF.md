@@ -20,3 +20,5 @@ RESULT.md has: findings ranked by severity with scenario and `path:line`; the fu
 `./ci.sh` 30 minutes; uncached Bazel 30 minutes. Log into this task folder.
 ## Report
 Per CONTRACT.md "Reporting". Reply in at most ten lines with the number of findings by severity.
+## State when this task starts
+The end-to-end scenario has not run: the machine's e2e ports are held by the owner's processes. The new e2e steps (W1 to W6) are uncommitted changes under `e2e/` in the working tree. Review them by reading, as section 2 says, and report as "not run" rather than as a finding. Never stop or kill a process or container you did not start, and do not start any compose stack.

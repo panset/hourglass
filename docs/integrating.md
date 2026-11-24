@@ -426,7 +426,7 @@ Rules:
 - A weight may be reported for any setup, whether it is deployed or not, held or free, enabled or disabled. If you report only deployed setups, a free setup shows its rate-rule price in the Setups list and in the acquire dialog, and the price changes once it is deployed. To avoid that, report every setup you can size.
 - `setup` is the Hourglass setup name, exactly, a non-empty string, not repeated in one report.
 - An entry holds only `setup`, `weight` and `attributes`. Any other field in an entry is refused. (The top-level keys of the body are matched without regard to case, as in the other two reports; the keys inside an entry are strict.)
-- `attributes` is optional: at most 16 entries, keys of 1 to 63 lowercase letters, digits, `.`, `_`, `/` or `-` that start and end with a letter or digit, and string values of at most 63 characters. Hourglass stores them, returns them and shows them next to the weight in the Setups list and the acquire dialog. It never interprets them, and no rate rule or filter matches them. They are shown only while the entry applies.
+- `attributes` is optional: at most 16 entries, keys of 1 to 63 lowercase letters, digits, `.`, `_`, `/` or `-` that start and end with a letter or digit, and string values of at most 63 characters. Hourglass stores them, returns them and shows them next to the weight in the Setups list and the acquire dialog. It never interprets them, and no rate rule or filter matches them. They are returned and shown while the entry is usable (the report has not expired and the weight is within the admin's limits), also when the admin's weight override pins the setup's weight.
 - A usable reported weight replaces the rate rules for that setup, even a rule of weight 0. The way to exempt a setup is the admin's per-setup weight override, which pins the setup's weight above both a report and the rate rules.
 - **Ordering and clock skew** are the rules of the other reports: an `observed_at` older than the one Hourglass holds is `409 stale_report`, an equal one replaces it, and one more than 2 minutes ahead of Hourglass's clock is `400 validation`. Without `observed_at`, Hourglass uses the time it received the report. The weights report is ordered separately from the deployments report, so the two may carry the same `observed_at` or different ones.
 - At most 10,000 entries and a 1 MB body. A report cannot be split across calls, so a large report with many attributes reaches the body limit first.
@@ -485,16 +485,16 @@ curl -sS "$HOURGLASS/api/v1/integration/state" -H "Authorization: Bearer $HOURGL
 ```
 
 - `applied` and `source` are what Hourglass applies right now and what the next poll charges if nothing changes before it. `source` is `override`, `reported`, `rule` or `default`.
-- `reported` is the weight in the stored report for the setup, or `null`. `not_applied` says why a reported weight is not applied: `expired` (the report is older than `max_age`), `out_of_bounds` (the admin's limits now exclude it) or `override` (the admin pinned this setup's weight). It is `null` when the weight applies or there is none.
-- `attributes` is `{}` when there are none or the entry is not applied.
+- `reported` is the weight in the stored report for the setup, or `null`. `not_applied` says why a reported weight is not applied: `expired` (the report is older than `max_age`), `out_of_bounds` (the admin's limits now exclude it) or `override` (the admin pinned this setup's weight; `reported` still shows the stored weight). It is `null` when the weight applies or there is none.
+- `attributes` is `{}` when there are none or the entry is not usable (expired, or outside the limits). An admin's override does not hide them: a usable entry's attributes are returned although its weight is not applied.
 - At the top level, `weights` holds the switch, the limits (`max` is `null` when none is set), and the stored report's `observed_at` and `expires_at`. The two times are `null` before the first report and while the setting is off.
-- With the setting off, `reported` and `not_applied` are `null` for every setup and `source` is `rule` or `default`.
+- With the setting off, `reported` and `not_applied` are `null` for every setup and `attributes` is `{}`. `source` is `override` for a setup with a weight override, otherwise `rule` or `default`.
 - The rate rule that matched is not returned: it is admin configuration.
 
 ### What the admin can do to your weights
 
 - **Tighten the limits.** A stored weight outside the new `min` or `max` stops applying at once, and that setup is charged at its rate-rule price (`not_applied` is `out_of_bounds`). Every later report that still holds such a weight is refused whole, so your service sees `400` until it reports weights inside the limits; after `max_age` every setup is back on the rate rules, with polls still succeeding. Real run, with the maximum lowered from 20 to 1 while `lab-03` was reported at 1.15: `lab-03` went to `{"applied": 2, "source": "rule", "reported": 1.15, "not_applied": "out_of_bounds"}`, and the same report was refused with `weights[0] (setup "lab-03"): weight 1.15 is above the maximum 1`.
-- **Pin one setup.** A weight override beats a report. The state shows the override as `source` and `override` as `not_applied` for the setup's reported weight.
+- **Pin one setup.** A weight override beats a report. The state shows the override as `source` and `override` as `not_applied` for the setup's reported weight; `reported` still shows the stored weight and a usable entry's `attributes` are still returned.
 - **Turn the setting off.** Reports are then refused with `409 not_configured`. Nothing stored is deleted: if it is turned on again while the report is still within `max_age`, it applies again. Raising `max_age` makes an expired report apply again in the same way.
 
 ## If you stop reporting
