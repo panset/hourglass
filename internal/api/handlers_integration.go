@@ -307,12 +307,9 @@ func (a *API) getIntegrationState(w http.ResponseWriter, r *http.Request) {
 		row := stateSetupJSON{Name: s.Name, Labels: labelsNonNil(s.Labels), Details: detailsJSON(s.DetailsJSON),
 			Enabled: s.Enabled, ReportedDeployed: deployed[s.Name]}
 		// The weight a poll now would charge (B4). A rate rule that cannot be
-		// evaluated fails the request, as it fails the poll.
-		res, err := l.resolve(s)
-		if err != nil {
-			a.writeError(w, r, err)
-			return
-		}
+		// evaluated is skipped, as in the admin views (D85(b)): this route
+		// answered in v1.1.0 whatever the rules held.
+		res := resolveLenient(s, l.rules, l.set, report, l.now)
 		row.Weight = stateWeight(res)
 		if h, ok := holdOf[s.ID]; ok {
 			u := users[h.UserID]

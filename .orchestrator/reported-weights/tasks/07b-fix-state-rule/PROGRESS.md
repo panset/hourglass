@@ -1,0 +1,2 @@
+- 2026-11-23 Wrote two red tests (500 confirmed), extracted resolveLenient from adminState.resolve, state route uses it; go test ./internal/... green.
+- 2026-11-23 ci.sh run 1: exit 3, only //ui:test failed (other agent in ui/). Rerun after 4 min: exit 0 (ci2.log).

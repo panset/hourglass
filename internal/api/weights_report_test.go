@@ -933,3 +933,52 @@ func TestWGT12_TighteningTheMaximumOverHTTP(t *testing.T) {
 		t.Errorf("after max_age: sample %+v", s)
 	}
 }
+
+// ---- WGT-13 / WGT-20: a rate rule that cannot be evaluated ----
+
+// A stored rate rule the evaluator cannot parse: the store does not validate.
+func (e *wEnv) damageRules() {
+	e.t.Helper()
+	if err := e.st.ReplaceRules(context.Background(), "rate", []store.Rule{{Selector: "tier in (", Value: 2}}, nil, e.clk.Now()); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+// The state route answers 200 with the rule part resolved as if no rate rule
+// existed: the default weight, an override or a usable reported weight still
+// applies (WGT-13, D85(b)).
+func TestWGT13_StateAnswersWithARuleThatCannotBeEvaluated(t *testing.T) {
+	e := newWEnv(t)
+	ctx := context.Background()
+	three := 3.0
+	if err := e.st.SetSetupWeightOverride(ctx, e.setupID("lab-02"), &three); err != nil {
+		t.Fatal(err)
+	}
+	e.damageRules()
+	e.setting(`{"enabled":true,"min":0,"max":20,"max_age":"10m"}`)
+	e.ok(`{"observed_at":"2026-11-23T09:59:30Z","weights":[{"setup":"lab-01","weight":1.15}]}`)
+	st, body := e.state()                                        // fails the test unless 200
+	wantWeight(t, st, "lab-01", 1.15, "reported", 1.15, "", nil) // usable reported weight
+	wantWeight(t, st, "lab-02", 3, "override", nil, "", nil)     // override
+	wantWeight(t, st, "lab-03", 1, "default", nil, "", nil)      // default
+	wantNoSelector(t, body)
+	// A hold-less setup with the report gone: default, not a failure.
+	e.clk.Advance(11 * time.Minute)
+	st, _ = e.state()
+	wantWeight(t, st, "lab-01", 1, "default", 1.15, "expired", nil)
+}
+
+// With the feature off the route answers as v1.1.0 did, which read no rule.
+func TestWGT20_StateAnswersAsBeforeWithARuleThatCannotBeEvaluated_FeatureOff(t *testing.T) {
+	e := newWEnv(t)
+	three := 3.0
+	if err := e.st.SetSetupWeightOverride(context.Background(), e.setupID("lab-02"), &three); err != nil {
+		t.Fatal(err)
+	}
+	e.damageRules()
+	e.setting(`{"enabled":false,"min":0,"max":null,"max_age":"10m"}`)
+	st, _ := e.state()
+	wantWeight(t, st, "lab-01", 1, "default", nil, "", nil)
+	wantWeight(t, st, "lab-02", 3, "override", nil, "", nil)
+	wantWeight(t, st, "lab-03", 1, "default", nil, "", nil)
+}

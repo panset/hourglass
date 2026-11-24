@@ -145,9 +145,16 @@ func toRulesRules(rows []store.Rule) []rules.Rule {
 // weight, as the admin views always did: the setup is resolved as if no rate
 // rule existed, so an override or a usable reported weight still applies.
 func (s *adminState) resolve(x store.Setup) weights.Result {
-	res, err := weights.Resolve(resolverSetup(x), s.rateRules, s.cfg, s.report, s.now)
+	return resolveLenient(x, s.rateRules, s.cfg, s.report, s.now)
+}
+
+// resolveLenient is the resolver's answer with the fallback above, shared by
+// the admin views and the state route: a rate rule that cannot be evaluated
+// is treated as if no rate rule existed.
+func resolveLenient(x store.Setup, rateRules []rules.Rule, cfg settings.Settings, report *weights.Report, now time.Time) weights.Result {
+	res, err := weights.Resolve(resolverSetup(x), rateRules, cfg, report, now)
 	if err != nil {
-		res, _ = weights.Resolve(resolverSetup(x), nil, s.cfg, s.report, s.now)
+		res, _ = weights.Resolve(resolverSetup(x), nil, cfg, report, now)
 	}
 	return res
 }
