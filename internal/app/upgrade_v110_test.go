@@ -388,9 +388,10 @@ func TestWGT19_ApplicationStartUpgradesV110DatabaseAndKeepsEveryNumber(t *testin
 	checkRecordedNumbers(t, db, f)
 }
 
-// waitForFirstPoll blocks until the application's first poll has written its
-// collector run (the database has more runs than the release's), so the test
-// stops it after, not before.
+// waitForFirstPoll blocks until the application's first poll has finished
+// (the database has more runs than the release's and the newest one has its
+// finish time), so the test stops it after, not before. The run's row is
+// inserted when the poll starts, so its presence alone is not enough.
 func waitForFirstPoll(t *testing.T, db string, runsBefore int) {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
@@ -400,7 +401,8 @@ func waitForFirstPoll(t *testing.T, db string, runsBefore int) {
 			t.Fatal(err)
 		}
 		var n int
-		err = h.QueryRow(`SELECT COUNT(*) FROM collector_runs`).Scan(&n)
+		err = h.QueryRow(`SELECT COUNT(*) FROM collector_runs WHERE
+			(SELECT finished_at FROM collector_runs ORDER BY id DESC LIMIT 1) IS NOT NULL`).Scan(&n)
 		_ = h.Close()
 		if err == nil && n > runsBefore {
 			return
