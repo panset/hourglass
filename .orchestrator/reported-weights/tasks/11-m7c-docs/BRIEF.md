@@ -1,0 +1,21 @@
+# 11 Milestone 7c: documentation
+Job intent: .orchestrator/reported-weights/INTENT.md (read it first). Contract: .orchestrator/reported-weights/CONTRACT.md (binding).
+## Goal
+The "Documentation deliverables" 1, 2, 3, 4 and 6 of docs/design/reported-weights.md, written from the code as built (not from the design alone), with every example in docs/integrating.md actually run against the real server. Deliverable 5 (docs/decisions.md) is the orchestrator's: never edit that file.
+## Context
+Where each piece lands: `.orchestrator/reported-weights/tasks/00-digest/RESULT.md`. What was built and decided: D80 to the last row of docs/decisions.md, and the RESULT.md files of tasks 02 to 10 under `.orchestrator/reported-weights/tasks/` (exact messages, field names, UI strings). Match each file's existing voice and structure.
+## Write
+1. `docs/integrating.md`: a fifth job, "Report weights": the request, every rule of design B1 and B2 as built (positions count from 0; the real messages), the new scope, the new state fields (B4), the new error cases, the checklist lines, and each of the eight "It must say" points of deliverable 1, word for word in substance. Contrast with the other two reports in "If you stop reporting". The file stays self-contained: no link or reference to the design, decisions or source. Bring up the local server with `e2e/integration-stack.sh up` (see its header; account `docs-example` has `weights:write` after task 10), turn the setting on through the admin API or UI as the guide tells a customer to, and run every command and example you add; paste real responses (trimmed as the file already trims them). Tear the stack down afterwards (`down`). Port hazard: check ports 8080, 8081, 8990, 8091, 9100 first; if something that is not this stack listens there, do not stop it: report `blocked`.
+2. `docs/deploying.md`: the `reported_weights` setting and its four fields (in "Settings stored in the database"), what tightening the limits does (design D1), the per-setup override, the `max_age` advice (at least twice the poll interval; expiry means prices go back to the rate rules while charging continues), the new scope in the integration section, and under "Upgrade" an entry for migration `0008` in the pattern of the 0006/0007 entry: additive, back up first, no down migration, an older binary refuses the newer schema, no configuration change, off by default, the added response fields, and the four fields whose meaning shifts (design "Compatibility: Fields whose meaning shifts"), each named.
+3. `docs/extending.md`: `SetupState.Weight` is the base weight and does not include a reported weight; the order of precedence with `Decision.Weight`; a policy cannot see the reported weight. Fix the sentence that says the weight is "already resolved from the rate rules".
+4. `README.md`: one paragraph where it lists features.
+5. `docs/ui-notes.md` (complete what task 08 added if anything is missing) and `docs/progress.md` (as the earlier work did: what is finished, what is not, requirement ids).
+Nothing may name the first client, its attribute keys or its backend (CONTRACT.md). Do not edit docs/SPEC.md or the design.
+## Scope
+May write: `docs/integrating.md`, `docs/deploying.md`, `docs/extending.md`, `docs/ui-notes.md`, `docs/progress.md`, `README.md`, this task folder (keep a transcript of the commands run and their real output in `examples.log`). Must not touch: code, `e2e/`, `docs/decisions.md`, `docs/SPEC.md`, `docs/design/`.
+## Done when
+Every deliverable line above is present (RESULT.md has a checklist mapping each required statement to file and line); every example in the new integrating.md section was run and its output in the doc matches `examples.log`; any difference between the design and the behaviour you observed is reported as a finding, not papered over; `./ci.sh` exits 0.
+## Long-running steps
+Stack start: a few minutes (the first poll can take up to 5). `./ci.sh`: 30 minute timeout.
+## Report
+Per CONTRACT.md "Reporting".

@@ -89,7 +89,7 @@ func TestLED2_MeShape(t *testing.T) {
 		t.Fatalf("burning %v", b)
 	}
 	bm := b[0].(ujobj)
-	uWantKeys(t, "burning", bm, "hold_id", "setup_id", "setup_name", "weight", "multiplier", "tokens_per_hour")
+	uWantKeys(t, "burning", bm, "hold_id", "setup_id", "setup_name", "weight", "weight_source", "multiplier", "tokens_per_hour")
 	if bm["setup_name"] != "lab-01" || uNum(t, bm, "weight") != 600 || uNum(t, bm, "multiplier") != 2 || int64(uNum(t, bm, "hold_id")) != hid {
 		t.Errorf("burning %v", bm)
 	}
@@ -156,7 +156,7 @@ func TestHOLD3_MyHoldsShapeAndStateFilter(t *testing.T) {
 		t.Fatalf("holds %v", hs)
 	}
 	h := hs[0].(ujobj)
-	uWantKeys(t, "hold", h, "id", "setup_id", "setup_name", "setup_labels", "user_id", "active", "weight", "acquired_at",
+	uWantKeys(t, "hold", h, "id", "setup_id", "setup_name", "setup_labels", "user_id", "active", "weight", "weight_source", "weight_attributes", "acquired_at",
 		"metering_started_at", "deployed_at", "release_requested_at", "released_at", "deployed", "metering", "cost_per_hour_tokens", "charged_tokens",
 		"released_by", "release_reason", "forced")
 	if int64(uNum(t, h, "id")) != hid || int64(uNum(t, h, "setup_id")) != sid || h["setup_name"] != "lab-01" ||
@@ -232,7 +232,7 @@ func TestLED2_MyLedger(t *testing.T) {
 	// Newest first: debit, debit, allowance. Running balance 100, 200, 300.
 	first, last := es[0].(ujobj), es[2].(ujobj)
 	uWantKeys(t, "entry", first, "id", "created_at", "period", "type", "amount_tokens", "balance_after_tokens", "multiplier",
-		"setup_name", "hold_id", "actor_name", "reason", "entry_count")
+		"setup_name", "hold_id", "actor_name", "reason", "entry_count", "weight_min", "weight_max", "weight_sources")
 	if first["type"] != "debit" || !uNear(uNum(t, first, "amount_tokens"), -100) || !uNear(uNum(t, first, "balance_after_tokens"), 100) ||
 		uNum(t, first, "multiplier") != 2 || first["setup_name"] != "lab-01" || int64(uNum(t, first, "hold_id")) != hid ||
 		first["actor_name"] != nil || first["created_at"] != "2026-11-19T10:10:00.000Z" {
@@ -377,7 +377,7 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 	e.poll()
 
 	l := uWantOK(t, e.get("/api/v1/setups", &dev), 200)
-	uWantKeys(t, "setups response", l, "setups", "display_label_keys", "label_index", "summary", "metering_description")
+	uWantKeys(t, "setups response", l, "setups", "display_label_keys", "label_index", "summary", "metering_description", "reported_weights_enabled")
 	if k := l["display_label_keys"].([]any); len(k) != 1 || k[0] != "tier" {
 		t.Errorf("display_label_keys %v", k)
 	}
@@ -392,7 +392,7 @@ func TestSET6_SetupsListForDeveloper(t *testing.T) {
 		t.Fatalf("setups %v", ss)
 	}
 	sa := ss[0].(ujobj)
-	uWantKeys(t, "setup", sa, "id", "name", "labels", "weight", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
+	uWantKeys(t, "setup", sa, "id", "name", "labels", "weight", "weight_source", "weight_attributes", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
 	if sa["name"] != "lab-a" || sa["state"] != "held" || uNum(t, sa, "weight") != 2 || sa["deployed"] != true || sa["admin"] != nil ||
 		sa["held_since"] != "2026-11-19T10:00:00.000Z" || sa["labels"].(ujobj)["site"] != "x" {
 		t.Errorf("held setup %v", sa)
@@ -438,7 +438,8 @@ func TestSET6_SetupsListForAdminHasAdminFieldsAndDisabled(t *testing.T) {
 		t.Fatalf("setups %v", ss)
 	}
 	a := ss[0].(ujobj)["admin"].(ujobj)
-	uWantKeys(t, "admin", a, "enabled", "last_seen_at", "matched_rule_selector")
+	uWantKeys(t, "admin", a, "enabled", "last_seen_at", "matched_rule_selector",
+		"reported_weight", "reported_weight_not_applied", "weight_override")
 	if ss[0].(ujobj)["deployed"] != true || a["enabled"] != true ||
 		a["last_seen_at"] != "2026-11-19T10:00:00.000Z" || a["matched_rule_selector"] != "tier=a" {
 		t.Errorf("admin fields %v", a)

@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -276,13 +277,14 @@ type stateWeightJSON struct {
 	Attributes map[string]string `json:"attributes"`
 }
 
-// stateWeightReport reads the stored weights report for the state route:
-// nil when reported weights are off or before the first report.
-func (a *API) stateWeightReport(r *http.Request, cfg settings.ReportedWeights) (*weights.Report, error) {
+// weightReport reads the stored weights report for the resolver: nil when
+// reported weights are off (the resolver ignores it then, and it is not read)
+// or before the first report.
+func (a *API) weightReport(ctx context.Context, cfg settings.ReportedWeights) (*weights.Report, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
-	rep, err := a.reported.Weights(r.Context())
+	rep, err := a.reported.Weights(ctx)
 	if err == reported.ErrNoReport {
 		return nil, nil
 	}

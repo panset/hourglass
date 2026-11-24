@@ -21,6 +21,7 @@ import (
 	"github.com/panset/hourglass/internal/rules"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/internal/weights"
 )
 
 // adminState is a snapshot of what the admin views derive from: settings,
@@ -32,10 +33,12 @@ type adminState struct {
 	period      string
 	cfg         settings.Settings
 	rateRules   []rules.Rule
+	report      *weights.Report // nil when reported weights are off or before the first report
 	setups      map[int64]store.Setup
 	setupList   []store.Setup // ordered by name
 	holdBySetup map[int64]store.Hold
 	holdsByUser map[int64][]store.Hold
+	samples     map[int64]store.LastSample // latest usage sample per active hold
 	stats       map[int64]store.LedgerStat
 	roles       map[int64][]string
 	multiplier  float64
@@ -67,6 +70,9 @@ func (a *API) loadAdminState(ctx context.Context, userID int64, status string) (
 	if s.rateRules, err = a.loadRateRules(ctx, st); err != nil {
 		return nil, err
 	}
+	if s.report, err = a.weightReport(ctx, s.cfg.ReportedWeights); err != nil {
+		return nil, err
+	}
 	if s.setupList, err = st.ListSetups(ctx, false); err != nil {
 		return nil, err
 	}
@@ -77,9 +83,14 @@ func (a *API) loadAdminState(ctx context.Context, userID int64, status string) (
 	if err != nil {
 		return nil, err
 	}
-	for _, h := range hs {
+	ids := make([]int64, len(hs))
+	for i, h := range hs {
 		s.holdBySetup[h.SetupID] = h
 		s.holdsByUser[h.UserID] = append(s.holdsByUser[h.UserID], h)
+		ids[i] = h.ID
+	}
+	if s.samples, err = st.HoldLastSamples(ctx, ids); err != nil {
+		return nil, err
 	}
 	stats, err := st.LedgerStats(ctx, s.period, userID, status)
 	if err != nil {
@@ -129,15 +140,16 @@ func toRulesRules(rows []store.Rule) []rules.Rule {
 	return out
 }
 
-// weight resolves a setup's weight and the selector of the rule that set it
-// (empty for the default weight). A rule that cannot be evaluated falls back
-// to the default weight, as the collector does.
-func (s *adminState) weight(x store.Setup) (w float64, selector string) {
-	w, sel, matched, err := rules.Weight(s.rateRules, x.Labels, s.cfg.DefaultWeight)
-	if err != nil || !matched {
-		return s.cfg.DefaultWeight, ""
+// resolve is the weight resolver's answer for a setup at the request's time
+// (A3). A rate rule that cannot be evaluated falls back to the default
+// weight, as the admin views always did: the setup is resolved as if no rate
+// rule existed, so an override or a usable reported weight still applies.
+func (s *adminState) resolve(x store.Setup) weights.Result {
+	res, err := weights.Resolve(resolverSetup(x), s.rateRules, s.cfg, s.report, s.now)
+	if err != nil {
+		res, _ = weights.Resolve(resolverSetup(x), nil, s.cfg, s.report, s.now)
 	}
-	return w, sel
+	return res
 }
 
 func (s *adminState) balance(userID int64) (mt int64, ok bool) {
@@ -207,8 +219,10 @@ func (s *adminState) userView(u store.User) adminUserView {
 		x := s.setups[h.SetupID]
 		v.ActiveHolds = append(v.ActiveHolds, activeHoldRef{HoldID: h.ID, SetupID: h.SetupID, SetupName: x.Name})
 		if h.MeteringStartedAt != nil {
-			w, _ := s.weight(x)
-			burn += metering.HourlyCostMT(w, s.multiplier)
+			// The weight the hold shows (A3): a policy's weight when its latest
+			// sample has the source policy, else what the setup resolves to now.
+			ls, sampled := s.samples[h.ID]
+			burn += metering.HourlyCostMT(activeWeight(s.resolve(x), ls, sampled).weight, s.multiplier)
 		}
 	}
 	v.BurnPerHour = tokens(burn)
@@ -278,32 +292,39 @@ type setupAdminView struct {
 	Enabled             bool    `json:"enabled"`
 	LastSeenAt          *string `json:"last_seen_at"`
 	MatchedRuleSelector *string `json:"matched_rule_selector"`
+	setupWeightAdminJSON
 }
 
 type adminSetupView struct {
-	ID        int64             `json:"id"`
-	Name      string            `json:"name"`
-	Labels    map[string]string `json:"labels"`
-	Weight    float64           `json:"weight"`
-	State     string            `json:"state"`
-	Holder    *holderView       `json:"holder"`
-	HeldSince *string           `json:"held_since"`
-	Deployed  bool              `json:"deployed"`
-	Metering  *meteringView     `json:"metering"`
-	Cost      costView          `json:"cost_per_hour_tokens"`
-	Details   json.RawMessage   `json:"details"`
-	Admin     *setupAdminView   `json:"admin"`
+	ID     int64             `json:"id"`
+	Name   string            `json:"name"`
+	Labels map[string]string `json:"labels"`
+	Weight float64           `json:"weight"`
+	// WeightSource and WeightAttributes are the resolver's (A3, C2).
+	WeightSource     string            `json:"weight_source"`
+	WeightAttributes map[string]string `json:"weight_attributes"`
+	State            string            `json:"state"`
+	Holder           *holderView       `json:"holder"`
+	HeldSince        *string           `json:"held_since"`
+	Deployed         bool              `json:"deployed"`
+	Metering         *meteringView     `json:"metering"`
+	Cost             costView          `json:"cost_per_hour_tokens"`
+	Details          json.RawMessage   `json:"details"`
+	Admin            *setupAdminView   `json:"admin"`
 }
 
 // setupView builds the admin view of a setup. callerID marks "is_you".
 func (a *API) setupView(ctx context.Context, s *adminState, x store.Setup, callerID int64) (adminSetupView, error) {
-	w, sel := s.weight(x)
+	res := s.resolve(x)
+	w := res.Weight
 	labels := labelsNonNil(x.Labels)
 	v := adminSetupView{
-		ID: x.ID, Name: x.Name, Labels: labels, Weight: w, State: "free",
+		ID: x.ID, Name: x.Name, Labels: labels, Weight: w, WeightSource: string(res.Source), WeightAttributes: res.Attributes,
+		State:   "free",
 		Cost:    costView{Now: tokens(metering.HourlyCostMT(w, s.multiplier)), AtPeak: tokens(metering.HourlyCostMT(w, s.cfg.Bands.Max()))},
 		Details: json.RawMessage(x.DetailsJSON),
-		Admin:   &setupAdminView{Enabled: x.Enabled, MatchedRuleSelector: nullIfEmpty(sel)},
+		Admin: &setupAdminView{Enabled: x.Enabled, MatchedRuleSelector: nullIfEmpty(res.RuleSelector),
+			setupWeightAdminJSON: setupWeightAdmin(res, x)},
 	}
 	if s.poll.OK {
 		v.Deployed = s.poll.Reported(x.Name) // D40: reported under the setup's exact name

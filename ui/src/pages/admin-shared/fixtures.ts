@@ -117,6 +117,8 @@ export const setup04: Setup = {
   name: "setup-04",
   labels: { size: "medium", site: "sjc" },
   weight: 1,
+  weight_source: "default",
+  weight_attributes: {},
   state: "held",
   holder: { user_id: 11, hold_id: 77, name: "Sam Lee", balance_tokens: 61, overdrawn: false, is_you: false, release_requested_at: null },
   held_since: "2026-11-18T08:00:00Z",
@@ -128,6 +130,9 @@ export const setup04: Setup = {
     enabled: true,
     last_seen_at: "2026-11-18T17:28:00Z",
     matched_rule_selector: null,
+    reported_weight: null,
+    reported_weight_not_applied: null,
+    weight_override: null,
   },
 };
 
@@ -146,6 +151,9 @@ export const setup07: Setup = {
     enabled: false,
     last_seen_at: null,
     matched_rule_selector: "size=large",
+    reported_weight: null,
+    reported_weight_not_applied: null,
+    weight_override: null,
   },
 };
 
@@ -156,6 +164,7 @@ export function setupList(setups: Setup[]): SetupList {
     label_index: [],
     summary: { enabled: 1, deployed: 1, free: 0 },
     metering_description: "deployed or 2 h after acquire",
+    reported_weights_enabled: false,
   };
 }
 
@@ -163,6 +172,8 @@ export const emptyCollector: Collector = {
   extensions: { provider: "vsphere", pressure_source: "vsphere", metering_policy: "default", hooks: [] },
   last_pressure_report: null,
   last_deployments_report: null,
+  last_weights_report: null,
+  last_weights_refusal: null,
   last_successful_poll_at: "2026-11-18T17:30:00Z",
   last_error: null,
   matched_setups: 9,

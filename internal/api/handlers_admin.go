@@ -3,12 +3,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -409,6 +411,10 @@ type setupInput struct {
 	labels  map[string]string
 	details string
 	enabled bool
+	// overrideSet is true when the body carries weight_override (null
+	// included); override is then its value, nil for null (D2).
+	overrideSet bool
+	override    *float64
 }
 
 // parseSetupInput reads and validates a SetupInput body (SET-1..SET-3). It
@@ -419,6 +425,8 @@ func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInpu
 		Labels  *map[string]string `json:"labels"`
 		Details json.RawMessage    `json:"details"`
 		Enabled *bool              `json:"enabled"`
+		// WeightOverride is optional: absent, null or a number (D2).
+		WeightOverride json.RawMessage `json:"weight_override"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return setupInput{}, false
@@ -457,15 +465,39 @@ func (a *API) parseSetupInput(w http.ResponseWriter, r *http.Request) (setupInpu
 	if body.Enabled == nil {
 		return bad("enabled", "enabled is required")
 	}
-	return setupInput{name: name, labels: *body.Labels, details: string(body.Details), enabled: *body.Enabled}, true
+	in := setupInput{name: name, labels: *body.Labels, details: string(body.Details), enabled: *body.Enabled}
+	if len(body.WeightOverride) > 0 {
+		in.overrideSet = true
+		if !bytes.Equal(bytes.TrimSpace(body.WeightOverride), []byte("null")) {
+			var v float64
+			// Unmarshal refuses a string, a boolean, an object, a list and a
+			// number too large for a float64.
+			if json.Unmarshal(body.WeightOverride, &v) != nil ||
+				math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > maxTokens {
+				return bad("weight_override", "weight_override must be a number from 0 to 1e12, or null for none")
+			}
+			if v == 0 {
+				v = 0 // -0 is stored as 0
+			}
+			in.override = &v
+		}
+	}
+	return in, true
 }
 
 // setupAudit is the audit snapshot of a setup. details is recorded as a size
 // and a SHA-256 only: it is opaque, up to 256 KB, and may hold anything.
+// weight_override is in it only when the setup has one (D2), so a setup
+// without one is recorded exactly as before, and setting and clearing it both
+// show in the before and after values.
 func setupAudit(s store.Setup) map[string]any {
 	sum := sha256.Sum256([]byte(s.DetailsJSON))
-	return map[string]any{"name": s.Name, "labels": s.Labels, "enabled": s.Enabled,
+	out := map[string]any{"name": s.Name, "labels": s.Labels, "enabled": s.Enabled,
 		"details_bytes": len(s.DetailsJSON), "details_sha256": hex.EncodeToString(sum[:])}
+	if s.WeightOverride != nil {
+		out["weight_override"] = *s.WeightOverride
+	}
+	return out
 }
 
 const msgNameTaken = "a setup with this name already exists"
@@ -484,7 +516,8 @@ func (a *API) createSetup(w http.ResponseWriter, r *http.Request) {
 	now := a.d.Clock.Now()
 	var id int64
 	err := a.d.Store.Tx(ctx, func(tx *store.Tx) error {
-		s := store.Setup{Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled}
+		// Absent or null on create means no override (D2).
+		s := store.Setup{Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled, WeightOverride: in.override}
 		var err error
 		if id, err = tx.CreateSetup(ctx, s); err != nil {
 			if errors.Is(err, store.ErrConflict) {
@@ -535,12 +568,22 @@ func (a *API) updateSetup(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		s := store.Setup{ID: id, Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled}
+		s := store.Setup{ID: id, Name: in.name, Labels: in.labels, DetailsJSON: in.details, Enabled: in.enabled,
+			WeightOverride: old.WeightOverride}
 		if err := tx.UpdateSetup(ctx, s); err != nil {
 			if errors.Is(err, store.ErrConflict) {
 				return adminRefuse(apierr.Conflict, msgNameTaken)
 			}
 			return err
+		}
+		// An absent weight_override leaves the stored one; null clears it
+		// and a number sets it (D2). The override follows the setup through
+		// a rename.
+		if in.overrideSet {
+			if err := tx.SetSetupWeightOverride(ctx, id, in.override); err != nil {
+				return err
+			}
+			s.WeightOverride = in.override
 		}
 		return putAudit(ctx, tx, caller.ID, auditSetupUpdate, targetID("setup", id), setupAudit(old), setupAudit(s), now)
 	})

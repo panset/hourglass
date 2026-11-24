@@ -28,6 +28,8 @@ function mount() {
 }
 
 const base = {
+  weight_source: "default" as const,
+  weight_attributes: {},
   metering: null,
   held_since: null,
   holder: null,
@@ -62,7 +64,7 @@ const setups: Setup[] = [
   {
     ...base, id: 6, name: "setup-06", labels: { size: "large" }, weight: 2, state: "disabled",
     cost_per_hour_tokens: { now: 4, at_peak: 6 },
-    admin: { enabled: false, last_seen_at: null, matched_rule_selector: null },
+    admin: { enabled: false, last_seen_at: null, matched_rule_selector: null, reported_weight: null, reported_weight_not_applied: null, weight_override: null },
   },
 ];
 
@@ -74,6 +76,7 @@ const list = (over: Partial<SetupList> = {}, items: Setup[] = setups): SetupList
   ],
   summary: { enabled: 11, deployed: 9, free: 2 },
   metering_description: "deployed or 2 h after acquire",
+  reported_weights_enabled: false,
   ...over,
 });
 

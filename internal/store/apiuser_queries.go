@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -140,6 +141,81 @@ func (q *queries) DebitEntries(ctx context.Context, userID int64, from, to time.
 	}, `SELECT created_at, amount_mt FROM ledger
 		WHERE user_id = ? AND type = 'debit' AND created_at >= ? AND created_at < ?
 		ORDER BY created_at, id`, userID, FormatTime(from), FormatTime(to))
+}
+
+// WeightWindow names the usage samples one ledger entry stands for: those of
+// the hold with From <= polled_at < To. Key identifies the entry in the
+// result (the API uses the entry's id).
+type WeightWindow struct {
+	Key    int64
+	HoldID int64
+	From   time.Time
+	To     time.Time
+}
+
+// WeightAggregate sums up the charged samples of one window: only samples
+// with a debit above zero count. Sources are the distinct non-null
+// weight_source values, in no particular order; NullSources counts the
+// samples that have none (written before migration 0008).
+type WeightAggregate struct {
+	Count       int
+	Min, Max    float64
+	Sources     []string
+	NullSources int
+}
+
+// DebitWeightAggregates returns, per window key, the weight range and sources
+// of the samples with a debit above zero in the window (design C1). Windows
+// with no such sample are absent from the map. It is one statement however
+// many windows there are: the windows are bound as one JSON array and each
+// is a range seek on UNIQUE (hold_id, polled_at).
+func (q *queries) DebitWeightAggregates(ctx context.Context, windows []WeightWindow) (map[int64]WeightAggregate, error) {
+	out := make(map[int64]WeightAggregate, len(windows))
+	if len(windows) == 0 {
+		return out, nil
+	}
+	type win struct {
+		K int64  `json:"k"`
+		H int64  `json:"h"`
+		F string `json:"f"`
+		T string `json:"t"`
+	}
+	ws := make([]win, len(windows))
+	for i, w := range windows {
+		ws[i] = win{K: w.Key, H: w.HoldID, F: FormatTime(w.From), T: FormatTime(w.To)}
+	}
+	arg, err := json.Marshal(ws)
+	if err != nil {
+		return nil, err
+	}
+	// CROSS JOIN keeps the windows as the outer loop, so each window is one
+	// seek on the (hold_id, polled_at) index.
+	rows, err := q.db.QueryContext(ctx, `SELECT w.k, COUNT(*), MIN(u.weight), MAX(u.weight),
+			SUM(u.weight_source IS NULL), COALESCE(group_concat(DISTINCT u.weight_source), '')
+		FROM (SELECT json_extract(value, '$.k') AS k, json_extract(value, '$.h') AS h,
+				json_extract(value, '$.f') AS f, json_extract(value, '$.t') AS t FROM json_each(?)) w
+		CROSS JOIN usage_samples u
+		WHERE u.hold_id = w.h AND u.polled_at >= w.f AND u.polled_at < w.t AND u.debit_mt > 0
+		GROUP BY w.k`, string(arg))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			key  int64
+			a    WeightAggregate
+			srcs string
+		)
+		if err := rows.Scan(&key, &a.Count, &a.Min, &a.Max, &a.NullSources, &srcs); err != nil {
+			return nil, err
+		}
+		if srcs != "" {
+			a.Sources = strings.Split(srcs, ",")
+		}
+		out[key] = a
+	}
+	return out, rows.Err()
 }
 
 // DebitMultipliers returns, per ledger entry id, the pressure multiplier the

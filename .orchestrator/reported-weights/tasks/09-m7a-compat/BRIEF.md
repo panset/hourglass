@@ -1,0 +1,17 @@
+# 09 Milestone 7a: compatibility tests against the v1.1.0 fixtures (WGT-19, WGT-20)
+Job intent: .orchestrator/reported-weights/INTENT.md (read it first). Contract: .orchestrator/reported-weights/CONTRACT.md (binding).
+## Goal
+Tests named after WGT-19 and WGT-20 that compare today's code with what `v1.1.0` produced, using `testdata/upgrade-v1.1.0/` (read its README and D81 in docs/decisions.md), built the way the `d96a950` tests are (D78; `internal/app/upgrade_test.go`, `internal/api/upgrade_compat_test.go`). Tests only: no product code change. If a comparison fails, that is a finding to report with the exact difference, not something to adjust away.
+## Build
+- WGT-19: start the real application on a copy of the v1.1.0 database with the same configuration; with reported weights off, every balance and every per-hold charge equals the recorded one; a poll over the same data writes the same debits and passes the same snapshot to the pressure source and the policy as `poll.json` records. `internal/collector/upgrade_v110_replay_test.go` (`TestWGT19_ReplayV110PollsWithFeatureOff`) already replays the polls at collector level: keep it, and add the application-level start (schema 7 to 8, no row rewritten: compare every pre-existing table's rows before and after the migration, new columns null).
+- WGT-20: with reported weights off and no override, the responses of every route in `responses.json` differ from the recorded ones only by the added fields the design names and by the two deliberate changes of design section A3 (an active hold's weight and the burn figures follow the resolver now; Admin Users burn honours a policy's weight). The allowed additions must be an explicit list per route in the test, so an unexpected new or changed field fails. And the contract check: no route, parameter, request field, response code or response field of `testdata/upgrade-v1.1.0/openapi.yaml` is removed or renamed, and no request gained a required field (the existing `TestUPG3_...` shows how). Existing requests keep working without the new fields: `PUT /api/v1/admin/settings` with the eight keys, setup create and update without `weight_override` (replay the recorded requests).
+- Wire the fixture into Bazel as the collector test does now (root `BUILD.bazel` already exports it). A missing fixture must fail, not skip.
+- Break check: for each id, one deliberate product-code break (e.g. write a non-null default into an old row, change a response field's value, drop a field) turns the test red; restore.
+## Scope
+May write: new `*_test.go` files in `internal/app` and `internal/api` (and test-helper additions there), their `BUILD.bazel` via Gazelle or data attributes, this task folder. Must not touch: product code, `testdata/`, existing d96a950 tests, `api/openapi.yaml`, `ui/`, `e2e/`, `docs/`.
+## Done when
+`./ci.sh` exits 0 with the new tests executed under Bazel (show it); RESULT.md has the requirement-to-test table, the allowed-difference list per route, every difference found, and decisions.
+## Long-running steps
+`./ci.sh`: 30 minute timeout, log into this task folder.
+## Report
+Per CONTRACT.md "Reporting".

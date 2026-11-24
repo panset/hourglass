@@ -172,6 +172,18 @@ func readGolden(t *testing.T) map[string]ujobj {
 	return g
 }
 
+// ledgerWeightFields are the LedgerEntry fields of reported weights (C1).
+var ledgerWeightFields = []string{"weight_min", "weight_max", "weight_sources"}
+
+func isLedgerWeightField(k string) bool {
+	for _, f := range ledgerWeightFields {
+		if k == f {
+			return true
+		}
+	}
+	return false
+}
+
 // withoutNewFields checks the two fields A4 adds and returns the response
 // without them: next_cursor must be null, and entry_count is checked by want.
 func withoutNewFields(t *testing.T, m ujobj, want func(i int, e ujobj, count float64)) ujobj {
@@ -194,9 +206,15 @@ func withoutNewFields(t *testing.T, m ujobj, want func(i int, e ujobj, count flo
 			t.Errorf("entry %v: entry_count missing", e["id"])
 		}
 		want(i, e, c)
+		// The weight fields of design C1 (reported weights) are added too.
+		for _, k := range ledgerWeightFields {
+			if _, ok := e[k]; !ok {
+				t.Errorf("entry %v: %s missing", e["id"], k)
+			}
+		}
 		se := ujobj{}
 		for k, v := range e {
-			if k != "entry_count" {
+			if k != "entry_count" && !isLedgerWeightField(k) {
 				se[k] = v
 			}
 		}

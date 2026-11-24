@@ -324,3 +324,64 @@ func dumpTable(t *testing.T, db *sql.DB, table string) []map[string]any {
 	}
 	return out
 }
+
+// DebitWeightAggregates (WGT-15): per window, the count, range and sources of
+// the samples with a debit above zero in [From, To); a sample without a
+// source is counted apart; windows without such a sample are absent; one
+// statement for any number of windows.
+func TestWGT15_StoreDebitWeightAggregates(t *testing.T) {
+	s := openTemp(t)
+	u := newUser(t, s, "a")
+	h1 := must(s.CreateHold(ctx, newSetup(t, s, "lab-01"), u.ID, t0))
+	h2 := must(s.CreateHold(ctx, newSetup(t, s, "lab-02"), u.ID, t0))
+	for i, x := range []struct {
+		hold   int64
+		weight float64
+		debit  int64
+		source string
+	}{
+		{h1.ID, 1, 0, "rule"}, {h1.ID, 1.15, 10, "reported"}, {h1.ID, 1.4, 10, "reported"}, {h1.ID, 3, 10, "policy"},
+		{h2.ID, 2, 10, ""}, {h2.ID, 2, 10, "rule"},
+	} {
+		must(s.InsertUsageSample(ctx, UsageSample{HoldID: x.hold, PolledAt: t0.Add(time.Duration(i%4) * time.Minute), Weight: x.weight,
+			Multiplier: 1, DebitMT: x.debit, Reason: "r", WeightSource: x.source}))
+	}
+	if got := must(s.DebitWeightAggregates(ctx, nil)); len(got) != 0 {
+		t.Errorf("no windows: %v", got)
+	}
+	before := s.StatementCount()
+	got := must(s.DebitWeightAggregates(ctx, []WeightWindow{
+		{Key: 1, HoldID: h1.ID, From: t0, To: t0.Add(time.Hour)},                                       // the whole hold: the debit 0 sample does not count
+		{Key: 2, HoldID: h1.ID, From: t0.Add(time.Minute), To: t0.Add(time.Minute + time.Millisecond)}, // one poll
+		{Key: 3, HoldID: h2.ID, From: t0, To: t0.Add(time.Hour)},                                       // one sample without a source
+		{Key: 4, HoldID: h1.ID, From: t0, To: t0.Add(time.Millisecond)},                                // only the debit 0 sample: absent
+		{Key: 5, HoldID: h2.ID, From: t0.Add(time.Hour), To: t0.Add(2 * time.Hour)},                    // nothing: absent
+	}))
+	if n := s.StatementCount() - before; n != 1 {
+		t.Errorf("%d statements, want 1", n)
+	}
+	sortStrings := func(a WeightAggregate) WeightAggregate {
+		if a.Sources != nil {
+			a.Sources = append([]string(nil), a.Sources...)
+			for i := 1; i < len(a.Sources); i++ {
+				for j := i; j > 0 && a.Sources[j] < a.Sources[j-1]; j-- {
+					a.Sources[j], a.Sources[j-1] = a.Sources[j-1], a.Sources[j]
+				}
+			}
+		}
+		return a
+	}
+	want := map[int64]WeightAggregate{
+		1: {Count: 3, Min: 1.15, Max: 3, Sources: []string{"policy", "reported"}},
+		2: {Count: 1, Min: 1.15, Max: 1.15, Sources: []string{"reported"}},
+		3: {Count: 2, Min: 2, Max: 2, Sources: []string{"rule"}, NullSources: 1},
+	}
+	if len(got) != len(want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	for k, w := range want {
+		if g := sortStrings(got[k]); !reflect.DeepEqual(g, w) {
+			t.Errorf("window %d: %+v, want %+v", k, g, w)
+		}
+	}
+}

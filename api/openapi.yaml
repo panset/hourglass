@@ -1678,12 +1678,18 @@ components:
     Burning:
       type: object
       description: One metering hold's current burn.
-      required: [hold_id, setup_id, setup_name, weight, multiplier, tokens_per_hour]
+      required: [hold_id, setup_id, setup_name, weight, weight_source, multiplier, tokens_per_hour]
       properties:
         hold_id: {type: integer, format: int64}
         setup_id: {type: integer, format: int64}
         setup_name: {type: string, example: lab-01}
-        weight: {type: number, example: 1}
+        weight:
+          type: number
+          example: 1
+          description: >-
+            The weight the setup resolves to now, or the hold's latest usage sample's weight when that sample's
+            source is `policy`.
+        weight_source: {$ref: '#/components/schemas/HoldWeightSource'}
         multiplier: {type: number, example: 2}
         tokens_per_hour: {$ref: '#/components/schemas/Tokens'}
     Me:
@@ -1774,7 +1780,7 @@ components:
           description: Tokens per hour at the highest band's multiplier.
     Hold:
       type: object
-      required: [id, setup_id, setup_name, setup_labels, user_id, active, weight, acquired_at, metering_started_at, deployed_at, release_requested_at, released_at, deployed, metering, cost_per_hour_tokens, charged_tokens, released_by, release_reason, forced]
+      required: [id, setup_id, setup_name, setup_labels, user_id, active, weight, weight_source, weight_attributes, acquired_at, metering_started_at, deployed_at, release_requested_at, released_at, deployed, metering, cost_per_hour_tokens, charged_tokens, released_by, release_reason, forced]
       properties:
         id: {type: integer, format: int64}
         setup_id: {type: integer, format: int64}
@@ -1782,7 +1788,22 @@ components:
         setup_labels: {$ref: '#/components/schemas/Labels'}
         user_id: {type: integer, format: int64}
         active: {type: boolean}
-        weight: {type: number}
+        weight:
+          type: number
+          description: >-
+            Active hold: the weight its setup resolves to now, or the latest usage sample's weight when that sample's
+            source is `policy`. Released hold: the weight of its last usage sample (what it was last charged at), or,
+            without a sample, what the setup resolves to now.
+        weight_source:
+          type: string
+          nullable: true
+          enum: [override, reported, rule, default, policy, null]
+          description: Where `weight` comes from. Null only for a released hold whose last usage sample was written before the upgrade that added sources.
+        weight_attributes:
+          allOf: [{$ref: '#/components/schemas/WeightAttributes'}]
+          description: >-
+            The setup's reported attributes when its reported weight is usable; `{}` otherwise, and always `{}` for a
+            released hold with a usage sample.
         acquired_at: {type: string, format: date-time}
         metering_started_at: {type: string, format: date-time, nullable: true}
         deployed_at: {type: string, format: date-time, nullable: true}
@@ -1854,6 +1875,25 @@ components:
             Always present on `GET /api/v1/me/ledger` entries, and absent on the admin grant and reset responses. The
             number of polls the entry stands for: 1 for a raw debit or a non-debit row, the stored roll-up count for a
             row compacted in storage, the sum over the merged rows in the `rollup=day` view.
+        weight_min:
+          type: number
+          nullable: true
+          description: >-
+            Always present on `GET /api/v1/me/ledger` entries, and absent on the admin grant and reset responses. For a
+            debit, the lowest weight among the charged polls the entry stands for (the usage samples of its hold with a
+            debit above zero: the one poll of a raw row, the local day of a rolled-up or merged entry). Null unless a
+            sample is found for every poll (`entry_count`), and for entries that are not debits.
+        weight_max:
+          type: number
+          nullable: true
+          description: As `weight_min`, the highest weight. Equal to `weight_min` for a single poll.
+        weight_sources:
+          type: array
+          nullable: true
+          items: {$ref: '#/components/schemas/HoldWeightSource'}
+          description: >-
+            As `weight_min`, the distinct weight sources of those polls, `policy` first and then `override`,
+            `reported`, `rule`, `default`. Null when `weight_min` is null or any of those samples has no source.
     LedgerResponse:
       type: object
       required: [period, available_periods, entries, next_cursor]
@@ -1943,7 +1983,7 @@ components:
     SetupAdminFields:
       type: object
       description: Admin-only fields.
-      required: [enabled, last_seen_at, matched_rule_selector]
+      required: [enabled, last_seen_at, matched_rule_selector, reported_weight, reported_weight_not_applied, weight_override]
       properties:
         enabled: {type: boolean}
         last_seen_at:
@@ -1954,15 +1994,34 @@ components:
         matched_rule_selector:
           type: string
           nullable: true
-          description: Selector of the rate rule that set the weight; null for the default weight.
+          description: >-
+            Selector of the first rate rule that matches the setup's labels, whatever the weight's source; null when no
+            rule matches.
+        reported_weight:
+          type: number
+          nullable: true
+          description: The stored weights report's weight for this setup, usable or not; null when there is none or reported weights are off.
+        reported_weight_not_applied:
+          type: string
+          nullable: true
+          enum: [expired, out_of_bounds, override, null]
+          description: Why `reported_weight` is not applied; null when it is applied, when there is none, or when reported weights are off.
+        weight_override:
+          type: number
+          nullable: true
+          description: The setup's weight override; null when none.
     Setup:
       type: object
-      required: [id, name, labels, weight, state, holder, held_since, deployed, metering, cost_per_hour_tokens, details, admin]
+      required: [id, name, labels, weight, weight_source, weight_attributes, state, holder, held_since, deployed, metering, cost_per_hour_tokens, details, admin]
       properties:
         id: {type: integer, format: int64}
         name: {type: string, example: lab-01}
         labels: {$ref: '#/components/schemas/Labels'}
-        weight: {type: number, description: "Resolved weight from the rate rules", example: 1}
+        weight: {type: number, description: "The weight Hourglass applies now; `weight_source` says where it comes from.", example: 1}
+        weight_source: {$ref: '#/components/schemas/WeightSource'}
+        weight_attributes:
+          allOf: [{$ref: '#/components/schemas/WeightAttributes'}]
+          description: The reported attributes when the setup's reported weight is usable (also under an override); `{}` otherwise.
         state:
           type: string
           enum: [free, held, disabled]
@@ -1990,8 +2049,11 @@ components:
           description: Null for users who are not admins.
     SetupList:
       type: object
-      required: [setups, display_label_keys, label_index, summary, metering_description]
+      required: [setups, display_label_keys, label_index, summary, metering_description, reported_weights_enabled]
       properties:
+        reported_weights_enabled:
+          type: boolean
+          description: The `reported_weights` setting is on, so prices may change, even for a setup with no reported weight yet.
         setups:
           type: array
           items: {$ref: '#/components/schemas/Setup'}
@@ -2051,7 +2113,27 @@ components:
           description: Any well-formed JSON, at most 256 KB.
           example: {note: opaque}
         enabled: {type: boolean}
+        weight_override:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1000000000000
+          description: >-
+            Optional. Pins the setup's weight above a reported weight and the rate rules; not bound by the reported
+            weights' limits. On create, absent or null means none. On update, absent leaves it unchanged, null clears
+            it, a number sets it.
       additionalProperties: false
+    WeightSource:
+      type: string
+      enum: [override, reported, rule, default]
+      description: Where a setup's weight comes from.
+    HoldWeightSource:
+      type: string
+      enum: [override, reported, rule, default, policy]
+      description: Where a charged or shown weight comes from; `policy` when the metering policy set the weight.
+    WeightAttributes:
+      type: object
+      additionalProperties: {type: string}
     ReleaseRequest:
       type: object
       properties:
@@ -2397,7 +2479,7 @@ components:
         service_account: {type: string, description: Name of the service account that sent the report.}
     Collector:
       type: object
-      required: [extensions, last_pressure_report, last_deployments_report, last_successful_poll_at, last_error, matched_setups, orphan_count, outages_this_month, recent_runs, outages, orphans, failed_deliveries, queue_length]
+      required: [extensions, last_pressure_report, last_deployments_report, last_weights_report, last_weights_refusal, last_successful_poll_at, last_error, matched_setups, orphan_count, outages_this_month, recent_runs, outages, orphans, failed_deliveries, queue_length]
       properties:
         extensions:
           type: object
@@ -2417,6 +2499,28 @@ components:
           allOf: [{$ref: '#/components/schemas/ReportedReportTimes'}]
           nullable: true
           description: The stored deployment report. Null before the first one and when the provider is not `reported`.
+        last_weights_report:
+          type: object
+          nullable: true
+          required: [observed_at, received_at, service_account, entries, out_of_bounds]
+          description: The stored weights report. Null before the first one and while reported weights are off.
+          properties:
+            observed_at: {type: string, format: date-time}
+            received_at: {type: string, format: date-time}
+            service_account: {type: string, description: Name of the service account that sent the report.}
+            entries: {type: integer, description: How many weights the stored report holds.}
+            out_of_bounds: {type: integer, description: How many of them the minimum and maximum now in force exclude.}
+        last_weights_refusal:
+          type: object
+          nullable: true
+          required: [at, service_account, message]
+          description: >-
+            The most recent weights report refused with 400, kept in memory (lost at a restart). Null when none was
+            refused since the start and while reported weights are off.
+          properties:
+            at: {type: string, format: date-time}
+            service_account: {type: string}
+            message: {type: string}
         last_successful_poll_at: {type: string, format: date-time, nullable: true}
         last_error:
           type: object

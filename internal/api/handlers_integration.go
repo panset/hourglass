@@ -14,7 +14,6 @@ import (
 	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
-	"github.com/panset/hourglass/internal/weights"
 )
 
 // Handlers of the integration routes (docs/design/integration-api.md,
@@ -297,11 +296,7 @@ func (a *API) getIntegrationState(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	report, err := a.stateWeightReport(r, l.set.ReportedWeights)
-	if err != nil {
-		a.writeError(w, r, err)
-		return
-	}
+	report := l.report
 	out.Weights = stateWeightsTop(l.set.ReportedWeights, report)
 	holdOf := make(map[int64]store.Hold, len(active))
 	for _, h := range active {
@@ -313,8 +308,7 @@ func (a *API) getIntegrationState(w http.ResponseWriter, r *http.Request) {
 			Enabled: s.Enabled, ReportedDeployed: deployed[s.Name]}
 		// The weight a poll now would charge (B4). A rate rule that cannot be
 		// evaluated fails the request, as it fails the poll.
-		res, err := weights.Resolve(weights.Setup{Name: s.Name, Labels: s.Labels, Override: s.WeightOverride},
-			l.rules, l.set, report, l.now)
+		res, err := l.resolve(s)
 		if err != nil {
 			a.writeError(w, r, err)
 			return

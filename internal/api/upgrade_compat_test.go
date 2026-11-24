@@ -122,15 +122,41 @@ func ledgerLikeRelease(t *testing.T, what string, m map[string]any) map[string]a
 		if e["entry_count"] != float64(1) {
 			t.Errorf("%s: entry %v has entry_count %v, want 1", what, e["id"], e["entry_count"])
 		}
+		for _, k := range ledgerWeightFields { // added by reported weights (C1)
+			if _, ok := e[k]; !ok {
+				t.Errorf("%s: entry %v lacks the added field %s", what, e["id"], k)
+			}
+		}
 		c := map[string]any{}
 		for k, v := range e {
-			if k != "entry_count" {
+			if k != "entry_count" && !isLedgerWeightField(k) {
 				c[k] = v
 			}
 		}
 		es = append(es, c)
 	}
 	out["entries"] = es
+	return out
+}
+
+// withoutSetupWeightFields removes from a copy of a Setups list the fields
+// reported weights add to each setup and its admin block (design C2),
+// requiring each to be present.
+func withoutSetupWeightFields(t *testing.T, what string, m map[string]any) map[string]any {
+	t.Helper()
+	list := []any{}
+	for _, x := range m["setups"].([]any) {
+		s := without(t, what+" setup", x.(map[string]any), "weight_source", "weight_attributes")
+		if adm, ok := s["admin"].(map[string]any); ok {
+			s["admin"] = without(t, what+" admin", adm, "reported_weight", "reported_weight_not_applied", "weight_override")
+		}
+		list = append(list, s)
+	}
+	out := map[string]any{}
+	for k, v := range m {
+		out[k] = v
+	}
+	out["setups"] = list
 	return out
 }
 
@@ -165,7 +191,8 @@ func TestUPG2_ResponsesAndSignInDifferFromTheReleaseOnlyByAddedFields(t *testing
 			{"setups_dev_filtered", "/api/v1/setups?selector=tier%3Da", dev},
 			{"setups_admin", "/api/v1/setups", adm},
 		} {
-			sameAsRelease(t, c.key, without(t, c.key, e.getJSON(c.s, c.path), "label_index"), g[c.key])
+			sameAsRelease(t, c.key, withoutSetupWeightFields(t, c.key,
+				without(t, c.key, e.getJSON(c.s, c.path), "label_index", "reported_weights_enabled")), g[c.key])
 		}
 	})
 	t.Run("session", func(t *testing.T) {

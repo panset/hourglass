@@ -20,6 +20,7 @@ import (
 	"github.com/panset/hourglass/internal/metering"
 	"github.com/panset/hourglass/internal/rules"
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/internal/weights"
 )
 
 // Handlers of the "any role" data routes (HOLD-1, HOLD-2, SET-6, LED-2, UI-6).
@@ -42,12 +43,15 @@ func userCaller(w http.ResponseWriter, r *http.Request) (*auth.User, bool) {
 // ---- GET /api/v1/me ----
 
 type burningJSON struct {
-	HoldID     int64   `json:"hold_id"`
-	SetupID    int64   `json:"setup_id"`
-	SetupName  string  `json:"setup_name"`
-	Weight     float64 `json:"weight"`
-	Multiplier float64 `json:"multiplier"`
-	TokensHour float64 `json:"tokens_per_hour"`
+	HoldID    int64   `json:"hold_id"`
+	SetupID   int64   `json:"setup_id"`
+	SetupName string  `json:"setup_name"`
+	Weight    float64 `json:"weight"`
+	// WeightSource is where Weight comes from (A3, C2); never null for an
+	// active hold.
+	WeightSource string  `json:"weight_source"`
+	Multiplier   float64 `json:"multiplier"`
+	TokensHour   float64 `json:"tokens_per_hour"`
 }
 
 type meJSON struct {
@@ -157,15 +161,15 @@ func (a *API) getMe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		s := d.setups[h.SetupID]
-		wt, err := l.holdWeight(h, s, d)
+		sw, err := l.holdWeight(h, s, d)
 		if err != nil {
 			a.writeError(w, r, err)
 			return
 		}
-		mt := metering.HourlyCostMT(wt, l.mult)
+		mt := metering.HourlyCostMT(sw.weight, l.mult)
 		burnMT += mt
 		me.Burning = append(me.Burning, burningJSON{HoldID: h.ID, SetupID: h.SetupID, SetupName: s.Name,
-			Weight: wt, Multiplier: l.mult, TokensHour: tokens(mt)})
+			Weight: sw.weight, WeightSource: *sw.source, Multiplier: l.mult, TokensHour: tokens(mt)})
 	}
 	b := tokens(balance)
 	me.Balance, me.Allowance, me.Granted, me.Carryover, me.Debited = &b, tokens(allowance), tokens(granted), tokens(carry), tokens(-debits)
@@ -237,6 +241,11 @@ type ledgerEntryJSON struct {
 	ActorName    *string  `json:"actor_name"`
 	Reason       *string  `json:"reason"`
 	EntryCount   int      `json:"entry_count"`
+	// The weights of the polls a debit stands for (C1); null when unknown
+	// and for entries that are not debits.
+	WeightMin     *float64 `json:"weight_min"`
+	WeightMax     *float64 `json:"weight_max"`
+	WeightSources []string `json:"weight_sources"`
 }
 
 // Ledger view parameters (design A4).
@@ -353,6 +362,58 @@ func ledgerView(rows []store.LedgerEntry, rollup string, loc *time.Location) []l
 	return out
 }
 
+// debitWeightWindows names, for every debit entry with a hold, the usage
+// samples its weights come from (C1): the one poll of a raw row (the
+// collector writes a debit at its sample's poll time), and the hold's local
+// day (in loc) for a row rolled up in storage or an entry merged by
+// rollup=day. Each window is keyed by the entry's id.
+func debitWeightWindows(view []ledgerViewEntry, loc *time.Location) []store.WeightWindow {
+	out := make([]store.WeightWindow, 0, len(view))
+	for _, ve := range view {
+		e := ve.row
+		if e.Type != string(ledger.TypeDebit) || e.HoldID == nil {
+			continue
+		}
+		w := store.WeightWindow{Key: e.ID, HoldID: *e.HoldID, From: e.CreatedAt, To: e.CreatedAt.Add(time.Millisecond)}
+		if ve.merged || e.RollupCount > 0 {
+			y, m, d := e.CreatedAt.In(loc).Date()
+			w.From, w.To = time.Date(y, m, d, 0, 0, 0, 0, loc), time.Date(y, m, d+1, 0, 0, 0, 0, loc)
+		}
+		out = append(out, w)
+	}
+	return out
+}
+
+// weightSourceOrder is the order of weight_sources (C1): policy first, then
+// the order of the resolver's table (A1).
+var weightSourceOrder = []weights.Source{weights.SourcePolicy, weights.SourceOverride, weights.SourceReported,
+	weights.SourceRule, weights.SourceDefault}
+
+// entryWeights is the weight range and sources of an entry that stands for
+// polls charged polls (C1). Partial data shows as unknown: the range is null
+// unless a charged sample was found for every poll, and the sources are null
+// when the range is or when any of those samples has no source.
+func entryWeights(agg store.WeightAggregate, polls int) (lo, hi *float64, sources []string) {
+	if agg.Count != polls {
+		return nil, nil, nil
+	}
+	lo, hi = &agg.Min, &agg.Max
+	if agg.NullSources > 0 {
+		return lo, hi, nil
+	}
+	has := map[string]bool{}
+	for _, s := range agg.Sources {
+		has[s] = true
+	}
+	sources = []string{}
+	for _, s := range weightSourceOrder {
+		if has[string(s)] {
+			sources = append(sources, string(s))
+		}
+	}
+	return lo, hi, sources
+}
+
 // availablePeriods lists the user's periods with ledger entries, newest
 // first, always including the current one (the Month select needs it).
 func (a *API) availablePeriods(r *http.Request, userID int64, current string) ([]string, error) {
@@ -438,6 +499,11 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 		c := strconv.FormatInt(view[begin].row.ID, 10)
 		next = &c
 	}
+	aggs, err := st.DebitWeightAggregates(ctx, debitWeightWindows(view[begin:end], a.d.Location))
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
 	actors := map[int64]string{}
 	holdSetup := map[int64]string{}
 	entries := make([]ledgerEntryJSON, 0, end-begin)
@@ -453,6 +519,9 @@ func (a *API) listMyLedger(w http.ResponseWriter, r *http.Request) {
 		// stands for more than one.
 		if m, ok := mults[e.ID]; ok && ve.count == 1 {
 			v.Multiplier = &m
+		}
+		if agg, ok := aggs[e.ID]; ok {
+			v.WeightMin, v.WeightMax, v.WeightSources = entryWeights(agg, ve.count)
 		}
 		if e.HoldID != nil {
 			name, seen := holdSetup[*e.HoldID]
@@ -629,21 +698,38 @@ type setupAdminJSON struct {
 	Enabled     bool    `json:"enabled"`
 	LastSeenAt  *string `json:"last_seen_at"`
 	MatchedRule *string `json:"matched_rule_selector"`
+	setupWeightAdminJSON
+}
+
+// setupWeightAdminJSON is the weight part of a setup's admin block (C2),
+// shared by the Setups list and the admin setup views.
+type setupWeightAdminJSON struct {
+	ReportedWeight           *float64 `json:"reported_weight"`
+	ReportedWeightNotApplied *string  `json:"reported_weight_not_applied"`
+	WeightOverride           *float64 `json:"weight_override"`
+}
+
+func setupWeightAdmin(res weights.Result, s store.Setup) setupWeightAdminJSON {
+	return setupWeightAdminJSON{ReportedWeight: res.Reported, ReportedWeightNotApplied: nullIfEmpty(string(res.NotApplied)),
+		WeightOverride: s.WeightOverride}
 }
 
 type setupJSON struct {
-	ID          int64             `json:"id"`
-	Name        string            `json:"name"`
-	Labels      map[string]string `json:"labels"`
-	Weight      float64           `json:"weight"`
-	State       string            `json:"state"`
-	Holder      *holderJSON       `json:"holder"`
-	HeldSince   *string           `json:"held_since"`
-	Deployed    bool              `json:"deployed"`
-	Metering    *meteringJSON     `json:"metering"`
-	CostPerHour costJSON          `json:"cost_per_hour_tokens"`
-	Details     any               `json:"details"`
-	Admin       *setupAdminJSON   `json:"admin"`
+	ID     int64             `json:"id"`
+	Name   string            `json:"name"`
+	Labels map[string]string `json:"labels"`
+	Weight float64           `json:"weight"`
+	// WeightSource and WeightAttributes are the resolver's (A3, C2).
+	WeightSource     string            `json:"weight_source"`
+	WeightAttributes map[string]string `json:"weight_attributes"`
+	State            string            `json:"state"`
+	Holder           *holderJSON       `json:"holder"`
+	HeldSince        *string           `json:"held_since"`
+	Deployed         bool              `json:"deployed"`
+	Metering         *meteringJSON     `json:"metering"`
+	CostPerHour      costJSON          `json:"cost_per_hour_tokens"`
+	Details          any               `json:"details"`
+	Admin            *setupAdminJSON   `json:"admin"`
 }
 
 type labelValueJSON struct {
@@ -761,12 +847,14 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 		if sel != nil && !sel.Matches(s.Labels) {
 			continue
 		}
-		wt, matched, err := l.weight(s)
+		res, err := l.resolve(s)
 		if err != nil {
 			a.writeError(w, r, err)
 			return
 		}
-		v := setupJSON{ID: s.ID, Name: s.Name, Labels: labelsNonNil(s.Labels), Weight: wt, State: "free",
+		wt := res.Weight
+		v := setupJSON{ID: s.ID, Name: s.Name, Labels: labelsNonNil(s.Labels), Weight: wt,
+			WeightSource: string(res.Source), WeightAttributes: res.Attributes, State: "free",
 			Deployed: rep, CostPerHour: l.cost(wt), Details: detailsJSON(s.DetailsJSON)}
 		switch {
 		case held:
@@ -782,7 +870,8 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 			v.State = "disabled"
 		}
 		if isAdmin {
-			adm := &setupAdminJSON{Enabled: s.Enabled, MatchedRule: nullIfEmpty(matched)}
+			adm := &setupAdminJSON{Enabled: s.Enabled, MatchedRule: nullIfEmpty(res.RuleSelector),
+				setupWeightAdminJSON: setupWeightAdmin(res, s)}
 			if t, ok := l.view.LastSeen[s.Name]; ok {
 				adm.LastSeenAt = tsPtr(&t)
 			}
@@ -792,7 +881,9 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"setups": list, "display_label_keys": keys, "label_index": index.build(),
-		"summary": map[string]int{"enabled": summary.Enabled, "deployed": summary.Deployed, "free": summary.Free},
+		// Prices may change even for a setup with no reported weight yet (C2).
+		"reported_weights_enabled": l.set.ReportedWeights.Enabled,
+		"summary":                  map[string]int{"enabled": summary.Enabled, "deployed": summary.Deployed, "free": summary.Free},
 		// The policy interface has no describe method, so there is no text to show.
 		"metering_description": nil,
 	})

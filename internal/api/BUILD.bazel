@@ -71,6 +71,7 @@ go_test(
         "upgrade_compat_test.go",
         "user_test.go",
         "user_testenv_test.go",
+        "weights_readers_test.go",
         "weights_report_test.go",
     ],
     data = [
@@ -102,6 +103,7 @@ go_test(
         "//internal/events",
         "//internal/holds",
         "//internal/ledger",
+        "//internal/metering",
         "//internal/reported",
         "//internal/rules",
         "//internal/settings",

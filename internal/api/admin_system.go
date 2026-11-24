@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/panset/hourglass/internal/ledger"
 	"github.com/panset/hourglass/internal/reported"
+	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
 )
 
@@ -80,20 +82,39 @@ type collectorReport struct {
 	ServiceAccount string `json:"service_account"`
 }
 
+// collectorWeightsReport is the stored weights report (C2): entries is how
+// many weights it holds, out_of_bounds how many of them the limits now in
+// force exclude.
+type collectorWeightsReport struct {
+	collectorReport
+	Entries     int `json:"entries"`
+	OutOfBounds int `json:"out_of_bounds"`
+}
+
+// collectorWeightsRefusal is the last weights report refused with 400 (B2).
+type collectorWeightsRefusal struct {
+	At             string `json:"at"`
+	ServiceAccount string `json:"service_account"`
+	Message        string `json:"message"`
+}
+
 type collectorOut struct {
-	Extensions           collectorExtensions    `json:"extensions"`
-	LastPressureReport   *collectorReport       `json:"last_pressure_report"`
-	LastDeploymentReport *collectorReport       `json:"last_deployments_report"`
-	LastSuccessfulPollAt *string                `json:"last_successful_poll_at"`
-	LastError            *collectorLastError    `json:"last_error"`
-	MatchedSetups        int                    `json:"matched_setups"`
-	OrphanCount          int                    `json:"orphan_count"`
-	OutagesThisMonth     collectorOutagesMonth  `json:"outages_this_month"`
-	RecentRuns           []collectorRunOut      `json:"recent_runs"`
-	Outages              []collectorOutageOut   `json:"outages"`
-	Orphans              []collectorOrphanOut   `json:"orphans"`
-	FailedDeliveries     []collectorDeliveryOut `json:"failed_deliveries"`
-	QueueLength          int                    `json:"queue_length"`
+	Extensions           collectorExtensions `json:"extensions"`
+	LastPressureReport   *collectorReport    `json:"last_pressure_report"`
+	LastDeploymentReport *collectorReport    `json:"last_deployments_report"`
+	// Both null while reported weights are off (C2).
+	LastWeightsReport    *collectorWeightsReport  `json:"last_weights_report"`
+	LastWeightsRefusal   *collectorWeightsRefusal `json:"last_weights_refusal"`
+	LastSuccessfulPollAt *string                  `json:"last_successful_poll_at"`
+	LastError            *collectorLastError      `json:"last_error"`
+	MatchedSetups        int                      `json:"matched_setups"`
+	OrphanCount          int                      `json:"orphan_count"`
+	OutagesThisMonth     collectorOutagesMonth    `json:"outages_this_month"`
+	RecentRuns           []collectorRunOut        `json:"recent_runs"`
+	Outages              []collectorOutageOut     `json:"outages"`
+	Orphans              []collectorOrphanOut     `json:"orphans"`
+	FailedDeliveries     []collectorDeliveryOut   `json:"failed_deliveries"`
+	QueueLength          int                      `json:"queue_length"`
 }
 
 // collectorView builds the Collector response (ADM-4, HOLD-4, EXT-6, EXT-7).
@@ -122,6 +143,9 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 		case err != reported.ErrNoReport:
 			return out, err
 		}
+	}
+	if err := a.collectorWeights(ctx, &out); err != nil {
+		return out, err
 	}
 	runs, err := st.ListCollectorRuns(ctx, collectorListLimit)
 	if err != nil {
@@ -210,6 +234,37 @@ func (a *API) collectorView(r *http.Request) (collectorOut, error) {
 		out.QueueLength = a.d.Events.Pending()
 	}
 	return out, nil
+}
+
+// collectorWeights fills the weights report and the last refusal (C2, WGT-22);
+// both stay null while reported weights are off.
+func (a *API) collectorWeights(ctx context.Context, out *collectorOut) error {
+	set, err := settings.Load(ctx, a.d.Store)
+	if err != nil {
+		return err
+	}
+	cfg := set.ReportedWeights
+	if !cfg.Enabled {
+		return nil
+	}
+	switch wr, err := a.reported.Weights(ctx); {
+	case err == nil:
+		v := &collectorWeightsReport{collectorReport: collectorReport{ObservedAt: ts(wr.ObservedAt), ReceivedAt: ts(wr.ReceivedAt),
+			ServiceAccount: wr.ServiceAccount}, Entries: len(wr.Weights)}
+		for _, e := range wr.Weights {
+			// The limits are inclusive at both ends, as in the resolver (A1).
+			if e.Weight < cfg.Min || (cfg.Max != nil && e.Weight > *cfg.Max) {
+				v.OutOfBounds++
+			}
+		}
+		out.LastWeightsReport = v
+	case err != reported.ErrNoReport:
+		return err
+	}
+	if r, ok := a.reported.LastWeightsRefusal(); ok {
+		out.LastWeightsRefusal = &collectorWeightsRefusal{At: ts(r.At), ServiceAccount: r.ServiceAccount, Message: r.Message}
+	}
+	return nil
 }
 
 func outageMinutes(o store.Outage) int {

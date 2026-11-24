@@ -13,6 +13,7 @@ import (
 	"github.com/panset/hourglass/internal/rules"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/internal/weights"
 )
 
 // Response shapes of the user-facing routes (api/openapi.yaml schemas Hold,
@@ -44,6 +45,8 @@ type holdJSON struct {
 	UserID             int64             `json:"user_id"`
 	Active             bool              `json:"active"`
 	Weight             float64           `json:"weight"`
+	WeightSource       *string           `json:"weight_source"`
+	WeightAttributes   map[string]string `json:"weight_attributes"`
 	AcquiredAt         string            `json:"acquired_at"`
 	MeteringStartedAt  *string           `json:"metering_started_at"`
 	DeployedAt         *string           `json:"deployed_at"`
@@ -59,11 +62,13 @@ type holdJSON struct {
 }
 
 // lab is the per-request view of the lab every user route needs: settings,
-// rate rules, the latest pressure sample and the collector's poll view.
+// rate rules, the stored weights report, the latest pressure sample and the
+// collector's poll view.
 type lab struct {
 	now      time.Time
 	set      settings.Settings
 	rules    []rules.Rule
+	report   *weights.Report       // nil when reported weights are off or before the first report
 	sample   *store.PressureSample // newest pressure sample, nil before the first poll
 	mult     float64               // multiplier now
 	peakMult float64               // highest band's multiplier
@@ -85,6 +90,9 @@ func (a *API) loadLab(ctx context.Context) (*lab, error) {
 		l.rules = append(l.rules, rules.Rule{ID: r.ID, Kind: r.Kind, Position: r.Position, Selector: r.Selector,
 			Value: strconv.FormatFloat(r.Value, 'f', -1, 64)})
 	}
+	if l.report, err = a.weightReport(ctx, set.ReportedWeights); err != nil {
+		return nil, err
+	}
 	latest, err := st.LatestPressure(ctx, 1)
 	if err != nil {
 		return nil, err
@@ -101,11 +109,10 @@ func (a *API) loadLab(ctx context.Context) (*lab, error) {
 	return l, nil
 }
 
-// weight resolves a setup's weight from the rate rules; selector is "" when
-// the default weight applied.
-func (l *lab) weight(s store.Setup) (w float64, selector string, err error) {
-	w, selector, _, err = rules.Weight(l.rules, s.Labels, l.set.DefaultWeight)
-	return w, selector, err
+// resolve is the weight resolver's answer for a setup at the request's time
+// (A1, A3). A rate rule that cannot be evaluated fails the request.
+func (l *lab) resolve(s store.Setup) (weights.Result, error) {
+	return weights.Resolve(resolverSetup(s), l.rules, l.set, l.report, l.now)
 }
 
 // reported reports whether the provider reported an allocation with the
@@ -168,14 +175,48 @@ func (a *API) loadHoldData(ctx context.Context, holds []store.Hold) (*holdData, 
 	return d, nil
 }
 
-// holdWeight is the weight a hold is charged with: what the policy last
-// decided with (it may override the rate rules), else the resolved weight.
-func (l *lab) holdWeight(h store.Hold, s store.Setup, d *holdData) (float64, error) {
-	if ls, ok := d.samples[h.ID]; ok {
-		return ls.Weight, nil
+// shownWeight is the weight, source and attributes a hold or a burn figure
+// shows (A3). Source is nil only for a released hold whose last sample was
+// written before migration 0008.
+type shownWeight struct {
+	weight     float64
+	source     *string
+	attributes map[string]string
+}
+
+// holdWeight is the weight a hold shows (A3). An active hold shows what its
+// setup resolves to now, except when its latest usage sample's source is
+// policy: then that sample's weight and source. A released hold shows the
+// weight and source of its last sample, what it was last charged at, with no
+// attributes (a sample does not keep them); without a sample it shows what
+// its setup resolves to now.
+func (l *lab) holdWeight(h store.Hold, s store.Setup, d *holdData) (shownWeight, error) {
+	ls, sampled := d.samples[h.ID]
+	if h.ReleasedAt != nil && sampled {
+		return shownWeight{weight: ls.Weight, source: nullIfEmpty(ls.WeightSource), attributes: map[string]string{}}, nil
 	}
-	w, _, err := l.weight(s)
-	return w, err
+	res, err := l.resolve(s)
+	if err != nil {
+		return shownWeight{}, err
+	}
+	return activeWeight(res, ls, sampled), nil
+}
+
+// activeWeight is the weight of an active hold from the resolver's answer and
+// the hold's latest sample, if any (A3). A sample with no source counts as not
+// policy.
+func activeWeight(res weights.Result, ls store.LastSample, sampled bool) shownWeight {
+	if sampled && ls.WeightSource == string(weights.SourcePolicy) {
+		src := ls.WeightSource
+		return shownWeight{weight: ls.Weight, source: &src, attributes: res.Attributes}
+	}
+	src := string(res.Source)
+	return shownWeight{weight: res.Weight, source: &src, attributes: res.Attributes}
+}
+
+// resolverSetup is what the resolver needs of a stored setup.
+func resolverSetup(s store.Setup) weights.Setup {
+	return weights.Setup{Name: s.Name, Labels: s.Labels, Override: s.WeightOverride}
 }
 
 // meteringOf is a hold's metering state. The reason is the metering policy's
@@ -199,13 +240,15 @@ func (a *API) holdViews(ctx context.Context, l *lab, holds []store.Hold) ([]hold
 	out := make([]holdJSON, 0, len(holds))
 	for _, h := range holds {
 		s := d.setups[h.SetupID]
-		w, err := l.holdWeight(h, s, d)
+		sw, err := l.holdWeight(h, s, d)
 		if err != nil {
 			return nil, err
 		}
+		w := sw.weight
 		v := holdJSON{
 			ID: h.ID, SetupID: h.SetupID, SetupName: s.Name, SetupLabels: labelsNonNil(s.Labels), UserID: h.UserID,
-			Active: h.ReleasedAt == nil, Weight: w, AcquiredAt: ts(h.AcquiredAt),
+			Active: h.ReleasedAt == nil, Weight: w, WeightSource: sw.source, WeightAttributes: sw.attributes,
+			AcquiredAt:        ts(h.AcquiredAt),
 			MeteringStartedAt: tsPtr(h.MeteringStartedAt), DeployedAt: tsPtr(h.DeployedAt),
 			ReleaseRequestedAt: tsPtr(h.ReleaseRequestedAt), ReleasedAt: tsPtr(h.ReleasedAt),
 			Metering:      meteringOf(h, l.view),

@@ -1059,8 +1059,12 @@ export interface components {
             setup_id: number;
             /** @example lab-01 */
             setup_name: string;
-            /** @example 1 */
+            /**
+             * @description The weight the setup resolves to now, or the hold's latest usage sample's weight when that sample's source is `policy`.
+             * @example 1
+             */
             weight: number;
+            weight_source: components["schemas"]["HoldWeightSource"];
             /** @example 2 */
             multiplier: number;
             tokens_per_hour: components["schemas"]["Tokens"];
@@ -1139,7 +1143,15 @@ export interface components {
             /** Format: int64 */
             user_id: number;
             active: boolean;
+            /** @description Active hold: the weight its setup resolves to now, or the latest usage sample's weight when that sample's source is `policy`. Released hold: the weight of its last usage sample (what it was last charged at), or, without a sample, what the setup resolves to now. */
             weight: number;
+            /**
+             * @description Where `weight` comes from. Null only for a released hold whose last usage sample was written before the upgrade that added sources.
+             * @enum {string|null}
+             */
+            weight_source: "override" | "reported" | "rule" | "default" | "policy" | null;
+            /** @description The setup's reported attributes when its reported weight is usable; `{}` otherwise, and always `{}` for a released hold with a usage sample. */
+            weight_attributes: components["schemas"]["WeightAttributes"];
             /** Format: date-time */
             acquired_at: string;
             /** Format: date-time */
@@ -1201,6 +1213,12 @@ export interface components {
             reason: string | null;
             /** @description Always present on `GET /api/v1/me/ledger` entries, and absent on the admin grant and reset responses. The number of polls the entry stands for: 1 for a raw debit or a non-debit row, the stored roll-up count for a row compacted in storage, the sum over the merged rows in the `rollup=day` view. */
             entry_count?: number;
+            /** @description Always present on `GET /api/v1/me/ledger` entries, and absent on the admin grant and reset responses. For a debit, the lowest weight among the charged polls the entry stands for (the usage samples of its hold with a debit above zero: the one poll of a raw row, the local day of a rolled-up or merged entry). Null unless a sample is found for every poll (`entry_count`), and for entries that are not debits. */
+            weight_min?: number | null;
+            /** @description As `weight_min`, the highest weight. Equal to `weight_min` for a single poll. */
+            weight_max?: number | null;
+            /** @description As `weight_min`, the distinct weight sources of those polls, `policy` first and then `override`, `reported`, `rule`, `default`. Null when `weight_min` is null or any of those samples has no source. */
+            weight_sources?: components["schemas"]["HoldWeightSource"][] | null;
         };
         LedgerResponse: {
             period: string;
@@ -1291,8 +1309,17 @@ export interface components {
              * @description Last time the provider reported an allocation with the setup's exact name; null if never.
              */
             last_seen_at: string | null;
-            /** @description Selector of the rate rule that set the weight; null for the default weight. */
+            /** @description Selector of the first rate rule that matches the setup's labels, whatever the weight's source; null when no rule matches. */
             matched_rule_selector: string | null;
+            /** @description The stored weights report's weight for this setup, usable or not; null when there is none or reported weights are off. */
+            reported_weight: number | null;
+            /**
+             * @description Why `reported_weight` is not applied; null when it is applied, when there is none, or when reported weights are off.
+             * @enum {string|null}
+             */
+            reported_weight_not_applied: "expired" | "out_of_bounds" | "override" | null;
+            /** @description The setup's weight override; null when none. */
+            weight_override: number | null;
         };
         Setup: {
             /** Format: int64 */
@@ -1301,10 +1328,13 @@ export interface components {
             name: string;
             labels: components["schemas"]["Labels"];
             /**
-             * @description Resolved weight from the rate rules
+             * @description The weight Hourglass applies now; `weight_source` says where it comes from.
              * @example 1
              */
             weight: number;
+            weight_source: components["schemas"]["WeightSource"];
+            /** @description The reported attributes when the setup's reported weight is usable (also under an override); `{}` otherwise. */
+            weight_attributes: components["schemas"]["WeightAttributes"];
             /** @enum {string} */
             state: "free" | "held" | "disabled";
             holder: components["schemas"]["Holder"] | null;
@@ -1326,6 +1356,8 @@ export interface components {
             admin: components["schemas"]["SetupAdminFields"] | null;
         };
         SetupList: {
+            /** @description The `reported_weights` setting is on, so prices may change, even for a setup with no reported weight yet. */
+            reported_weights_enabled: boolean;
             setups: components["schemas"]["Setup"][];
             /** @description Every label key and value over every setup the caller may see
              *     (enabled setups for a developer, all setups for an admin),
@@ -1376,6 +1408,21 @@ export interface components {
              */
             details: unknown;
             enabled: boolean;
+            /** @description Optional. Pins the setup's weight above a reported weight and the rate rules; not bound by the reported weights' limits. On create, absent or null means none. On update, absent leaves it unchanged, null clears it, a number sets it. */
+            weight_override?: number | null;
+        };
+        /**
+         * @description Where a setup's weight comes from.
+         * @enum {string}
+         */
+        WeightSource: "override" | "reported" | "rule" | "default";
+        /**
+         * @description Where a charged or shown weight comes from; `policy` when the metering policy set the weight.
+         * @enum {string}
+         */
+        HoldWeightSource: "override" | "reported" | "rule" | "default" | "policy";
+        WeightAttributes: {
+            [key: string]: string;
         };
         ReleaseRequest: {
             /**
@@ -1683,6 +1730,26 @@ export interface components {
             last_pressure_report: components["schemas"]["ReportedReportTimes"] | null;
             /** @description The stored deployment report. Null before the first one and when the provider is not `reported`. */
             last_deployments_report: components["schemas"]["ReportedReportTimes"] | null;
+            /** @description The stored weights report. Null before the first one and while reported weights are off. */
+            last_weights_report: {
+                /** Format: date-time */
+                observed_at: string;
+                /** Format: date-time */
+                received_at: string;
+                /** @description Name of the service account that sent the report. */
+                service_account: string;
+                /** @description How many weights the stored report holds. */
+                entries: number;
+                /** @description How many of them the minimum and maximum now in force exclude. */
+                out_of_bounds: number;
+            } | null;
+            /** @description The most recent weights report refused with 400, kept in memory (lost at a restart). Null when none was refused since the start and while reported weights are off. */
+            last_weights_refusal: {
+                /** Format: date-time */
+                at: string;
+                service_account: string;
+                message: string;
+            } | null;
             /** Format: date-time */
             last_successful_poll_at: string | null;
             last_error: {

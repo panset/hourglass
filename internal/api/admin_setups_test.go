@@ -25,7 +25,7 @@ func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
 	}
 	rec := e.send("POST", setupPath, setupBody("lab-01", `{"note":"opaque"}`, true))
 	s := uWantOK(t, rec, 201)
-	uWantKeys(t, "setup", s, "id", "name", "labels", "weight", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
+	uWantKeys(t, "setup", s, "id", "name", "labels", "weight", "weight_source", "weight_attributes", "state", "holder", "held_since", "deployed", "metering", "cost_per_hour_tokens", "details", "admin")
 	if s["name"] != "lab-01" || uNum(t, s, "weight") != 2 || s["state"] != "free" || s["holder"] != nil || s["held_since"] != nil ||
 		s["deployed"] != false || s["metering"] != nil {
 		t.Errorf("setup = %v", s)
@@ -39,7 +39,8 @@ func TestSET1_CreateSetupShapeAndAudit(t *testing.T) {
 		t.Errorf("cost = %v", cost)
 	}
 	ad := adObjOf(t, s["admin"])
-	uWantKeys(t, "admin", ad, "enabled", "last_seen_at", "matched_rule_selector")
+	uWantKeys(t, "admin", ad, "enabled", "last_seen_at", "matched_rule_selector",
+		"reported_weight", "reported_weight_not_applied", "weight_override")
 	if ad["enabled"] != true || ad["last_seen_at"] != nil || ad["matched_rule_selector"] != "tier=a" {
 		t.Errorf("admin = %v", ad)
 	}
