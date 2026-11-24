@@ -20,6 +20,9 @@ type UsageSample struct {
 	Multiplier   float64
 	DebitMT      int64
 	Reason       string
+	// WeightSource is override, reported, rule, default or policy; empty when
+	// null (samples written before migration 0008, and for now every sample).
+	WeightSource string
 }
 
 // DayTotal is the sum of debits for one UTC calendar day (YYYY-MM-DD).
@@ -32,9 +35,10 @@ type DayTotal struct {
 // (MET-5) and reports whether a row was inserted.
 func (q *queries) InsertUsageSample(ctx context.Context, s UsageSample) (bool, error) {
 	res, err := q.db.ExecContext(ctx, `INSERT INTO usage_samples
-		(hold_id, polled_at, weight, rule_selector, pressure, multiplier, debit_mt, reason)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (hold_id, polled_at) DO NOTHING`,
-		s.HoldID, FormatTime(s.PolledAt), s.Weight, nullStr(s.RuleSelector), s.Pressure, s.Multiplier, s.DebitMT, s.Reason)
+		(hold_id, polled_at, weight, rule_selector, pressure, multiplier, debit_mt, reason, weight_source)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (hold_id, polled_at) DO NOTHING`,
+		s.HoldID, FormatTime(s.PolledAt), s.Weight, nullStr(s.RuleSelector), s.Pressure, s.Multiplier, s.DebitMT, s.Reason,
+		nullStr(s.WeightSource))
 	if err != nil {
 		return false, mapErr(err)
 	}
@@ -49,15 +53,17 @@ func (q *queries) ListUsageSamples(ctx context.Context, holdID int64) ([]UsageSa
 			s    UsageSample
 			at   string
 			rule sql.NullString
+			src  sql.NullString
 		)
-		err := r.Scan(&s.ID, &s.HoldID, &at, &s.Weight, &rule, &s.Pressure, &s.Multiplier, &s.DebitMT, &s.Reason)
+		err := r.Scan(&s.ID, &s.HoldID, &at, &s.Weight, &rule, &s.Pressure, &s.Multiplier, &s.DebitMT, &s.Reason, &src)
 		if err != nil {
 			return s, err
 		}
 		s.RuleSelector = rule.String
+		s.WeightSource = src.String
 		s.PolledAt, err = ParseTime(at)
 		return s, err
-	}, `SELECT id, hold_id, polled_at, weight, rule_selector, pressure, multiplier, debit_mt, reason
+	}, `SELECT id, hold_id, polled_at, weight, rule_selector, pressure, multiplier, debit_mt, reason, weight_source
 		FROM usage_samples WHERE hold_id = ? ORDER BY polled_at`, holdID)
 }
 

@@ -60,6 +60,8 @@ type LastSample struct {
 	Weight     float64
 	Multiplier float64
 	Reason     string
+	// WeightSource is the sample's weight_source, empty when null.
+	WeightSource string
 }
 
 // HoldLastSamples returns the newest usage sample per hold id. Holds without
@@ -70,7 +72,7 @@ func (q *queries) HoldLastSamples(ctx context.Context, holdIDs []int64) (map[int
 		list, args := inList(holdIDs, i, min(i+idChunk, len(holdIDs)))
 		// Driven from the holds: one seek per hold on UNIQUE (hold_id,
 		// polled_at), never a walk over the samples of every listed hold.
-		rows, err := q.db.QueryContext(ctx, `SELECT u.hold_id, u.polled_at, u.weight, u.multiplier, u.reason
+		rows, err := q.db.QueryContext(ctx, `SELECT u.hold_id, u.polled_at, u.weight, u.multiplier, u.reason, u.weight_source
 			FROM holds h JOIN usage_samples u ON u.hold_id = h.id
 			AND u.polled_at = (SELECT MAX(m.polled_at) FROM usage_samples m WHERE m.hold_id = h.id)
 			WHERE h.id IN `+list, args...)
@@ -79,13 +81,15 @@ func (q *queries) HoldLastSamples(ctx context.Context, holdIDs []int64) (map[int
 		}
 		for rows.Next() {
 			var (
-				s  LastSample
-				at string
+				s   LastSample
+				at  string
+				src sql.NullString
 			)
-			if err := rows.Scan(&s.HoldID, &at, &s.Weight, &s.Multiplier, &s.Reason); err != nil {
+			if err := rows.Scan(&s.HoldID, &at, &s.Weight, &s.Multiplier, &s.Reason, &src); err != nil {
 				rows.Close()
 				return nil, err
 			}
+			s.WeightSource = src.String
 			if s.PolledAt, err = ParseTime(at); err != nil {
 				rows.Close()
 				return nil, err

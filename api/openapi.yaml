@@ -2217,6 +2217,38 @@ components:
           description: Duration string, at least `1m`.
           example: 5m
         enforcement: {type: boolean, default: false, description: False is shadow mode.}
+        reported_weights: {$ref: '#/components/schemas/ReportedWeightsSetting'}
+      additionalProperties: false
+    ReportedWeightsSetting:
+      type: object
+      description: >-
+        Whether a service account may report a weight per setup, and the limits such a weight must lie
+        within. Always returned by `GET`. Optional on `PUT`: a body without it leaves the stored value
+        unchanged; when present, all four fields are required. Changes apply from the next poll and the
+        next read.
+      required: [enabled, min, max, max_age]
+      properties:
+        enabled: {type: boolean, default: false, description: Can be true only when `max` is set.}
+        min:
+          type: number
+          minimum: 0
+          default: 0
+          description: Lowest weight a report may carry, inclusive; at most `max` when `max` is set.
+        max:
+          type: number
+          nullable: true
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 1000000000000
+          default: null
+          description: Highest weight a report may carry, inclusive; null when no maximum is set.
+        max_age:
+          type: string
+          default: 10m
+          description: >-
+            Duration string from `1m` to `24h`: how long a weights report stays usable after its
+            `observed_at`. Should be at least twice the poll interval.
+          example: 10m
       additionalProperties: false
     Runtime:
       type: object

@@ -964,7 +964,7 @@ func TestUPG1_Schema5LedgerUpgradesAndCompacts(t *testing.T) {
 	var ic string
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 7 || ic != "ok" {
+	if v != 8 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d integrity %q", v, ic)
 	}
 	if got := read(s); !reflect.DeepEqual(got, old) {

@@ -31,6 +31,7 @@ go_library(
         "migrations/0005_integration_api.sql",
         "migrations/0006_ledger_rollup.sql",
         "migrations/0007_preapprovals.sql",
+        "migrations/0008_reported_weights.sql",
     ],
     importpath = "github.com/panset/hourglass/internal/store",
     visibility = ["//:__subpackages__"],
@@ -53,6 +54,7 @@ go_test(
         "migrate0004_test.go",
         "preapprovals_test.go",
         "store_test.go",
+        "weights_queries_test.go",
     ],
     embed = [":store"],
 )

@@ -321,6 +321,13 @@ func nullTime(t *time.Time) any {
 	return FormatTime(*t)
 }
 
+func nullFloat(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
 func nullInt(p *int64) any {
 	if p == nil {
 		return nil

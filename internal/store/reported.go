@@ -144,3 +144,94 @@ func (q *queries) ReplaceReportedDeployments(ctx context.Context, h ReportedHead
 		return nil
 	})
 }
+
+// ReportedWeight is a row of reported_weights. Attributes is never nil on a
+// read.
+type ReportedWeight struct {
+	SetupName  string
+	Weight     float64
+	Attributes map[string]string
+}
+
+// GetReportedWeights returns the stored weights report header and its set
+// (ordered by setup name) from one consistent snapshot, or ErrNotFound before
+// the first report. An empty set is a non-nil empty slice.
+func (q *queries) GetReportedWeights(ctx context.Context) (ReportedHeader, []ReportedWeight, error) {
+	var (
+		h   ReportedHeader
+		set []ReportedWeight
+	)
+	rerr := q.atomic(ctx, func(q *queries) error {
+		var obs, rec string
+		if err := q.db.QueryRowContext(ctx, `SELECT observed_at, received_at, service_account FROM reported_weights_meta`).
+			Scan(&obs, &rec, &h.ServiceAccount); err != nil {
+			return mapErr(err)
+		}
+		var err error
+		if h.ObservedAt, err = ParseTime(obs); err != nil {
+			return err
+		}
+		if h.ReceivedAt, err = ParseTime(rec); err != nil {
+			return err
+		}
+		set, err = collect(ctx, q.db, func(r rowScanner) (ReportedWeight, error) {
+			var (
+				w  ReportedWeight
+				aj string
+			)
+			if err := r.Scan(&w.SetupName, &w.Weight, &aj); err != nil {
+				return w, err
+			}
+			if err := json.Unmarshal([]byte(aj), &w.Attributes); err != nil {
+				return w, err
+			}
+			if w.Attributes == nil {
+				w.Attributes = map[string]string{}
+			}
+			return w, nil
+		}, `SELECT setup_name, weight, attributes_json FROM reported_weights ORDER BY setup_name`)
+		if set == nil {
+			set = []ReportedWeight{}
+		}
+		return err
+	})
+	if rerr != nil {
+		return ReportedHeader{}, nil, rerr
+	}
+	return h, set, nil
+}
+
+// ReplaceReportedWeights replaces the weights report header and the whole set
+// in one transaction: all or nothing, and a reader sees either the old report
+// or the new one. A duplicate setup name returns ErrConflict and changes
+// nothing. It does not compare timestamps or validate values; those are the
+// caller's rules (internal/reported), which runs it in the same transaction.
+func (q *queries) ReplaceReportedWeights(ctx context.Context, h ReportedHeader, set []ReportedWeight) error {
+	return q.atomic(ctx, func(q *queries) error {
+		if _, err := q.db.ExecContext(ctx, `DELETE FROM reported_weights`); err != nil {
+			return err
+		}
+		if _, err := q.db.ExecContext(ctx, `DELETE FROM reported_weights_meta`); err != nil {
+			return err
+		}
+		if _, err := q.db.ExecContext(ctx, `INSERT INTO reported_weights_meta (observed_at, received_at, service_account)
+			VALUES (?, ?, ?)`, FormatTime(h.ObservedAt), FormatTime(h.ReceivedAt), h.ServiceAccount); err != nil {
+			return err
+		}
+		for _, w := range set {
+			attrs := w.Attributes
+			if attrs == nil {
+				attrs = map[string]string{}
+			}
+			aj, err := json.Marshal(attrs)
+			if err != nil {
+				return err
+			}
+			if _, err := q.db.ExecContext(ctx, `INSERT INTO reported_weights (setup_name, weight, attributes_json) VALUES (?, ?, ?)`,
+				w.SetupName, w.Weight, string(aj)); err != nil {
+				return mapErr(err)
+			}
+		}
+		return nil
+	})
+}

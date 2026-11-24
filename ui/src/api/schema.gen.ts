@@ -1511,6 +1511,31 @@ export interface components {
              * @default false
              */
             enforcement: boolean;
+            reported_weights?: components["schemas"]["ReportedWeightsSetting"];
+        };
+        /** @description Whether a service account may report a weight per setup, and the limits such a weight must lie within. Always returned by `GET`. Optional on `PUT`: a body without it leaves the stored value unchanged; when present, all four fields are required. Changes apply from the next poll and the next read. */
+        ReportedWeightsSetting: {
+            /**
+             * @description Can be true only when `max` is set.
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * @description Lowest weight a report may carry, inclusive; at most `max` when `max` is set.
+             * @default 0
+             */
+            min: number;
+            /**
+             * @description Highest weight a report may carry, inclusive; null when no maximum is set.
+             * @default null
+             */
+            max: number | null;
+            /**
+             * @description Duration string from `1m` to `24h`: how long a weights report stays usable after its `observed_at`. Should be at least twice the poll interval.
+             * @default 10m
+             * @example 10m
+             */
+            max_age: string;
         };
         /** @description Read-only names from the config file; never secrets. */
         Runtime: {

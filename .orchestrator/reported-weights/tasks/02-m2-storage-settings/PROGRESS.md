@@ -1,0 +1,7 @@
+# Progress 02-m2-storage-settings
+- 2026-11-23 Read brief, intent, contract, design, CONTRIBUTING. Next: read internal/store, reported, settings, settings handler.
+- 2026-11-23 Migration 0008 and store queries done (GetReportedWeights/ReplaceReportedWeights, UsageSample.WeightSource, LastSample.WeightSource, Setup.WeightOverride, SetSetupWeightOverride); store tests pass. Decision: UpdateSetup never touches weight_override and CreateSetup names the column only when an override is set, so old-schema upgrade tests that call CreateSetup keep working.
+- 2026-11-23 Bumped the migration-count assertions 7 -> 8 in the store tests and in internal/app/upgrade_test.go:164-165 (outside May write; unavoidable, as the 0007 commit 873fb3d did for its counts). Next: internal/reported weights.
+- 2026-11-23 internal/reported weights done (SubmitWeights, Weights, WeightChecker, EntryError, EntryMessage, Record/LastWeightsRefusal); tests pass. Decisions: entry positions count from 0; refusal log lives on reported.Service (the API owns one Service, so handler and collector view share it). Next: settings key.
+- 2026-11-23 Settings key, handler (absent key keeps stored value), OpenAPI ReportedWeightsSetting schema, regenerated schema.gen.ts (UI typecheck and vitest pass, no fixture change), WGT-17 HTTP tests done. Updated TestADM2_GetSettingsShapeAndRuntime's exact key list to include reported_weights (the design adds the key to GET). Next: gazelle, go test ./internal/..., ci.sh.
+- 2026-11-23 Gazelle, go test ./... and ./ci.sh all exit 0. RESULT.md written. Task finished.

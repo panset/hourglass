@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 )
 
 // Setup is a row of setups with its labels.
@@ -13,20 +14,29 @@ type Setup struct {
 	DetailsJSON string
 	Enabled     bool
 	Labels      map[string]string
+	// WeightOverride is the admin's pinned weight (design D2), nil when none.
+	// CreateSetup writes it; UpdateSetup leaves it alone, and only
+	// SetSetupWeightOverride changes it on an existing setup.
+	WeightOverride *float64
 }
 
 func scanSetup(r rowScanner) (Setup, error) {
 	var (
 		s  Setup
 		en int
+		wo sql.NullFloat64
 	)
-	err := r.Scan(&s.ID, &s.Name, &s.DetailsJSON, &en)
+	err := r.Scan(&s.ID, &s.Name, &s.DetailsJSON, &en, &wo)
 	s.Enabled = en != 0
+	if wo.Valid {
+		v := wo.Float64
+		s.WeightOverride = &v
+	}
 	s.Labels = map[string]string{}
 	return s, err
 }
 
-const setupCols = `id, name, details_json, enabled`
+const setupCols = `id, name, details_json, enabled, weight_override`
 
 func (q *queries) loadLabels(ctx context.Context, setups []Setup) error {
 	if len(setups) == 0 {
@@ -66,8 +76,8 @@ func (q *queries) setLabels(ctx context.Context, id int64, labels map[string]str
 	return nil
 }
 
-// CreateSetup inserts a setup and its labels and returns its id. A duplicate
-// name returns ErrConflict.
+// CreateSetup inserts a setup, its labels and its weight override (nil for
+// none) and returns its id. A duplicate name returns ErrConflict.
 func (q *queries) CreateSetup(ctx context.Context, s Setup) (int64, error) {
 	var id int64
 	err := q.atomic(ctx, func(q *queries) error {
@@ -81,12 +91,21 @@ func (q *queries) CreateSetup(ctx context.Context, s Setup) (int64, error) {
 			return mapErr(err)
 		}
 		id, _ = res.LastInsertId()
+		if s.WeightOverride != nil {
+			// A separate statement, so a setup without an override is
+			// inserted exactly as before migration 0008.
+			if _, err := q.db.ExecContext(ctx, `UPDATE setups SET weight_override = ? WHERE id = ?`, *s.WeightOverride, id); err != nil {
+				return mapErr(err)
+			}
+		}
 		return q.setLabels(ctx, id, s.Labels)
 	})
 	return id, err
 }
 
-// UpdateSetup updates a setup's fields and replaces its labels as a set.
+// UpdateSetup updates a setup's name, details and enabled flag and replaces
+// its labels as a set. It does not change the weight override (see
+// SetSetupWeightOverride).
 func (q *queries) UpdateSetup(ctx context.Context, s Setup) error {
 	return q.atomic(ctx, func(q *queries) error {
 		details := s.DetailsJSON
@@ -104,6 +123,20 @@ func (q *queries) UpdateSetup(ctx context.Context, s Setup) error {
 		}
 		return q.setLabels(ctx, s.ID, s.Labels)
 	})
+}
+
+// SetSetupWeightOverride sets a setup's weight override, or clears it when w
+// is nil (design D2). Validating the value is the caller's job. An unknown id
+// returns ErrNotFound.
+func (q *queries) SetSetupWeightOverride(ctx context.Context, id int64, w *float64) error {
+	res, err := q.db.ExecContext(ctx, `UPDATE setups SET weight_override = ? WHERE id = ?`, nullFloat(w), id)
+	if err != nil {
+		return mapErr(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // DeleteSetup deletes a setup (its labels go with it). A setup that has

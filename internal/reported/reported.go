@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 // Package reported owns the stored reports of the integration API: the last
-// pressure value and the last deployed set that a customer's own service
-// pushed (INT-2, INT-3, INT-6). HTTP handlers write through it and the bundled
+// pressure value, the last deployed set and the last weights report that a
+// customer's own service pushed (INT-2, INT-3, INT-6; reported weights B1-B3). HTTP handlers write through it and the bundled
 // "reported" extensions read through it; it imports no extension package.
 //
 // Each report is stored whole, with its observed_at, received_at and the name
@@ -84,8 +84,9 @@ func ExpiresAt(observedAt time.Time, maxAge time.Duration) time.Time { return ob
 
 // Service reads and writes the stored reports.
 type Service struct {
-	st    *store.Store
-	clock Clock
+	st       *store.Store
+	clock    Clock
+	refusals refusalLog // the last refused weights report (weights.go)
 }
 
 // New returns a Service over st.

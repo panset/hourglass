@@ -1,0 +1,29 @@
+# 03 Milestone 3: the resolver and the collector (WGT-1 to WGT-6, WGT-12)
+Job intent: .orchestrator/reported-weights/INTENT.md (read it first). Contract: .orchestrator/reported-weights/CONTRACT.md (binding).
+## Goal
+Design sections A1 and A2 of docs/design/reported-weights.md, implemented and tested: one pure resolver in a new core package `internal/weights`, and the collector charging through it. Read the whole design; A1 and A2 are yours, word for word.
+## Context
+Milestone 2 is committed: migration 0008, the store queries, `internal/reported` weights report, the `reported_weights` setting. Its exported API and decisions are in `.orchestrator/reported-weights/tasks/02-m2-storage-settings/RESULT.md`: read it before writing code. Pointers to test helpers: `.orchestrator/reported-weights/tasks/00-digest/RESULT.md`.
+## Build
+1. `internal/weights`: the resolver of A1, pure and without database access. Inputs: a setup (name, labels, override), the rate rules, the settings, the stored weights report (or none), a time. Outputs: every item of the A1 list (weight, source, base weight, first matching rule's selector whatever the source, reported weight, `not_applied`, attributes). Every rule under A1's "Rules" holds, including: limits inclusive, re-checked at read time; `not_applied` is the first of `expired`, `out_of_bounds`, `override`; feature off behaves as if no report were stored; an override does not hide attributes of a usable entry; with the feature off and no override the result is exactly `rules.Weight`'s. A rule that cannot be evaluated is returned as an error so each caller keeps its current effect.
+2. `internal/collector` (A2): read the stored weights report in step 1 of `poll` (a database error fails the poll; a missing, expired or unusable report never does); resolve every setup at poll time `T` in step 2; `SetupState.Weight` is the **base** weight; the debit uses the resolved weight; `Decision.Weight` above 0 still replaces it and the sample's source is then `policy`; every usage sample records `weight_source`; `rule_selector` is set only when the source is `rule`. The arithmetic (MET-3, MET-4, D19) does not change. No pro-rating. Do not add logic that remembers a removed weight.
+3. `pkg/hourglass/types.go`: update the comment on `SetupState.Weight` to say it is the base weight (override, else rate rule, else default) and never a reported weight. Change nothing else in that file.
+4. This milestone has no HTTP route for weights reports and no way to set an override over HTTP (milestones 4 and 5). Tests write the stored report through `internal/reported`/the store and the override through the store.
+## Tests (named after ids; each must fail when the requirement is broken: check each by breaking the code once and restoring it)
+- WGT-1: 1.15 at multiplier 1 for 5 minutes is 96 milli-tokens; and with a multiplier above 1.
+- WGT-2: order override, usable reported, first matching rule, default; reported beats a matching rule of weight 0 and of a higher weight; `Decision.Weight` above 0 replaces the result for that hold and poll.
+- WGT-3: each fallback cause (none sent, expired, setup left out of the latest report, outside the limits, feature off) charges the override, rule or default exactly as without the feature, and the poll succeeds; a database error reading the stored report fails the poll. The two A2 cases as their own collector tests, each asserting the fallback weight and its source on the sample: a hold metered before its setup is reported; a pending release completed by a poll after the setup left the weights report (D58).
+- WGT-4: a changed weight prices the whole interval the next poll charges; no earlier usage sample or ledger row changes (compare the rows before and after).
+- WGT-5: every sample has one of the five sources; `rule_selector` only for `rule`.
+- WGT-6: the snapshot seen by the pressure source and by the policy carries the base weight for every enabled setup whatever is reported; with the bundled `inventory` pressure source a weights report changes neither pressure nor multiplier. (Core tests may not import extension packages: see tools/check_core_generic.sh. Put a test that needs the real `inventory` source where such imports are allowed, e.g. beside the extension or in a composition-root test, and name it after WGT-6.)
+- WGT-12: an admin lowers the maximum (settings) below a stored weight; the next poll charges the fallback without a new report.
+- The resolver table test the design's Tests section asks for: every combination of override, reported entry (absent, usable, expired, out of bounds, exactly at each limit), feature on and off, matching rule (including weight 0) and none.
+- Replay check against v1.1.0: if practical now, a collector-level test that replays `testdata/upgrade-v1.1.0/poll.json` (read its README) and requires identical snapshots and debits with the feature off. If it does not fit this milestone cleanly, say so in RESULT.md; milestone 7 owns WGT-19.
+## Scope
+May write: `internal/weights/**` (new), `internal/collector/**`, the one comment in `pkg/hourglass/types.go`, a WGT-6 test beside the `inventory` extension or in a composition root, the smallest store addition a collector read needs (say which), BUILD.bazel via Gazelle, this task folder. Must not touch: `internal/api`, `api/openapi.yaml`, `ui/`, `docs/`, `testdata/`, `e2e/`.
+## Done when
+`./ci.sh` exits 0; every existing test passes unchanged (if one fails, it is your bug unless it is an A3 change, which this milestone should not reach); RESULT.md has the requirement-to-test table, for each id the mutation you made to see the test go red, the resolver's exported API, and your decisions.
+## Long-running steps
+`./ci.sh`: 30 minute timeout, log into this task folder.
+## Report
+Per CONTRACT.md "Reporting".

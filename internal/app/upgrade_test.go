@@ -161,8 +161,8 @@ func TestUPG1_ReleaseDatabaseUpgradesAtStartAndKeepsEveryNumber(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = mig.Close()
-	if migrated != 7 || integrity != "ok" {
-		t.Fatalf("after the start: schema version %d (want 7), integrity %q", migrated, integrity)
+	if migrated != 8 || integrity != "ok" {
+		t.Fatalf("after the start: schema version %d (want 8), integrity %q", migrated, integrity)
 	}
 	st, err := store.Open(db)
 	if err != nil {

@@ -223,3 +223,54 @@ func TestSaveAtUsesSuppliedTime(t *testing.T) {
 		t.Fatalf("Save stamps %v err %v", r.at, err)
 	}
 }
+
+// WGT-17: the D1 rules on Go values, including the non-finite numbers that
+// JSON cannot carry, and the JSON form of the defaults.
+func TestWGT17_ReportedWeightsValidateAndDefaults(t *testing.T) {
+	d := Defaults().ReportedWeights
+	if d.Enabled || d.Min != 0 || d.Max != nil || d.MaxAge != 10*time.Minute {
+		t.Fatalf("defaults %+v", d)
+	}
+	b, err := json.Marshal(Defaults())
+	if err != nil || !strings.Contains(string(b), `"reported_weights":{"enabled":false,"min":0,"max":null,"max_age":"10m"}`) {
+		t.Fatalf("JSON %s %v", b, err)
+	}
+	f := func(v float64) *float64 { return &v }
+	inf := 1 / func() float64 { return 0 }()
+	cases := []struct {
+		name  string
+		rw    ReportedWeights
+		field string
+	}{
+		{"min NaN", ReportedWeights{Min: nan(), MaxAge: time.Hour}, "reported_weights.min"},
+		{"min +Inf", ReportedWeights{Min: inf, MaxAge: time.Hour}, "reported_weights.min"},
+		{"max NaN", ReportedWeights{Max: f(nan()), MaxAge: time.Hour}, "reported_weights.max"},
+		{"max +Inf", ReportedWeights{Max: f(inf), MaxAge: time.Hour}, "reported_weights.max"},
+		{"on without max", ReportedWeights{Enabled: true, MaxAge: time.Hour}, "reported_weights.enabled"},
+		{"max_age zero", ReportedWeights{}, "reported_weights.max_age"},
+	}
+	for _, c := range cases {
+		s := Defaults()
+		s.ReportedWeights = c.rw
+		var fe *FieldError
+		if err := s.Validate(); !errors.As(err, &fe) || fe.Field != c.field {
+			t.Errorf("%s: got %v, want field %s", c.name, err, c.field)
+		}
+	}
+	s := Defaults()
+	s.ReportedWeights = ReportedWeights{Enabled: true, Min: 1e12, Max: f(1e12), MaxAge: 24 * time.Hour}
+	if err := s.Validate(); err != nil {
+		t.Errorf("upper bounds: %v", err)
+	}
+	// Stored and loaded back unchanged.
+	fk := &fake{}
+	if _, err := Save(context.Background(), fk, Defaults(), s, 1); err != nil {
+		t.Fatal(err)
+	}
+	fk.rows = []store.Setting{{Key: KeyReportedWeights, ValueJSON: fk.puts[KeyReportedWeights]}}
+	got, err := Load(context.Background(), fk)
+	if err != nil || got.ReportedWeights.Max == nil || *got.ReportedWeights.Max != 1e12 || !got.ReportedWeights.Enabled ||
+		got.ReportedWeights.MaxAge != 24*time.Hour || got.ReportedWeights.Min != 1e12 {
+		t.Errorf("loaded %+v %v (stored %s)", got.ReportedWeights, err, fk.puts[KeyReportedWeights])
+	}
+}

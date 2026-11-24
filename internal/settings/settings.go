@@ -29,17 +29,28 @@ const (
 	KeyReleaseRequiresTeardown = "release_requires_teardown"
 	KeyPollInterval            = "poll_interval"
 	KeyEnforcement             = "enforcement"
+	KeyReportedWeights         = "reported_weights"
 )
 
 // keyOrder is the fixed order of all keys.
 var keyOrder = []string{
 	KeyDefaultWeight, KeyDisplayLabelKeys, KeyBands,
 	KeyDefaultAllowance, KeyMaxHoldsPerUser, KeyReleaseRequiresTeardown,
-	KeyPollInterval, KeyEnforcement,
+	KeyPollInterval, KeyEnforcement, KeyReportedWeights,
 }
 
 // MinPollInterval is the smallest allowed poll interval.
 const MinPollInterval = time.Minute
+
+// Bounds of the reported_weights setting (docs/design/reported-weights.md, D1).
+const (
+	// MaxReportedWeight is the largest allowed maximum: the limit for a rate
+	// rule's weight.
+	MaxReportedWeight = 1e12
+	// MinReportedWeightsMaxAge and MaxReportedWeightsMaxAge bound max_age.
+	MinReportedWeightsMaxAge = time.Minute
+	MaxReportedWeightsMaxAge = 24 * time.Hour
+)
 
 // MaxDisplayLabelKeys bounds DisplayLabelKeys (the SET-3 label limit).
 const MaxDisplayLabelKeys = rules.MaxLabels
@@ -54,6 +65,17 @@ type Settings struct {
 	ReleaseRequiresTeardown bool
 	PollInterval            time.Duration
 	Enforcement             bool // false is shadow mode
+	ReportedWeights         ReportedWeights
+}
+
+// ReportedWeights is the reported_weights setting (design D1): whether a
+// service may report weights, the inclusive limits a reported weight must
+// lie within, and how long a weights report stays usable.
+type ReportedWeights struct {
+	Enabled bool
+	Min     float64
+	Max     *float64 // nil when no maximum is set; Enabled needs one
+	MaxAge  time.Duration
 }
 
 // Defaults returns the spec defaults.
@@ -67,6 +89,7 @@ func Defaults() Settings {
 		ReleaseRequiresTeardown: true,
 		PollInterval:            5 * time.Minute,
 		Enforcement:             false,
+		ReportedWeights:         ReportedWeights{Enabled: false, Min: 0, Max: nil, MaxAge: 10 * time.Minute},
 	}
 }
 
@@ -112,6 +135,32 @@ func (s Settings) Validate() error {
 	if s.PollInterval < MinPollInterval {
 		return fieldErr(KeyPollInterval, "must be at least %s", MinPollInterval)
 	}
+	return s.ReportedWeights.validate()
+}
+
+func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+
+// validate applies the rules of the D1 table. Errors name the field as
+// reported_weights.<field>.
+func (r ReportedWeights) validate() error {
+	const k = KeyReportedWeights
+	if r.Max != nil {
+		if m := *r.Max; !finite(m) || m <= 0 || m > MaxReportedWeight {
+			return fieldErr(k+".max", "max must be null, or a number above 0 and at most 1e12")
+		}
+	}
+	if !finite(r.Min) || r.Min < 0 {
+		return fieldErr(k+".min", "min must be a number of at least 0")
+	}
+	if r.Max != nil && r.Min > *r.Max {
+		return fieldErr(k+".min", "min must not be above max")
+	}
+	if r.MaxAge < MinReportedWeightsMaxAge || r.MaxAge > MaxReportedWeightsMaxAge {
+		return fieldErr(k+".max_age", "max_age must be a duration from 1m to 24h")
+	}
+	if r.Enabled && r.Max == nil {
+		return fieldErr(k+".enabled", "enabled can be true only when max is set: set a maximum weight to turn reported weights on")
+	}
 	return nil
 }
 
@@ -125,6 +174,69 @@ type stepJSON struct {
 type bandsJSON struct {
 	Base  float64    `json:"base"`
 	Steps []stepJSON `json:"steps"`
+}
+
+type reportedWeightsJSON struct {
+	Enabled bool     `json:"enabled"`
+	Min     float64  `json:"min"`
+	Max     *float64 `json:"max"`
+	MaxAge  string   `json:"max_age"`
+}
+
+// reportedWeightsFields are the fields of the reported_weights object, all
+// required when the key is present.
+var reportedWeightsFields = []string{"enabled", "min", "max", "max_age"}
+
+// decodeReportedWeights reads the reported_weights object: all four fields
+// are required (max may be null), no other field is allowed. Negative zero
+// counts as 0. The values are not validated; Validate does that.
+func decodeReportedWeights(raw json.RawMessage) (ReportedWeights, error) {
+	const k = KeyReportedWeights
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return ReportedWeights{}, fieldErr(k, "must be an object with enabled, min, max and max_age")
+	}
+	for _, f := range reportedWeightsFields {
+		if _, ok := fields[f]; !ok {
+			return ReportedWeights{}, fieldErr(k+"."+f, "%s is required", f)
+		}
+	}
+	for f := range fields {
+		known := false
+		for _, g := range reportedWeightsFields {
+			known = known || f == g
+		}
+		if !known {
+			return ReportedWeights{}, fieldErr(k+"."+f, "unknown field %s", f)
+		}
+	}
+	var out ReportedWeights
+	if err := strictDecode(fields["enabled"], &out.Enabled); err != nil || string(fields["enabled"]) == "null" {
+		return out, fieldErr(k+".enabled", "enabled must be true or false")
+	}
+	if err := strictDecode(fields["min"], &out.Min); err != nil || string(fields["min"]) == "null" {
+		return out, fieldErr(k+".min", "min must be a number")
+	}
+	if err := strictDecode(fields["max"], &out.Max); err != nil {
+		return out, fieldErr(k+".max", "max must be null or a number")
+	}
+	var age string
+	if err := strictDecode(fields["max_age"], &age); err != nil || string(fields["max_age"]) == "null" {
+		return out, fieldErr(k+".max_age", "max_age must be a duration string such as \"10m\"")
+	}
+	d, err := time.ParseDuration(age)
+	if err != nil {
+		return out, fieldErr(k+".max_age", "max_age must be a duration string such as \"10m\"")
+	}
+	out.MaxAge = d
+	if out.Min == 0 {
+		out.Min = 0 // negative zero
+	}
+	if out.Max != nil && *out.Max == 0 {
+		z := 0.0
+		out.Max = &z
+	}
+	return out, nil
 }
 
 func formatDuration(d time.Duration) string {
@@ -166,6 +278,9 @@ func (s Settings) encodeKey(key string) (json.RawMessage, error) {
 		v = formatDuration(s.PollInterval)
 	case KeyEnforcement:
 		v = s.Enforcement
+	case KeyReportedWeights:
+		r := s.ReportedWeights
+		v = reportedWeightsJSON{Enabled: r.Enabled, Min: r.Min, Max: r.Max, MaxAge: formatDuration(r.MaxAge)}
 	default:
 		return nil, fmt.Errorf("unknown setting %q", key)
 	}
@@ -233,6 +348,11 @@ func (s *Settings) decodeKey(key string, raw json.RawMessage) error {
 		}
 	case KeyEnforcement:
 		err = strictDecode(raw, &s.Enforcement)
+	case KeyReportedWeights:
+		var r ReportedWeights
+		if r, err = decodeReportedWeights(raw); err == nil {
+			s.ReportedWeights = r
+		}
 	default:
 		return fmt.Errorf("unknown setting %q", key)
 	}
@@ -279,6 +399,9 @@ func (s Settings) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON reads the API form. Unknown fields are rejected; fields that
 // are absent take their default value (the result does not depend on the
 // receiver's previous contents). The result is not validated; call Validate.
+// A caller for which an absent reported_weights means "unchanged" (PUT
+// /api/v1/admin/settings, design D1) checks for the key and copies the stored
+// value itself.
 func (s *Settings) UnmarshalJSON(data []byte) error {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(data, &m); err != nil {

@@ -71,7 +71,7 @@ func TestMigrateFreshAndReopen(t *testing.T) {
 	defer s.Close()
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 7 {
+	if n != 8 {
 		t.Errorf("schema_migrations rows = %d", n)
 	}
 	if us, _ := s.ListUsers(ctx, ""); len(us) != 1 {
@@ -93,11 +93,11 @@ func TestSchemaColumnsMatchSpec(t *testing.T) {
 	spec := map[string][]string{
 		"users":             {"id", "auth_source", "oidc_sub", "username", "email", "name", "status", "labels_json", "password_hash", "must_change_password", "balance_mt", "created_at", "last_login_at"},
 		"user_roles":        {"user_id", "role"},
-		"setups":            {"id", "name", "details_json", "enabled"},
+		"setups":            {"id", "name", "details_json", "enabled", "weight_override"},
 		"setup_labels":      {"setup_id", "key", "value"},
 		"rules":             {"id", "kind", "position", "selector", "value", "updated_by", "updated_at"},
 		"holds":             {"id", "setup_id", "user_id", "acquired_at", "metering_started_at", "deployed_at", "released_at", "released_by", "release_reason", "release_requested_at", "released_by_service"},
-		"usage_samples":     {"id", "hold_id", "polled_at", "weight", "rule_selector", "pressure", "multiplier", "debit_mt", "reason"},
+		"usage_samples":     {"id", "hold_id", "polled_at", "weight", "rule_selector", "pressure", "multiplier", "debit_mt", "reason", "weight_source"},
 		"ledger":            {"id", "user_id", "period", "type", "amount_mt", "hold_id", "actor_id", "reason", "created_at", "rollup_count"},
 		"ledger_compaction": {"one"},
 		"pressure_samples":  {"polled_at", "source", "raw", "smoothed", "multiplier"},
@@ -116,6 +116,9 @@ func TestSchemaColumnsMatchSpec(t *testing.T) {
 		"reported_deployments":      {"setup_name", "labels_json"},
 
 		"preapprovals": {"id", "email", "roles_json", "created_by", "created_at", "used_at", "used_by"},
+
+		"reported_weights_meta": {"observed_at", "received_at", "service_account"},
+		"reported_weights":      {"setup_name", "weight", "attributes_json"},
 	}
 	s := openTemp(t)
 	for table, cols := range spec {
@@ -959,7 +962,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s.sqldb.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v)
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM ledger`).Scan(&rows)
 	s.sqldb.QueryRow(`PRAGMA integrity_check`).Scan(&ic)
-	if v != 7 || rows != 14 || ic != "ok" {
+	if v != 8 || rows != 14 || ic != "ok" {
 		t.Fatalf("after upgrade: version %d, ledger rows %d, integrity %q", v, rows, ic)
 	}
 	var idx []string
@@ -990,7 +993,7 @@ func TestNFR_Migration0003UpgradesVersion2Database(t *testing.T) {
 	s = must(Open(path)) // reopen: nothing to run
 	var n int
 	s.sqldb.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n)
-	if n != 7 {
+	if n != 8 {
 		t.Errorf("schema_migrations rows = %d after reopen", n)
 	}
 }

@@ -7,8 +7,8 @@ Milestones follow the design's "Suggested task order". Build tasks run one at a 
 |---|---|---|---|---|---|---|
 | 00 | Digest of deploying/integrating/extending docs, how D78 fixtures were recorded, version and release mechanics | explore | sonnet | - | (read-only) | done |
 | 01 | M1: record v1.1.0 compatibility fixtures (`testdata/upgrade-v1.1.0/`) before product code changes | build | sonnet | - | `testdata/upgrade-v1.1.0/` | done |
-| 02 | M2: migration 0008, store queries, `internal/reported` weights report, `reported_weights` setting (WGT-17) | build | opus | 01 | store, reported, settings, settings handler, openapi | running |
-| 03 | M3: resolver `internal/weights` and collector (WGT-1..6, WGT-12) | build | opus | 02 | weights, collector, pkg/hourglass comment | pending |
+| 02 | M2: migration 0008, store queries, `internal/reported` weights report, `reported_weights` setting (WGT-17) | build | opus | 01 | store, reported, settings, settings handler, openapi | done |
+| 03 | M3: resolver `internal/weights` and collector (WGT-1..6, WGT-12) | build | opus | 02 | weights, collector, pkg/hourglass comment | running |
 | 04 | Verify M3 (independent) | verify | opus | 03 | (read-only) | pending |
 | 05 | M4: scope, report route, state fields (WGT-7..11, 13, 21); OpenAPI + generated types | build | opus | 04 | auth, api, openapi, schema.gen.ts | pending |
 | 06 | M5: other readers, ledger fields, setup input, collector view (WGT-14..16, 18, 22, 23) | build | opus | 05 | api, store, openapi, schema.gen.ts | pending |

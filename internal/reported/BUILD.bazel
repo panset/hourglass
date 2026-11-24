@@ -3,15 +3,24 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "reported",
-    srcs = ["reported.go"],
+    srcs = [
+        "reported.go",
+        "weights.go",
+    ],
     importpath = "github.com/panset/hourglass/internal/reported",
     visibility = ["//:__subpackages__"],
-    deps = ["//internal/store"],
+    deps = [
+        "//internal/rules",
+        "//internal/store",
+    ],
 )
 
 go_test(
     name = "reported_test",
-    srcs = ["reported_test.go"],
+    srcs = [
+        "reported_test.go",
+        "weights_test.go",
+    ],
     embed = [":reported"],
     deps = ["//internal/store"],
 )

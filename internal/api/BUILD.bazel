@@ -63,6 +63,7 @@ go_test(
         "router_test.go",
         "service_accounts_test.go",
         "service_testenv_test.go",
+        "settings_reported_weights_test.go",
         "setups_label_index_test.go",
         "testenv_test.go",
         "upgrade_compat_test.go",

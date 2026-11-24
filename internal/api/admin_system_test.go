@@ -157,7 +157,7 @@ func TestADM2_GetSettingsShapeAndRuntime(t *testing.T) {
 	b := uWantOK(t, e.get(settingsPath), 200)
 	uWantKeys(t, "response", b, "settings", "runtime")
 	uWantKeys(t, "settings", adObjOf(t, b["settings"]), "default_weight", "display_label_keys", "bands", "default_allowance",
-		"max_holds_per_user", "release_requires_teardown", "poll_interval", "enforcement")
+		"max_holds_per_user", "release_requires_teardown", "poll_interval", "enforcement", "reported_weights")
 	st := adObjOf(t, b["settings"])
 	if uNum(t, st, "default_allowance") != 300 || st["poll_interval"] != "5m" || st["enforcement"] != false {
 		t.Errorf("settings = %v", st)

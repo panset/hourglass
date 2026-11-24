@@ -809,13 +809,16 @@ func (a *API) writeSettings(w http.ResponseWriter, r *http.Request) {
 // getSettings is GET /api/v1/admin/settings (ADM-2).
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) { a.writeSettings(w, r) }
 
-// settingsKeys are the keys a PUT body must all carry.
+// settingsKeys are the keys a PUT body must all carry. reported_weights is
+// optional and deliberately not listed (design D1): an absent key leaves the
+// stored value unchanged.
 var settingsKeys = []string{settings.KeyDefaultWeight, settings.KeyDisplayLabelKeys,
 	settings.KeyBands, settings.KeyDefaultAllowance, settings.KeyMaxHoldsPerUser, settings.KeyReleaseRequiresTeardown,
 	settings.KeyPollInterval, settings.KeyEnforcement}
 
 // updateSettings is PUT /api/v1/admin/settings (ADM-2). The body is the whole
-// Settings object; changes apply from the next poll.
+// Settings object, except that reported_weights may be left out to keep the
+// stored value (D1); changes apply from the next poll.
 func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
 	caller, ok := adminCaller(w, r)
 	if !ok {
@@ -836,6 +839,7 @@ func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	_, hasReportedWeights := keys[settings.KeyReportedWeights]
 	var next settings.Settings
 	if err := json.Unmarshal(raw, &next); err != nil {
 		a.writeError(w, r, err) // *settings.FieldError names the key
@@ -847,6 +851,11 @@ func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
 		old, err := settings.Load(ctx, tx)
 		if err != nil {
 			return err
+		}
+		if !hasReportedWeights {
+			// Unmarshal gave the absent key its default, which would switch
+			// reported weights off and clear the limits; keep the stored one.
+			next.ReportedWeights = old.ReportedWeights
 		}
 		changes, err := settings.SaveAt(ctx, tx, old, next, caller.ID, now)
 		if err != nil || len(changes) == 0 {
