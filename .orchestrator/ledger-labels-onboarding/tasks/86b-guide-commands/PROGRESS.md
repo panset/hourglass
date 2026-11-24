@@ -1,0 +1,5 @@
+- 2026-11-23 Built/loaded images, started project hourglass-86b on 18080 (host process owns 8080).
+- 2026-11-23 Ran scripted calls; found missing password-change step and blank-line failure; corrected deploying.md.
+- 2026-11-23 Ran file way (env var, config key, invalid file), checked admin page code, ran dave end to end via curl OIDC.
+- 2026-11-23 Re-ran guide blocks extracted from the doc on a fresh volume; updated docs/progress.md; tore down my stack; ./ci.sh exit 0.
+- Done. See RESULT.md.

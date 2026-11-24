@@ -82,7 +82,7 @@ Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to
 **Not finished, not verified, or left as is**
 
 - The commands in "Pre-approving SSO users" in `docs/deploying.md` (the file and the scripted way) are marked `<!-- 86b: run and correct -->`: they were written from the code and have not been run against the bundled stack. The job is not done until they have been.
-- The new end-to-end steps (A2g, A2f, A2p, A7g, A8p, A8c) type-check and list but had not run in a browser when their task finished, because the owner's `hourglass-tls` project held ports 8081 and 8990. `e2e/run.sh both` and `e2e/run.sh integration` have to pass before a release.
+- The new end-to-end steps (A2g, A2f, A2p, A7g, A8p, A8c) have run in a browser: `e2e/run.sh both` passed 16 of 16 steps in bundled mode and 16 of 16 in split mode, and `e2e/run.sh integration` passed 11 of 11, on 2026-11-23.
 - The roll-up window (seven days) is fixed. Compacted rows cannot be expanded again, and an older binary refuses the upgraded database; the way back is the backup taken before the upgrade.
 - Disk: the file stops growing at the old rate but does not shrink until an offline `VACUUM`.
 - The release itself (merge, version number, tag, image workflow) has not been done. No version tag exists yet, and `internal/version` has not been checked for what the released binary reports.

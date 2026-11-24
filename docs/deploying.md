@@ -252,7 +252,6 @@ Each approval is written to the audit log as `user.preapprove` with no actor (sh
 
 **2. The file.** Write the file in the format shown under [Pre-approved users file](#pre-approved-users-file), make it readable by the user the process runs as (uid 65532 in the images), mount it into the container, set `preapproved_users_file` or `HOURGLASS_PREAPPROVED_USERS_FILE` to its path inside the container, and restart. The entries then appear in Users with the source "Config file" and cannot be removed there. The file is read once at start, so a change to it needs another restart. Check the start-up log for `pre-approved users file read` and the entry count; an invalid file stops the start and the message names the entry.
 
-<!-- 86b: run and correct -->
 ```sh
 cat > preapproved-users.yaml <<'EOF'
 users:
@@ -277,12 +276,26 @@ docker logs hourglass 2>&1 | grep 'pre-approved users file read'
 2. `GET /api/v1/session` and read `csrf_token`. (A password change replaces the session and the token: read it again afterwards.)
 3. `POST /api/v1/admin/preapprovals` with the `X-CSRF-Token` header and the body `{"emails": [...], "roles": [...]}`. It takes 1 to 1,000 emails and one role set for all of them, so a longer list goes in several calls, grouped by role. Any invalid email or role is a 400 `validation` that names the first bad value, and nothing is stored. The answer is `{"added": N, "updated": M}`: an email already in the list gets the new roles and keeps its use record, so the call can be repeated safely. `GET /api/v1/admin/preapprovals` lists every entry from both sources.
 
-<!-- 86b: run and correct -->
+On a stack that has just started, the first-run password change comes first. This sets the new password (it must differ from the current one and be at least 12 characters), and the sign-in below then uses it:
+
 ```sh
 export HOURGLASS=http://localhost:8080      # HTTPS, or localhost: the cookie is Secure
 
 curl -sS -c jar -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"choose-a-long-password"}' $HOURGLASS/auth/local
+  -d '{"username":"admin","password":"choose-a-long-password"}' $HOURGLASS/auth/local >/dev/null
+CSRF=$(curl -sS -b jar $HOURGLASS/api/v1/session | jq -r .csrf_token)
+curl -sS -c jar -b jar -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
+  -d '{"current_password":"choose-a-long-password","new_password":"choose-another-long-password"}' \
+  $HOURGLASS/auth/local/password
+```
+
+Then the three calls (`jq` is needed):
+
+```sh
+export HOURGLASS=http://localhost:8080      # HTTPS, or localhost: the cookie is Secure
+
+curl -sS -c jar -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"choose-another-long-password"}' $HOURGLASS/auth/local
 CSRF=$(curl -sS -b jar $HOURGLASS/api/v1/session | jq -r .csrf_token)
 
 curl -sS -b jar -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
@@ -291,12 +304,12 @@ curl -sS -b jar -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
 curl -sS -b jar $HOURGLASS/api/v1/admin/preapprovals | jq .
 ```
 
-<!-- 86b: run and correct -->
 ```sh
-# From a file with one email per line, 1,000 at a time:
+# Run after the calls above (it uses their cookie jar and $CSRF).
+# From a file with one email per line, 1,000 at a time; blank lines are skipped:
 split -l 1000 emails.txt part-
 for f in part-*; do
-  jq -R . "$f" | jq -s '{emails: ., roles: ["developer"]}' |
+  jq -R 'select(test("\\S"))' "$f" | jq -s '{emails: ., roles: ["developer"]}' |
     curl -sS -b jar -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
       -d @- $HOURGLASS/api/v1/admin/preapprovals
 done
