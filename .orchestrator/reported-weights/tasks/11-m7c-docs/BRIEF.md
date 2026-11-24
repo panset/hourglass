@@ -19,3 +19,5 @@ Every deliverable line above is present (RESULT.md has a checklist mapping each 
 Stack start: a few minutes (the first poll can take up to 5). `./ci.sh`: 30 minute timeout.
 ## Report
 Per CONTRACT.md "Reporting".
+## Also in the upgrade notes (from verification 07)
+Under the shifted fields: a hold whose weight a Go metering policy sets shows its rate-rule weight on screens between the upgrade and the first poll after it, because samples written before the upgrade carry no source; charges are not affected, and the first poll puts the policy weight back. And: the top-level keys of a report body are matched without regard to case, as in the other two reports; entries are strict.

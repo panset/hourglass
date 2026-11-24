@@ -466,3 +466,69 @@ describe("UI-8 Ledger paging", () => {
     expect(within(rows[1]!).getByText("Debit · 2×")).toBeInTheDocument();
   });
 });
+
+describe("UI-13 weight source and ledger weights", () => {
+  const debit = (id: number, over: Partial<LedgerEntry>) => entry(id, { setup_name: `lab-${id}`, ...over });
+  const mountLedger = async (entries: LedgerEntry[], holds: Hold[] = [hold]) => {
+    mockApi({ ...okRoutes(), "GET /api/v1/me/holds": { holds }, "GET /api/v1/me/ledger": { ...ledger, entries } });
+    mount();
+    return screen.findByRole("table", { name: "Ledger" });
+  };
+  const typeOf = (table: HTMLElement, setup: string) => within(within(table).getByText(new RegExp(`^${setup}`)).closest("tr")!).getAllByRole("cell")[1]!;
+
+  it("UI-13 a hold row shows its weight with a tag for reported, override and policy, and none for rule, default or null", async () => {
+    const mk = (id: number, source: Hold["weight_source"]): Hold => ({ ...hold, id, setup_name: `h-${id}`, weight: 1.4, weight_source: source });
+    mockApi({
+      ...okRoutes(),
+      "GET /api/v1/me/holds": { holds: [mk(11, "reported"), mk(12, "override"), mk(13, "policy"), mk(14, "rule"), mk(15, "default"), mk(16, null)] },
+    });
+    mount();
+    const table = await screen.findByRole("table", { name: "Current holds" });
+    const cell = (n: string) => within(table).getByText(n).closest("tr")!;
+    for (const [n, tag] of [["h-11", "reported"], ["h-12", "override"], ["h-13", "policy"]] as const) {
+      expect(within(cell(n)).getByText(tag)).toBeInTheDocument();
+      expect(cell(n)).toHaveTextContent("1.4");
+    }
+    for (const n of ["h-14", "h-15", "h-16"]) {
+      for (const tag of ["reported", "override", "policy", "rule", "default"]) expect(within(cell(n)).queryByText(tag)).toBeNull();
+    }
+  });
+
+  it("UI-13 the burn line keeps its form", async () => {
+    mockApi({ ...okRoutes(), "GET /api/v1/me": { ...me, burning: [{ ...me.burning![0]!, weight: 1.15, weight_source: "reported" }] } });
+    mount();
+    expect(await screen.findByText("setup-04 · weight 1.15 × 2×")).toBeInTheDocument();
+  });
+
+  it("UI-13 a ledger debit shows one weight when min equals max", async () => {
+    const table = await mountLedger([debit(1, { weight_min: 1.15, weight_max: 1.15, weight_sources: ["rule"] })]);
+    expect(typeOf(table, "lab-1")).toHaveTextContent("Debit · 2× · weight 1.15");
+    expect(typeOf(table, "lab-1")).not.toHaveTextContent(" to ");
+  });
+
+  it("UI-13 a ledger debit shows a range when min and max differ, with the source when it is not rule or default", async () => {
+    const table = await mountLedger([
+      debit(1, { weight_min: 1.15, weight_max: 1.4, weight_sources: ["reported", "rule"], entry_count: 288, multiplier: null }),
+      debit(2, { weight_min: 1, weight_max: 2, weight_sources: ["rule", "default"] }),
+    ]);
+    expect(typeOf(table, "lab-1")).toHaveTextContent("Debit · weight 1.15 to 1.40 (reported)");
+    expect(typeOf(table, "lab-2")).toHaveTextContent("Debit · 2× · weight 1.00 to 2.00");
+    expect(typeOf(table, "lab-2")).not.toHaveTextContent("(");
+  });
+
+  it("UI-13 a ledger debit shows the source for a single reported or policy weight", async () => {
+    const table = await mountLedger([debit(1, { weight_min: 3, weight_max: 3, weight_sources: ["policy"] })]);
+    expect(typeOf(table, "lab-1")).toHaveTextContent("Debit · 2× · weight 3 (policy)");
+  });
+
+  it("UI-13 a ledger debit shows no weight when it is unknown (null), and a grant shows none", async () => {
+    const table = await mountLedger([
+      debit(1, { weight_min: null, weight_max: null, weight_sources: null }),
+      debit(2, {}),
+      entry(3, { type: "grant", multiplier: null, setup_name: null, actor_name: "Riley Admin", reason: "r", weight_min: null, weight_max: null, weight_sources: null }),
+    ]);
+    expect(typeOf(table, "lab-1").textContent).toBe("Debit · 2×");
+    expect(typeOf(table, "lab-2").textContent).toBe("Debit · 2×");
+    expect(within(table).queryByText(/weight/)).toBeNull();
+  });
+});

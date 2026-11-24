@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setCsrfToken } from "../../api/client";
 import { errorResponse, mockApi } from "../../test/mockApi";
-import { emptyCollector, setup04, setup07, setupList } from "../admin-shared/fixtures";
+import { emptyCollector, setup04, setup07, setupList, type Setup } from "../admin-shared/fixtures";
 import Page from "./index";
 
 const collector = {
@@ -213,5 +213,82 @@ describe("SET-5 disable, delete, force-release", () => {
     render(<Page />);
     await userEvent.click(await screen.findByRole("button", { name: "Edit setup-07" }));
     expect(screen.queryByRole("button", { name: "Force-release" })).toBeNull();
+  });
+});
+
+describe("UI-14 setup inventory: weight, source, reported weight and override", () => {
+  const withAdmin = (s: Setup, over: Partial<NonNullable<Setup["admin"]>>, top: Partial<Setup> = {}): Setup => ({
+    ...s, ...top, admin: { ...s.admin!, ...over },
+  });
+  const rowOf = async (name: string) => within(await screen.findByRole("table", { name: "Setups" })).getByText(name).closest("tr")!;
+
+  it("UI-14 shows the weight and its source tag, the reported weight, and the attributes", async () => {
+    const reported = withAdmin(setup04, { reported_weight: 1.15 }, { weight: 1.15, weight_source: "reported", weight_attributes: { "memory-gb": "512", tier: "gold" } });
+    mockApi(routes({ "GET /api/v1/setups": setupList([reported, setup07]) }));
+    render(<Page />);
+    const row = await rowOf("setup-04");
+    expect(within(row).getByText("reported")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Reported weight 1.15");
+    expect(within(row).getByText("memory-gb 512 · tier gold")).toBeInTheDocument();
+    expect(within(row).queryByText(/Not applied/)).toBeNull();
+    expect(within(await rowOf("setup-07")).queryByText(/Reported weight/)).toBeNull();
+  });
+
+  it.each([
+    ["expired", "Not applied: the report is older than the maximum age."],
+    ["out_of_bounds", "Not applied: the weight is outside the minimum and maximum."],
+    ["override", "Not applied: the weight override takes its place."],
+  ] as const)("UI-14 says in words why a reported weight is not applied (%s)", async (why, words) => {
+    const s = withAdmin(setup04, { reported_weight: 25, reported_weight_not_applied: why, weight_override: why === "override" ? 3 : null }, { weight_source: why === "override" ? "override" : "rule" });
+    mockApi(routes({ "GET /api/v1/setups": setupList([s]) }));
+    render(<Page />);
+    const row = await rowOf("setup-04");
+    expect(row).toHaveTextContent("Reported weight 25");
+    expect(row).toHaveTextContent(words);
+  });
+
+  const openEdit = async (s: Setup) => {
+    const calls = mockApi(routes({ "GET /api/v1/setups": setupList([s]), [`PUT /api/v1/admin/setups/${s.id}`]: s })).calls;
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: `Edit ${s.name}` }));
+    return { calls, panel: screen.getByRole("complementary", { name: "Edit setup" }) };
+  };
+
+  it("UI-14 an untouched override is left out of the PUT body, shown or not", async () => {
+    const { calls, panel } = await openEdit(withAdmin(setup04, { weight_override: 3 }, { weight_source: "override", weight: 3 }));
+    expect(within(panel).getByLabelText("Weight override")).toHaveValue("3");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(calls.find((c) => c.method === "PUT")!.body).not.toHaveProperty("weight_override");
+  });
+
+  it("UI-14 setting the override sends the number", async () => {
+    const { calls, panel } = await openEdit(setup04);
+    expect(within(panel).getByLabelText("Weight override")).toHaveValue("");
+    await userEvent.type(within(panel).getByLabelText("Weight override"), "2.5");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(calls.find((c) => c.method === "PUT")!.body).toMatchObject({ name: "setup-04", weight_override: 2.5 });
+  });
+
+  it("UI-14 clearing the override sends null", async () => {
+    const { calls, panel } = await openEdit(withAdmin(setup04, { weight_override: 3 }, { weight_source: "override", weight: 3 }));
+    await userEvent.clear(within(panel).getByLabelText("Weight override"));
+    await userEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.body).toHaveProperty("weight_override", null);
+  });
+
+  it("UI-14 a value that is not a number is refused on the page and sends nothing", async () => {
+    const { calls, panel } = await openEdit(setup04);
+    await userEvent.type(within(panel).getByLabelText("Weight override"), "abc");
+    await userEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    expect(within(panel).getByText(/Enter a number/)).toBeInTheDocument();
+    expect(calls.some((c) => c.method === "PUT")).toBe(false);
+  });
+
+  it("UI-14 the disable button does not touch the override", async () => {
+    const { calls } = mockApi(routes({ "PUT /api/v1/admin/setups/4": setup04 }));
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Disable setup-04" }));
+    expect(calls.find((c) => c.method === "PUT")!.body).not.toHaveProperty("weight_override");
   });
 });

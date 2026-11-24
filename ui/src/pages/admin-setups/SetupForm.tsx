@@ -44,6 +44,9 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
   );
   const [details, setDetails] = useState(setup ? JSON.stringify(setup.details ?? null, null, 2) : "{}");
   const [enabled, setEnabled] = useState(setup?.admin?.enabled ?? true);
+  const initialOverride = setup?.admin?.weight_override != null ? String(setup.admin.weight_override) : "";
+  const [override, setOverride] = useState(initialOverride);
+  const [overrideError, setOverrideError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [forcing, setForcing] = useState(false);
   const [reason, setReason] = useState("");
@@ -68,6 +71,19 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
       details: parsed.value,
       enabled,
     };
+    // D2: untouched is omitted (the stored value stays), blank sends null (clears), a number sets it.
+    if (override.trim() !== initialOverride) {
+      if (override.trim() === "") body.weight_override = null;
+      else {
+        const n = Number(override);
+        if (!Number.isFinite(n)) {
+          setOverrideError("Enter a number, or leave it blank to clear the override.");
+          return;
+        }
+        body.weight_override = n;
+      }
+    }
+    setOverrideError(undefined);
     const ok = await save.run(() => (setup ? updateSetup(setup.id, body) : createSetup(body)));
     if (ok) onSaved(setup ? `Saved ${body.name}.` : `Added ${body.name}.`);
   };
@@ -145,6 +161,16 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
               </Button>
             </div>
           </>
+        )}
+      </Field>
+
+      <Field
+        label="Weight override"
+        hint="Pins this setup's weight above a reported weight and the rate rules. Leave blank for none; clear it to remove it."
+        error={overrideError}
+      >
+        {(p) => (
+          <Input {...p} inputMode="decimal" value={override} onChange={(e) => setOverride(e.target.value)} />
         )}
       </Field>
 

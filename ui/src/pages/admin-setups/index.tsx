@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Chip, Clip, Table, Time, zoneLabel } from "../../
 import { useApi } from "../../hooks/useApi";
 import { errorText, useAction } from "../admin-shared/useAction";
 import shared from "../admin-shared/admin.module.css";
+import { attributesLine, notAppliedText, WeightTag } from "../usage/weight";
 import { getCollector, listSetups, updateSetup, type Orphan, type Setup } from "./api";
 import { SetupForm, toInput } from "./SetupForm";
 
@@ -97,7 +98,34 @@ export default function Page() {
                   </div>
                 ),
               },
-              { key: "weight", header: "Weight", render: (s) => s.weight },
+              {
+                key: "weight",
+                header: "Weight",
+                render: (s) => {
+                  const attrs = attributesLine(s.weight_attributes);
+                  const reported = s.admin?.reported_weight;
+                  const why = notAppliedText(s.admin?.reported_weight_not_applied);
+                  return (
+                    <>
+                      {s.weight}
+                      <WeightTag source={s.weight_source} />
+                      {reported !== null && reported !== undefined ? (
+                        <span className={shared.sub}>
+                          <br />
+                          Reported weight {reported}
+                          {why ? `. ${why}` : ""}
+                        </span>
+                      ) : null}
+                      {attrs ? (
+                        <span className={shared.sub}>
+                          <br />
+                          {attrs}
+                        </span>
+                      ) : null}
+                    </>
+                  );
+                },
+              },
               {
                 key: "seen",
                 header: `Last seen by provider (${zoneLabel()})`,

@@ -6,7 +6,7 @@ import { useApi } from "../../hooks/useApi";
 import shared from "../admin-shared/admin.module.css";
 import { errorText, useAction } from "../admin-shared/useAction";
 import { getCollector, getRules, getSettings, putRules, putSettings, type Collector as CollectorData } from "./api";
-import { sameJson, toForm, toRuleInputs, toRuleRows, toSettings, type FieldErrors, type RuleRow, type SettingsForm } from "./form";
+import { reportedFields, sameJson, toForm, toRuleInputs, toRuleRows, toSettings, type FieldErrors, type RuleRow, type SettingsForm } from "./form";
 
 const POLL_MS = 60_000;
 let newKey = 1;
@@ -34,8 +34,86 @@ function ReportStat({ title, report }: { title: string; report: ReportTimes | nu
   );
 }
 
-function Collector() {
-  const c = useApi(getCollector, [], { pollMs: POLL_MS });
+type CollectorState = ReturnType<typeof useApi<CollectorData>>;
+
+/** The "Reported weights" section (D1, C3): the four fields, the last accepted report and the two warnings. */
+function ReportedWeights({
+  form,
+  edit,
+  collector,
+  pollInterval,
+  fieldError,
+}: {
+  form: SettingsForm;
+  edit: (patch: Partial<SettingsForm>) => void;
+  collector: CollectorState;
+  pollInterval: string;
+  fieldError: (key: string) => string | undefined;
+}) {
+  const report = collector.data?.last_weights_report ?? null;
+  const refusal = collector.data?.last_weights_refusal ?? null;
+  return (
+    <section className={shared.card} aria-labelledby="rw-h">
+      <h2 id="rw-h">Reported weights</h2>
+      <label className={shared.check}>
+        <input type="checkbox" checked={form.rwEnabled} onChange={(e) => edit({ rwEnabled: e.target.checked })} />
+        Accept weights reported by a service account
+      </label>
+      {fieldError("reported_weights.enabled") ?? fieldError("reported_weights") ? (
+        <Alert tone="error">{fieldError("reported_weights.enabled") ?? fieldError("reported_weights")}</Alert>
+      ) : null}
+      <p className={shared.note}>
+        On: a usable reported weight replaces the rate rules for that setup. Off: reports are refused and prices come from the rules.
+      </p>
+      <Field label="Minimum weight" error={fieldError("reported_weights.min")}>
+        {(p) => <Input {...p} inputMode="decimal" value={form.rwMin} onChange={(e) => edit({ rwMin: e.target.value })} />}
+      </Field>
+      <Field label="Maximum weight" hint="Required before the switch can be on." error={fieldError("reported_weights.max")}>
+        {(p) => <Input {...p} inputMode="decimal" value={form.rwMax} onChange={(e) => edit({ rwMax: e.target.value })} />}
+      </Field>
+      <Field label="Maximum age" hint="A duration from 1m to 24h, such as 10m." error={fieldError("reported_weights.max_age")}>
+        {(p) => <Input {...p} value={form.rwMaxAge} onChange={(e) => edit({ rwMaxAge: e.target.value })} />}
+      </Field>
+      <p className={shared.note}>
+        The maximum age should be at least twice the poll interval ({pollInterval}). With a shorter value, polls can alternate
+        between the reported price and the rule price without any error.
+      </p>
+      {collector.error && !collector.data ? <Alert tone="error">{collector.error.message}</Alert> : null}
+      {collector.data ? (
+        <div className={shared.stat}>
+          <span className={shared.sub}>Last weights report</span>
+          {report ? (
+            <>
+              <span className={shared.statValue}>
+                <Time iso={report.received_at} />
+              </span>
+              <span className={shared.sub}>
+                received from {report.service_account}; observed <Time iso={report.observed_at} />; {report.entries} weight
+                {report.entries === 1 ? "" : "s"}
+              </span>
+            </>
+          ) : (
+            <span className={shared.statValue}>None received</span>
+          )}
+        </div>
+      ) : null}
+      {report && report.out_of_bounds > 0 ? (
+        <Alert tone="warning">
+          {report.out_of_bounds} stored weight{report.out_of_bounds === 1 ? " is" : "s are"} outside the minimum and maximum
+          and not applied. Those setups are charged at their rate rule price, and a report that still holds such a weight is refused.
+        </Alert>
+      ) : null}
+      {refusal && (!report || Date.parse(refusal.at) > Date.parse(report.received_at)) ? (
+        <Alert tone="warning">
+          A weights report was refused after the last accepted one, at <Time iso={refusal.at} />, from {refusal.service_account}:{" "}
+          {refusal.message}
+        </Alert>
+      ) : null}
+    </section>
+  );
+}
+
+function Collector({ c }: { c: CollectorState }) {
   if (c.loading) return <p role="status">Loading collector health…</p>;
   if (c.error || !c.data) return <Alert tone="error">{c.error?.message ?? "Could not load collector health."}</Alert>;
   const d = c.data;
@@ -104,6 +182,7 @@ function Collector() {
 
 export default function Page() {
   const settings = useApi(getSettings, [], { pollMs: POLL_MS });
+  const collector = useApi(getCollector, [], { pollMs: POLL_MS });
   const rules = useApi(getRules, [], { pollMs: POLL_MS });
   const [formEdits, setFormEdits] = useState<SettingsForm | null>(null);
   const [ruleEdits, setRuleEdits] = useState<RuleRow[] | null>(null);
@@ -144,6 +223,7 @@ export default function Page() {
   const formDirty = formEdits !== null && !sameJson(formEdits, baseForm);
   const rulesDirty = ruleEdits !== null && !sameJson(ruleEdits, baseRules);
   const dirty = formDirty || rulesDirty;
+  const reportedDirty = formEdits !== null && !sameJson(reportedFields(formEdits), reportedFields(baseForm));
 
   const editForm = (patch: Partial<SettingsForm>) => {
     setSaved(false);
@@ -172,7 +252,7 @@ export default function Page() {
       if (!ruleBody.ok) Object.assign(errs, ruleBody.errors);
     }
     if (formDirty) {
-      settingsBody = toSettings(form);
+      settingsBody = toSettings(form, reportedDirty);
       if (!settingsBody.ok) Object.assign(errs, settingsBody.errors);
     }
     setLocalErrors(errs);
@@ -189,6 +269,7 @@ export default function Page() {
     // Refetch either way: the rules may have saved even if the settings call failed.
     rules.reload();
     settings.reload();
+    collector.reload();
   };
 
   const apiField = save.error?.field;
@@ -212,7 +293,7 @@ export default function Page() {
 
       <section className={shared.region} aria-labelledby="collector-h">
         <h2 id="collector-h">Collector health</h2>
-        <Collector />
+        <Collector c={collector} />
         <p className={shared.note}>
           Provider: {runtime.provider ?? "none"} · Pressure source: {runtime.pressure_source} · Metering policy:{" "}
           {runtime.metering_policy.name}
@@ -263,6 +344,14 @@ export default function Page() {
         </div>
 
         <div className={shared.main}>
+          <ReportedWeights
+            form={form}
+            edit={editForm}
+            collector={collector}
+            pollInterval={serverSettings.poll_interval}
+            fieldError={fieldError}
+          />
+
           <section className={shared.card} aria-labelledby="bands-h">
             <h2 id="bands-h">Pressure bands</h2>
             <div className={shared.row}>

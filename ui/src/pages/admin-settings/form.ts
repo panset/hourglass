@@ -17,10 +17,31 @@ export interface SettingsForm {
   teardown: boolean;
   poll: string;
   enforcement: boolean;
+  /** The "Reported weights" section (D1). Sent only when one of these four was changed. */
+  rwEnabled: boolean;
+  rwMin: string;
+  rwMax: string;
+  rwMaxAge: string;
 }
 
+/** Defaults of the setting (D1) for a server that omits the key. */
+const RW_DEFAULT = { enabled: false, min: 0, max: null, max_age: "10m" } as const;
+
+/** The four reported-weights fields of a form, for comparing against the saved ones. */
+export const reportedFields = (f: SettingsForm) => ({
+  enabled: f.rwEnabled,
+  min: f.rwMin.trim(),
+  max: f.rwMax.trim(),
+  max_age: f.rwMaxAge.trim(),
+});
+
 export function toForm(s: Settings): SettingsForm {
+  const rw = s.reported_weights ?? RW_DEFAULT;
   return {
+    rwEnabled: rw.enabled,
+    rwMin: String(rw.min),
+    rwMax: rw.max === null ? "" : String(rw.max),
+    rwMaxAge: rw.max_age,
     defaultWeight: String(s.default_weight),
     labelKeys: s.display_label_keys.join(", "),
     baseMultiplier: String(s.bands.base),
@@ -40,7 +61,10 @@ function num(text: string): number {
 }
 
 /** Parses the text fields. Returns field errors for anything that is not a number. */
-export function toSettings(f: SettingsForm): { ok: true; value: Settings } | { ok: false; errors: FieldErrors } {
+export function toSettings(
+  f: SettingsForm,
+  includeReported = false,
+): { ok: true; value: Settings } | { ok: false; errors: FieldErrors } {
   const errors: FieldErrors = {};
   const need = (key: string, text: string): number => {
     const n = num(text);
@@ -55,10 +79,16 @@ export function toSettings(f: SettingsForm): { ok: true; value: Settings } | { o
     from: need(`bands.steps[${i}].from`, b.from),
     multiplier: need(`bands.steps[${i}].multiplier`, b.multiplier),
   }));
+  // Blank max means "no maximum" (null); the server decides whether that is allowed with the switch on.
+  const rwMin = includeReported ? need("reported_weights.min", f.rwMin) : 0;
+  const rwMax = !includeReported || f.rwMax.trim() === "" ? null : need("reported_weights.max", f.rwMax);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
     value: {
+      ...(includeReported
+        ? { reported_weights: { enabled: f.rwEnabled, min: rwMin, max: rwMax, max_age: f.rwMaxAge.trim() } }
+        : {}),
       default_weight,
       display_label_keys: f.labelKeys
         .split(",")

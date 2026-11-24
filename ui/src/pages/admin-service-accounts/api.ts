@@ -10,12 +10,13 @@ export type ServiceToken = S["ServiceToken"];
 export type IssuedServiceToken = S["IssuedServiceToken"];
 export type ServiceScope = S["ServiceScope"];
 
-/** The four scopes, with what each lets the service do (SVC-3). */
+/** The five scopes, with what each lets the service do (SVC-3). */
 export const SCOPES: { scope: ServiceScope; hint: string }[] = [
   { scope: "state:read", hint: "read the state of every setup and hold" },
   { scope: "pressure:write", hint: "report lab pressure" },
   { scope: "deployments:write", hint: "report which setups are deployed" },
   { scope: "holds:release", hint: "release any hold" },
+  { scope: "weights:write", hint: "report a weight per setup" },
 ];
 
 const base = "/api/v1/admin/service-accounts";

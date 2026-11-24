@@ -21,3 +21,5 @@ May write: `ui/src/**` except `ui/src/api/schema.gen.ts`, `docs/ui-notes.md`, `u
 `./ci.sh`: 30 minute timeout, log into this task folder.
 ## Report
 Per CONTRACT.md "Reporting".
+## Note
+Another agent is editing `internal/api` Go files at the same time (a small fix). Do not touch Go code. If `./ci.sh` fails only in a Go target you did not touch, rerun it once after a few minutes and report what you saw.

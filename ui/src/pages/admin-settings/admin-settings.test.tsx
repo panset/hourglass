@@ -224,3 +224,140 @@ describe("RULE-3 rate rules", () => {
     release(new Response(JSON.stringify(rules), { status: 200 }));
   });
 });
+
+describe("UI-14 Reported weights section", () => {
+  const rw = (over: Partial<NonNullable<SettingsResponse["settings"]["reported_weights"]>> = {}) => ({
+    ...settings,
+    settings: { ...settings.settings, reported_weights: { enabled: false, min: 0, max: null, max_age: "10m", ...over } },
+  });
+  const section = async () => within(await screen.findByRole("region", { name: "Reported weights" }));
+
+  it("UI-14 shows the switch, minimum, maximum and maximum age, and the advice about the poll interval", async () => {
+    mockApi(routes({ "GET /api/v1/admin/settings": rw({ enabled: true, min: 0.5, max: 20, max_age: "15m" }) }));
+    render(<Page />);
+    const s = await section();
+    expect(s.getByRole("checkbox", { name: /Accept weights reported/ })).toBeChecked();
+    expect(s.getByLabelText("Minimum weight")).toHaveValue("0.5");
+    expect(s.getByLabelText("Maximum weight")).toHaveValue("20");
+    expect(s.getByLabelText("Maximum age")).toHaveValue("15m");
+    expect(s.getByText(/maximum age should be at least twice the poll interval/)).toBeInTheDocument();
+  });
+
+  it("UI-14 shows the defaults when the server sends no key", async () => {
+    mockApi(routes());
+    render(<Page />);
+    const s = await section();
+    expect(s.getByLabelText("Maximum weight")).toHaveValue("");
+    expect(s.getByLabelText("Maximum age")).toHaveValue("10m");
+  });
+
+  it("UI-14 saving a change sends all four fields; blank maximum is null", async () => {
+    const { calls } = mockApi(routes({ "GET /api/v1/admin/settings": rw({ max: 20 }), "PUT /api/v1/admin/settings": rw({ max: 20 }) }));
+    render(<Page />);
+    const s = await section();
+    await userEvent.click(s.getByRole("checkbox", { name: /Accept weights reported/ }));
+    await userEvent.clear(s.getByLabelText("Maximum age"));
+    await userEvent.type(s.getByLabelText("Maximum age"), "20m");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.body).toEqual({ ...settings.settings, reported_weights: { enabled: true, min: 0, max: 20, max_age: "20m" } });
+    // A blank maximum is sent as null, with the switch off, so the server accepts it.
+    await userEvent.clear(await s.findByLabelText("Maximum weight"));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const puts = calls.filter((c) => c.method === "PUT");
+    expect(puts).toHaveLength(2);
+    expect((puts[1]!.body as { reported_weights: unknown }).reported_weights).toEqual({ enabled: false, min: 0, max: null, max_age: "10m" });
+  });
+
+  it("UI-14 a save that changes only other settings does not send reported_weights (the key stays as stored)", async () => {
+    const { calls } = mockApi(routes({ "GET /api/v1/admin/settings": rw({ enabled: true, max: 20 }), "PUT /api/v1/admin/settings": rw({ enabled: true, max: 20 }) }));
+    render(<Page />);
+    await userEvent.clear(await screen.findByLabelText("Max setups per developer"));
+    await userEvent.type(screen.getByLabelText("Max setups per developer"), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const body = calls.find((c) => c.method === "PUT")!.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("reported_weights");
+    expect(body.max_holds_per_user).toBe(3);
+  });
+
+  it("UI-14 turning the switch on without a maximum shows the server's validation message", async () => {
+    const msg = "reported_weights.max is required when reported weights are enabled";
+    mockApi(routes({ "PUT /api/v1/admin/settings": () => errorResponse(400, "validation", msg, "reported_weights.max") }));
+    render(<Page />);
+    const s = await section();
+    await userEvent.click(s.getByRole("checkbox", { name: /Accept weights reported/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await s.findByText(msg)).toBeInTheDocument();
+  });
+
+  it("UI-14 shows when the last weights report arrived and from which account, or that none did", async () => {
+    mockApi(
+      routes({
+        "GET /api/v1/admin/settings": rw({ enabled: true, max: 20 }),
+        "GET /api/v1/admin/collector": {
+          ...collector,
+          last_weights_report: { observed_at: "2026-11-18T17:20:00Z", received_at: "2026-11-18T17:21:00Z", service_account: "lab-weights", entries: 9, out_of_bounds: 0 },
+        },
+      }),
+    );
+    render(<Page />);
+    const stat = (await (await section()).findByText("Last weights report")).closest("div")!;
+    expect(stat).toHaveTextContent("received from lab-weights");
+    expect(stat).toHaveTextContent("9 weights");
+    expect(stat.querySelector("time[datetime='2026-11-18T17:21:00Z']")).not.toBeNull();
+  });
+
+  it("UI-14 says None received, with no warnings, when nothing has arrived", async () => {
+    mockApi(routes());
+    render(<Page />);
+    const s = await section();
+    expect((await s.findByText("Last weights report")).closest("div")).toHaveTextContent("None received");
+    expect(s.queryByText(/outside the minimum and maximum and not applied/)).toBeNull();
+    expect(s.queryByText(/was refused/)).toBeNull();
+  });
+
+  it("UI-14 warns with the count when stored weights are outside the limits", async () => {
+    mockApi(
+      routes({
+        "GET /api/v1/admin/collector": {
+          ...collector,
+          last_weights_report: { observed_at: "2026-11-18T17:20:00Z", received_at: "2026-11-18T17:21:00Z", service_account: "lab-weights", entries: 9, out_of_bounds: 3 },
+        },
+      }),
+    );
+    render(<Page />);
+    expect(await (await section()).findByText(/3 stored weights are outside the minimum and maximum/)).toBeInTheDocument();
+  });
+
+  it("UI-14 warns with the time, account and message of a refusal after the last accepted report", async () => {
+    mockApi(
+      routes({
+        "GET /api/v1/admin/collector": {
+          ...collector,
+          last_weights_report: { observed_at: "2026-11-18T17:20:00Z", received_at: "2026-11-18T17:21:00Z", service_account: "lab-weights", entries: 9, out_of_bounds: 0 },
+          last_weights_refusal: { at: "2026-11-18T17:30:00Z", service_account: "lab-weights", message: 'weights[3] (setup "lab-03"): weight 25 is above the maximum 20' },
+        },
+      }),
+    );
+    render(<Page />);
+    const alert = (await (await section()).findByText(/was refused after the last accepted one/)).closest("div")!;
+    expect(alert).toHaveTextContent("lab-weights");
+    expect(alert).toHaveTextContent('weights[3] (setup "lab-03"): weight 25 is above the maximum 20');
+    expect(alert.querySelector("time[datetime='2026-11-18T17:30:00Z']")).not.toBeNull();
+  });
+
+  it("UI-14 does not show a refusal that is older than the last accepted report", async () => {
+    mockApi(
+      routes({
+        "GET /api/v1/admin/collector": {
+          ...collector,
+          last_weights_report: { observed_at: "2026-11-18T17:20:00Z", received_at: "2026-11-18T17:21:00Z", service_account: "lab-weights", entries: 9, out_of_bounds: 0 },
+          last_weights_refusal: { at: "2026-11-18T17:10:00Z", service_account: "lab-weights", message: "too old to matter" },
+        },
+      }),
+    );
+    render(<Page />);
+    await (await section()).findByText("Last weights report");
+    expect(screen.queryByText(/too old to matter/)).toBeNull();
+  });
+});

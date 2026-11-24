@@ -11,6 +11,7 @@ import { POLL_INTERVAL_MS } from "../../hooks/usePolling";
 import { formatMultiplier, formatPerHour, formatTokens } from "../../lib/format";
 import { isAdmin, useSession } from "../../shell/session";
 import { elapsedSince, isPendingRelease, releaseHold, type Hold, type Setup, type SetupList } from "../usage/holdApi";
+import { attributesLine, WeightTag } from "../usage/weight";
 import { LabelChips, placeholderFrom } from "./LabelChips";
 import { applyChip, splitTerms } from "./labelTerms";
 import styles from "./setups.module.css";
@@ -156,7 +157,20 @@ export default function SetupsPage() {
       ),
     },
     ...keys.map((k) => ({ key: `label:${k}`, header: k, render: (s: Setup) => s.labels[k] ?? "" })),
-    { key: "weight", header: "Weight", render: (s: Setup) => formatTokens(s.weight) },
+    {
+      key: "weight",
+      header: "Weight",
+      render: (s: Setup) => {
+        const attrs = attributesLine(s.weight_attributes);
+        return (
+          <>
+            {formatTokens(s.weight)}
+            <WeightTag source={s.weight_source} />
+            {attrs ? <span className={styles.reason}>{attrs}</span> : null}
+          </>
+        );
+      },
+    },
     {
       key: "state",
       header: "State",
@@ -334,10 +348,16 @@ export default function SetupsPage() {
           {acquiring && cost ? (
             <>
               <p>
-                Weight {formatTokens(acquiring.weight)}. Costs {formatPerHour(cost.now)}
+                Weight {formatTokens(acquiring.weight)}
+                {acquiring.weight_source === "reported" || acquiring.weight_source === "override" ? ` (${acquiring.weight_source})` : ""}
+                . Costs {formatPerHour(cost.now)}
                 {pressure.data ? ` now (${formatMultiplier(pressure.data.multiplier)})` : " now"}, up to{" "}
                 {formatPerHour(cost.at_peak)} at the highest band.
               </p>
+              {attributesLine(acquiring.weight_attributes) ? <p>{attributesLine(acquiring.weight_attributes)}</p> : null}
+              {data?.reported_weights_enabled ? (
+                <p>Weights are reported by automation, so the price can change while the setup is held.</p>
+              ) : null}
               {data?.metering_description ? <p>Charging starts: {data.metering_description}.</p> : null}
             </>
           ) : null}

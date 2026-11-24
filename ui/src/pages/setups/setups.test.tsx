@@ -506,3 +506,62 @@ describe("UI-9 label chips on Setups", () => {
     expect(selectorBox().value).toBe("tier=");
   });
 });
+
+describe("UI-12 weight source, attributes and the acquire warning", () => {
+  const priced = (id: number, source: Setup["weight_source"], attrs: Record<string, string> = {}): Setup => ({
+    ...base, id, name: `src-${id}`, labels: { size: "medium" }, weight: 1.15, weight_source: source, weight_attributes: attrs,
+    state: "free", cost_per_hour_tokens: { now: 2.3, at_peak: 3.45 },
+  });
+  const mountWith = (items: Setup[], over: Partial<SetupList> = {}) => {
+    mockApi(routes({ "GET /api/v1/setups": list(over, items) }));
+    mount();
+  };
+  const rowOf = async (name: string) => within(await screen.findByRole("table", { name: "All setups" })).getByText(name).closest("tr")!;
+
+  it("UI-12 the weight cell carries a tag for reported and override, and none for rule or default", async () => {
+    mountWith([priced(1, "reported"), priced(2, "override"), priced(3, "rule"), priced(4, "default")]);
+    expect(within(await rowOf("src-1")).getByText("reported")).toBeInTheDocument();
+    expect(within(await rowOf("src-1")).getByText("1.15")).toBeInTheDocument();
+    expect(within(await rowOf("src-2")).getByText("override")).toBeInTheDocument();
+    for (const n of ["src-3", "src-4"]) {
+      const row = await rowOf(n);
+      expect(within(row).queryByText("reported")).toBeNull();
+      expect(within(row).queryByText("override")).toBeNull();
+      expect(within(row).queryByText("rule")).toBeNull();
+      expect(within(row).queryByText("default")).toBeNull();
+    }
+  });
+
+  it("UI-12 attributes are one secondary line, not columns, and absent when empty", async () => {
+    mountWith([priced(1, "reported", { "memory-gb": "512", "storage-gb": "4000", tier: "gold" }), priced(2, "reported")]);
+    const row = await rowOf("src-1");
+    expect(within(row).getByText("memory-gb 512 · storage-gb 4000 · tier gold")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "All setups" });
+    const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers.some((h) => /memory|storage|tier/.test(h ?? ""))).toBe(false);
+    expect(within(await rowOf("src-2")).queryByText(/memory-gb/)).toBeNull();
+    expect(screen.queryByLabelText("memory-gb")).toBeNull(); // no filter either
+  });
+
+  const SENTENCE = "Weights are reported by automation, so the price can change while the setup is held.";
+  it.each(["reported", "rule", "default", "override"] as const)(
+    "UI-12 the acquire dialog shows the change warning when reported_weights_enabled is true, whatever the source (%s)",
+    async (source) => {
+      mountWith([priced(5, source, { tier: "gold" })], { reported_weights_enabled: true });
+      await userEvent.click(await screen.findByRole("button", { name: "Acquire src-5" }));
+      const dialog = await screen.findByRole("dialog", { name: "Acquire src-5?" });
+      expect(dialog).toHaveTextContent("Weight 1.15");
+      expect(dialog).toHaveTextContent("tier gold");
+      expect(dialog).toHaveTextContent("Costs 2.3 / h now (2×), up to 3.45 / h at the highest band.");
+      expect(within(dialog).getByText(SENTENCE)).toBeInTheDocument();
+    },
+  );
+
+  it("UI-12 the acquire dialog has no change warning when reported_weights_enabled is false", async () => {
+    mountWith([priced(5, "reported")], { reported_weights_enabled: false });
+    await userEvent.click(await screen.findByRole("button", { name: "Acquire src-5" }));
+    const dialog = await screen.findByRole("dialog", { name: "Acquire src-5?" });
+    expect(dialog).toHaveTextContent("Weight 1.15");
+    expect(within(dialog).queryByText(SENTENCE)).toBeNull();
+  });
+});

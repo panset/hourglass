@@ -15,3 +15,5 @@ May write: new `*_test.go` files in `internal/app` and `internal/api` (and test-
 `./ci.sh`: 30 minute timeout, log into this task folder.
 ## Report
 Per CONTRACT.md "Reporting".
+## Known difference to cover (from verification 07)
+In the v1.1.0 fixture a hold priced by a policy's `Decision.Weight` has samples with no source (written before the migration). Design A3 says a sample with no source counts as not `policy`, so until the first poll after the upgrade that active hold and its burn figures show the resolver's weight (1.25 in the fixture) where v1.1.0 showed the sample's (3.25). This is the first deliberate A3 change, not a bug: the WGT-20 test must allow exactly this difference, by name, and must show that after one poll on the new code the hold shows the policy weight and source `policy` again. Read `.orchestrator/reported-weights/tasks/07-verify-m5/RESULT.md` for the details. Also: the state route no longer fails on a rule that cannot be evaluated (task 07b).

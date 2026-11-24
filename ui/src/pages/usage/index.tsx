@@ -30,11 +30,18 @@ import {
   type LedgerView,
 } from "./holdApi";
 import { PressureBar } from "./PressureBar";
+import { ledgerWeight, WeightTag } from "./weight";
 import styles from "./usage.module.css";
 
 const typeLabel = (e: LedgerEntry) => {
   const base = e.type.charAt(0).toUpperCase() + e.type.slice(1);
-  return e.multiplier !== null && e.type === "debit" ? `${base} · ${formatMultiplier(e.multiplier)}` : base;
+  if (e.type !== "debit") return base;
+  // UI-13: the weight follows the multiplier; nothing is added when the API says the weight is unknown.
+  const parts = [base];
+  if (e.multiplier !== null) parts.push(formatMultiplier(e.multiplier));
+  const w = ledgerWeight(e.weight_min, e.weight_max, e.weight_sources);
+  if (w) parts.push(w);
+  return parts.join(" · ");
 };
 
 const detail = (e: LedgerEntry) => {
@@ -235,7 +242,16 @@ export default function UsagePage() {
                       render: (h) =>
                         h.deployed ? <Badge tone="blue">Deployed</Badge> : <Badge tone="grey">Acquired · deploying</Badge>,
                     },
-                    { key: "weight", header: "Weight", render: (h) => formatTokens(h.weight) },
+                    {
+                      key: "weight",
+                      header: "Weight",
+                      render: (h) => (
+                        <>
+                          {formatTokens(h.weight)}
+                          <WeightTag source={h.weight_source} />
+                        </>
+                      ),
+                    },
                     {
                       key: "cost",
                       header: "Cost now",

@@ -70,7 +70,7 @@ describe("SVC-6 create, edit, delete", () => {
     render(<Page />);
     await userEvent.click(await screen.findByRole("button", { name: "Create service account" }));
     const dialog = screen.getByRole("dialog", { name: "Create service account" });
-    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(4);
+    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(5); // UI-14: weights:write is the fifth scope (design D3)
     await userEvent.type(within(dialog).getByLabelText("Name"), "new-svc");
     await userEvent.type(within(dialog).getByLabelText("Description"), "for tests");
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /holds:release/ }));
@@ -199,5 +199,23 @@ describe("SVC-4 SVC-6 tokens", () => {
     await userEvent.click(screen.getByRole("button", { name: "Revoke token" }));
     expect(await screen.findByText("Revoked token 2 of lab-agent.")).toBeInTheDocument();
     expect(calls.find((c) => c.method === "DELETE")!.url).toBe("/api/v1/admin/service-accounts/1/tokens/2");
+  });
+});
+
+describe("UI-14 the weights:write scope", () => {
+  it("UI-14 the scope list offers weights:write and sends it with the others", async () => {
+    const { calls } = mockApi(
+      routes({ "POST /api/v1/admin/service-accounts": () => json({ ...idle, id: 3, name: "w-svc", enabled: true }, 201) }),
+    );
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Create service account" }));
+    const dialog = screen.getByRole("dialog", { name: "Create service account" });
+    const boxes = within(dialog).getAllByRole("checkbox");
+    expect(boxes).toHaveLength(5);
+    await userEvent.type(within(dialog).getByLabelText("Name"), "w-svc");
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /weights:write/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create account" }));
+    await screen.findByText("Created w-svc.");
+    expect(calls.find((c) => c.method === "POST")!.body).toEqual({ name: "w-svc", description: "", scopes: ["weights:write"] });
   });
 });
