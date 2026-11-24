@@ -219,7 +219,7 @@ Wireframe shows, spec does not ask for (or says differently):
 3. Setup inventory shows a "Held by" column and a Status (Enabled/Disabled) column; the spec lists labels, weight, resource name, enabled flag, last seen.
 4. Setups page has a "Details" link for other holders' setups and a "Cost" cell with "Free for 1 h 20 m more" or "N / h if acquired". The spec says "open details JSON", which the wireframe does not show as JSON; a grace-period text is also not in the spec.
 5. The wireframe nav shows pending count inside "Users · 2 pending" and an "Audit log" link without a page.
-6. The Setups table shows weight only through the cost figure, not as its own column; the spec lists "weight" among the columns.
+6. The Setups table shows weight only through the cost figure, not as its own column; the spec lists "weight" among the columns. (Since reported weights, the Weight cell on Setups shows the weight itself; see item 14.)
 7. Settings has no hold-limit-specific section; "Max setups per developer" sits under "Allowance and timing" (the spec calls it hold limit). It also has "Poll interval (minutes)" and a "Require teardown before release" checkbox next to "Block acquiring at zero tokens"; the spec lists enforcement and the others elsewhere, and these may need cross-checking against the settings keys.
 8. Local admin row on Users ("Admin · fixed", "No balance", "Cannot hold setups") and the rule "An admin cannot remove their own admin role" are shown as notes; check these against AUTH requirements.
 9. Grant panel has "Reset to 300" with a reason requirement; the spec says "reset a balance" without requiring a reason.

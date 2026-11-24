@@ -189,8 +189,39 @@ An admin edits these in the UI (Admin, Settings), or with `GET` and `PUT /api/v1
 | `release_requires_teardown` | `true` | A user's release of a setup the provider still reports is accepted but pending (the hold shows Releasing and keeps charging); it completes at the first poll where the setup is no longer reported. No effect without a provider |
 | `poll_interval` | `5m` | Minimum `1m` |
 | `enforcement` | `false` | `false` is shadow mode: balances fall but nobody is blocked |
+| `reported_weights` | off, minimum `0`, no maximum, `max_age` `10m` | Lets a customer's service report a weight per setup. An object of four fields, see [Reported weights](#reported-weights) |
 
-Rate rules (an ordered list of selector and weight) and the setups themselves are also stored in the database. `PUT /api/v1/admin/settings` takes the whole object: fetch it with `GET`, change a key, and send it back.
+Rate rules (an ordered list of selector and weight) and the setups themselves are also stored in the database. `PUT /api/v1/admin/settings` takes the whole object: fetch it with `GET`, change a key, and send it back. The one exception is `reported_weights`: a `PUT` that does not carry it leaves the stored value unchanged, so a script written for an earlier release cannot switch the feature off by accident.
+
+### Reported weights
+
+By default a setup's weight, and so its price, comes from the rate rules and changes only when an admin edits a rule or a label. With `reported_weights` on, a service account that holds the `weights:write` scope can report a weight per setup (`PUT /api/v1/integration/weights`, described in [the integration guide](integrating.md#report-weights)), and Hourglass applies it within limits you set. The feature is **off by default**, and it is a setting in the database, not a key of the config file: turning it on changes who sets prices, so it is audited like every other setting (before and after value, the whole object).
+
+| Field | Default | Rule |
+| --- | --- | --- |
+| `enabled` | `false` | Can be `true` only when `max` is set |
+| `min` | `0` | The lowest weight a report may carry. Finite, at least 0, and at most `max` when `max` is set. A minimum above 0 means no setup can be reported free |
+| `max` | none | The highest weight a report may carry. Null, or above 0 and at most 1e12. There is no default: you choose the ceiling |
+| `max_age` | `10m` | How long a report applies after its `observed_at`. A duration from `1m` to `24h` |
+
+When the key is present in a `PUT`, all four fields are required. `GET` always returns it. Both limits are inclusive. A change applies from the next poll and the next read, and is not retroactive.
+
+What it does, in short:
+
+- A usable reported weight replaces the rate rules for that setup, including a rule of weight 0, and every charge, balance and screen uses it. A setup with no usable reported weight (none sent, left out of the latest report, expired, outside the limits, or the feature off) is priced as before: its override, else its rate rule, else the default weight. A poll never fails for that reason.
+- A weight outside the limits is **refused**, never clamped, and a report is accepted or refused whole. The previous report stays in force until it expires.
+- A reported weight changes the charge and nothing else. The snapshot that the pressure source and the metering policy receive keeps the admin's weight, so a weights reporter cannot move lab pressure or the multiplier.
+- Turning the setting off deletes nothing: the stored report is ignored, and applies again if the setting is turned back on while it is still within `max_age`. Raising `max_age` makes an expired report apply again in the same way.
+
+**Choosing `max_age`.** It should be at least twice the poll interval, and well above the period at which the service reports (every 60 seconds), as for the `reported` provider and pressure source. With a shorter value, polls can alternate between the reported price and the rate-rule price without any error. Unlike those two reports, an expired weights report does not fail polls and does not stop charging: every hold is charged at its rate-rule price until the next report, and the Setups page and the state route show that (`not_applied` is `expired`). A weights reporter that is down for longer than `max_age` therefore changes prices without any alarm; raise `max_age` (up to 24 hours) if you would rather keep the last reported weights through a longer outage, and have the service alert on a `400` from the weights route. Admin, Settings shows when the last weights report arrived and from which account.
+
+**What tightening the limits does.** Because a report is refused whole and never clamped:
+
+- A stored weight outside the new limits stops applying at once, from the next poll and the next read; that setup is charged at its rate-rule price.
+- Every later report that still contains such a weight is refused whole, with a `400` that names the setup. After `max_age`, every setup is back on its rate-rule price, with polls succeeding.
+- You see both on Admin, Settings: the number of stored weights the limits exclude at once, and the last refused report (time, account, message) as it arrives. The same two are in `last_weights_report` and `last_weights_refusal` of `GET /api/v1/admin/collector`; they are null while the feature is off. The last refusal is kept in memory and is lost at a restart.
+
+**Per-setup override.** A setup can carry a weight override (Admin, Setup inventory, "Weight override", or `weight_override` in `POST` and `PUT /api/v1/admin/setups`). It pins that setup's weight above a reported weight and above the rate rules, whether reported weights are on or off, and is not bound by the reported minimum and maximum. It pins the weight, not the cost: the pressure multiplier still applies. Use it to exempt a setup from reports. On `PUT` an absent field leaves it unchanged, `null` clears it, and a number sets it; it belongs to the setup and survives a rename, and setting and clearing it are audited. A metering policy's `Decision.Weight` above 0 still replaces the result for its hold and poll.
 
 ## Sign-in: OIDC
 
@@ -465,7 +496,7 @@ pressure:
     max_age: 10m
 ```
 
-`max_age` is a Go duration, default `10m`, minimum `1m`. A report is stale once it is older than `max_age`, counted from the `observed_at` the service sent. While either selected report is missing or stale, every poll fails with an error that names `max_age`, nobody is charged for that time, and the gap is recorded as an outage (see [Roll out in shadow mode](#roll-out-in-shadow-mode) for how outages are shown). You can select just one of the two; `provider` and `pressure` are independent. A report sent to the integration API while its extension is not selected is refused with 409 `not_configured`.
+`max_age` is a Go duration, default `10m`, minimum `1m`. A report is stale once it is older than `max_age`, counted from the `observed_at` the service sent. While either selected report is missing or stale, every poll fails with an error that names `max_age`, nobody is charged for that time, and the gap is recorded as an outage (see [Roll out in shadow mode](#roll-out-in-shadow-mode) for how outages are shown). You can select just one of the two; `provider` and `pressure` are independent. A report sent to the integration API while its extension is not selected is refused with 409 `not_configured`. The weights report is separate: it does not depend on the config file, and a stale or missing one never fails a poll (see [Reported weights](#reported-weights)).
 
 Match `max_age` to the poll interval and to how often the service reports. The service should report every 60 seconds, the poll runs every `poll_interval` (5 minutes by default, 1 minute at the least), and each poll needs a report younger than `max_age`. So `max_age` should be at least twice the poll interval and well above the reporting period, or one late report fails a poll. The default 10 minutes suits the default 5-minute poll if the service reports every minute. If you lower `poll_interval`, `max_age` can stay at 10 minutes; if you raise it above 5 minutes, raise `max_age` with it. A shorter `max_age` finds a dead reporter sooner but fails polls on short hiccups; a longer one lets old data stand in for longer. Check the result before relying on it with `hourglassd check-provider`, which prints the age of each report.
 
@@ -473,7 +504,7 @@ Match `max_age` to the poll interval and to how often the service reports. The s
 
 A service account is the identity of your service. It is a separate kind of principal, never a user and never an admin or developer, and its token works only under `/api/v1/integration/`.
 
-1. In Admin, Service accounts, create an account. The name is 1 to 64 letters, digits, `.`, `_` or `-`, and cannot be changed. Give it only the scopes the service needs: `deployments:write`, `pressure:write`, `state:read`, `holds:release`. (`GET` and `PUT /api/v1/admin/service-accounts` do the same from a script.)
+1. In Admin, Service accounts, create an account. The name is 1 to 64 letters, digits, `.`, `_` or `-`, and cannot be changed. Give it only the scopes the service needs: `deployments:write`, `pressure:write`, `weights:write`, `state:read`, `holds:release`. `weights:write` allows only `PUT /api/v1/integration/weights`, and no other scope allows that route; no existing account gains it when you upgrade. (`GET` and `PUT /api/v1/admin/service-accounts` do the same from a script.)
 2. Issue a token. It looks like `hgsa_<id>_<64 hex characters>` and is shown once. Only its hash is stored. Put it in the service's secret store.
 3. To rotate: issue a second token for the same account, switch the service to it, check that the first token's last-used time in the UI stops moving, then revoke the first. An account can have several live tokens at once, so there is no gap. Tokens can have an expiry; give them one if your secret manager can rotate them.
 4. To cut a service off at once, disable the account (every token stops working) or revoke the one token.
@@ -583,6 +614,23 @@ This release adds two migrations. `0006` adds a column to the ledger (`rollup_co
 - **`GET /api/v1/me/ledger` without the new parameters** still returns one entry per stored row, unpaged, in the same order, with the same fields plus `entry_count` and `next_cursor` (null). After compaction the stored rows of older days are the rolled-up ones, so the answer gets shorter for those days, and the running balance shown against a grant or other entry in the middle of a compacted day no longer includes that day's earlier debits for the same hold. Each row's balance still equals the previous row's balance plus its own amount, and the balance after the last entry of every day is unchanged.
 - **Two other responses each gain one field:** `GET /api/v1/setups` returns `label_index` and `GET /api/v1/session` returns `display_name`. Nothing is removed or renamed.
 - **Sign-in is unchanged** until you add a pre-approval: with none, a new SSO user is `pending` and gets `user.pending`, as before.
+
+### Upgrading to reported weights (migration 0008)
+
+This release adds one migration, `0008`, and the optional weights report. `0008` is additive: it creates two tables for the stored weights report and adds a nullable `weight_source` column to the usage samples and a nullable `weight_override` column to the setups. No existing row is rewritten. No configuration change is needed: reported weights are **off by default**, there is no new key in the config file, and an existing config file and environment start the new version unchanged. With the feature off and no override set, every charge and every balance is what the previous release computes from the same data.
+
+- **Back up first, and keep the backup.** There is no down migration. Once `0008` has run, an older binary refuses the database (`database schema version N is newer than this binary`). The way back is the backup taken before the upgrade, which loses what was written since. See [Backup and restore](#backup-and-restore).
+- **No existing account can use the new route.** `weights:write` is a new scope that no account holds until an admin adds it, and no existing token or scope allows `PUT /api/v1/integration/weights`. With the setting off the route answers 409 `not_configured`.
+- **Added response fields. Nothing is removed or renamed.** `GET /api/v1/setups` gains `reported_weights_enabled`, and each setup gains `weight_source` and `weight_attributes` (and, in its admin block, `reported_weight`, `reported_weight_not_applied` and `weight_override`). A hold gains `weight_source` and `weight_attributes`, and the `burning` entries of `GET /api/v1/me` gain `weight_source`. Each ledger entry of `GET /api/v1/me/ledger` gains `weight_min`, `weight_max` and `weight_sources` (null when unknown, for debits whose samples are gone or were written before the upgrade). `GET /api/v1/integration/state` gains a top-level `weights` and a `weight` on every setup. `GET /api/v1/admin/collector` gains `last_weights_report` and `last_weights_refusal` (null while the feature is off). `GET /api/v1/admin/settings` always returns `reported_weights`, and `PUT` accepts it as an optional key. `POST` and `PUT /api/v1/admin/setups` accept an optional `weight_override`. A client that ignores unknown fields needs no change.
+- **Four fields change meaning.** These are deliberate. With the feature off and no override, the first and the last return what they return today.
+  - `Setup.weight` (`GET /api/v1/setups`, the admin setup views) was "the weight resolved from the rate rules". It is now "the weight Hourglass applies" (an override, a usable reported weight, a rate rule or the default weight, in that order), and `weight_source` says which.
+  - An active `Hold.weight` and the burn figures (`burning` in `GET /api/v1/me`, burn per hour on My usage, and the Admin Users burn) were the weight of the hold's last usage sample. They are now the weight Hourglass would charge now, so after an admin edits a rate rule they change at once, as the Setups list always has, and not at the next poll. A hold whose latest sample came from a Go metering policy's `Decision.Weight` still shows that sample's weight, with the source `policy`.
+  - The Admin Users burn per hour now honours a metering policy's weight; it used to show the rate-rule weight even for a hold whose policy had replaced it.
+  - `matched_rule_selector` and a rule's `match_count` describe the first matching rate rule. That rule is no longer always the one that sets the weight, because an override or a reported weight can replace it.
+- **Policy holds right after the upgrade.** A hold whose weight a Go metering policy sets shows its rate-rule weight on screens between the upgrade and the first poll after it, because samples written before the upgrade carry no source. Charges are not affected, and the first poll puts the policy weight back. The bundled `default` policy never sets a weight, so the bundled configuration is not affected.
+- **Body keys.** The top-level keys of a weights report (`observed_at`, `weights`) are matched without regard to case, as in the other two reports. The keys inside an entry are strict.
+- **Extensions.** No interface, type or contract changes. `SetupState.Weight` is the base weight, so the `inventory` pressure source and every custom extension compute what they computed before. See [Extending Hourglass](extending.md#snapshot-holdstate-and-decision).
+- **Turning it on** is a separate, audited step (Admin, Settings, "Reported weights"; a maximum is required). See [Reported weights](#reported-weights).
 
 ## Data retention
 

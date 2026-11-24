@@ -113,8 +113,9 @@ type Hold struct {
 // SetupState is an enabled setup as the core resolves it for one poll.
 type SetupState struct {
 	Setup
-	// Weight is the weight resolved from the rate rules, or the default
-	// weight when no rule matches.
+	// Weight is the setup's base weight: its weight override when it has
+	// one, else the first matching rate rule's weight, else the default
+	// weight. It is never a reported weight.
 	Weight float64
 }
 
@@ -152,10 +153,11 @@ Rules for these types:
 
 - **Use `Snapshot.Time`, never the wall clock.** `Time` is when the poll started. The core can run on an injected clock, and the conformance suite calls `Decide` twice with the same input and expects the same answer. A policy that reads `time.Now()` fails that check.
 - **Treat everything as read-only.** The same `Snapshot` goes to the pressure source and to every `Decide` call. The conformance suites check that you do not modify it.
-- **`Decision.Weight` of 0 means "use the rate rules".** A policy cannot override a hold to a weight of exactly 0. To make a setup free, return `Meter: false`, or give it a rate rule of weight 0. A negative or non-finite weight fails the poll.
+- **`Decision.Weight` of 0 means "use the resolved weight" (the override, a reported weight, the rate rules or the default).** A policy cannot override a hold to a weight of exactly 0. To make a setup free, return `Meter: false`, or give it a rate rule of weight 0. A negative or non-finite weight fails the poll.
 - **Set `Decision.Reason` whenever `Meter` is true.** Users see it on the dashboard. The conformance suite checks it.
 - **`Snapshot.Setups` lists enabled setups only.** `Snapshot.Holds` lists active holds only. Allocations with the same resource name are merged into one before you see them.
-- **`SetupState.Weight` is already resolved from the rate rules**, for the pressure source and the policy alike. Only a snapshot built by `hourglassd check-provider` has weight 0 (see [Check a provider](#check-a-provider)).
+- **`SetupState.Weight` is the base weight**, for the pressure source and the policy alike: the setup's weight override if an admin set one, else the weight of the first matching rate rule, else the default weight. It does **not** include a reported weight. A customer's service can report a weight per setup (see [the integration guide](integrating.md#report-weights)); Hourglass charges that weight, but a pressure source and a policy never see it, so a weights reporter cannot move lab pressure or the multiplier, and an extension computes what it computed before reported weights existed. A policy cannot see the reported weight. Only a snapshot built by `hourglassd check-provider` has weight 0 (see [Check a provider](#check-a-provider)).
+- **Order of precedence for a hold's charge.** Hourglass resolves one weight per setup for each poll: the setup's weight override, else a usable reported weight, else the first matching rate rule, else the default weight. `Decision.Weight` above 0 replaces that result for the one hold and poll; the usage sample then records the source `policy`. So the order is: `Decision.Weight`, override, reported weight, rate rule, default. A policy that returns 0 leaves the resolved weight in place.
 
 ## What the core guarantees when it calls you
 
@@ -174,7 +176,7 @@ Other details you can rely on:
 - Each call gets a context with a 30-second deadline. A call that ignores its context is abandoned at the deadline, not killed. Honour the context.
 - A timeout is an error. For `hold.acquiring` the user sees `hook <name> timed out`.
 - Metering starts at the first poll where `Decide` returns `Meter: true`. That poll sets `metering_started_at` and debits nothing. Each later poll in which `Decide` returns `Meter: true` debits the time since the previous successful poll (at most twice the poll interval). A poll where it returns `Meter: false` debits nothing. The core does not remember "metering is on": your policy decides every poll. The bundled `default` policy keeps returning true once `HoldState.Hold.MeteringStartedAt` is set.
-- When `Decision.Weight` is greater than 0 it replaces the weight from the rate rules for that poll.
+- When `Decision.Weight` is greater than 0 it replaces the resolved weight (override, reported weight, rate rule or default, whichever applies) for that hold and poll.
 - `Provider.List` is the only source of `hold.deployed`: the event fires the first poll where the provider reports the hold's resource. With no provider, holds are never marked deployed.
 
 ## Register an extension
@@ -667,7 +669,7 @@ All are linked into `hourglassd`. Setting a name in the config is what enables o
 | `"0"` | Meter from the moment of acquire |
 | `"off"` | No time trigger |
 
-With both triggers off, nothing is ever metered. It always returns `Weight: 0`, so the rate rules decide the weight. It is the default metering policy.
+With both triggers off, nothing is ever metered. It always returns `Weight: 0`, so the resolved weight (override, reported weight, rate rule or default) decides it. It is the default metering policy.
 
 **`vsphere`** (provider and pressure source share one block and one vCenter session):
 

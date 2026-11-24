@@ -6,6 +6,8 @@ Hourglass is an open-source token-management framework for shared lab setups. It
 
 **Ledger, labels and sign-in.** The ledger on My usage pages 20 rows at a time, by day or every poll; storage rolls the per-poll debits of days older than a week up to one row per hold and day, with the same totals. The Setups page lists every label as a clickable chip that fills the selector. The top bar greets the signed-in user by name. An admin can pre-approve SSO users by email, in Admin, Users or with a file, so that a listed person gets their role at the first sign-in instead of waiting; [docs/deploying.md](docs/deploying.md#pre-approving-sso-users) explains how to load a list.
 
+**Reported weights.** A customer's service can report a weight per setup, so that the price of a setup follows what the setup currently reserves and comes down when it shrinks. It is off until an admin turns it on with a minimum and a maximum. Hourglass applies a valid report within those limits, records on every charge where the weight came from, shows the weight and its source wherever a price is shown, and falls back to the rate rules, without failing a poll, whenever no valid report exists. An admin can pin one setup's weight. See [docs/integrating.md](docs/integrating.md#report-weights) and [docs/deploying.md](docs/deploying.md#reported-weights).
+
 **Status: v1, tested against a simulator.** All vSphere code is built and tested against mocks and the govmomi simulator. It has not been run against a real vCenter, and the first run needs the [checklist](docs/deploying.md#first-run-checklist-against-a-real-vcenter). Hourglass runs as one process with one SQLite file and has no high availability.
 
 ## Quick start with Docker and Bazel

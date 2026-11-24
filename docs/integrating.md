@@ -5,7 +5,7 @@ This guide is for the engineer or AI agent who installs Hourglass in a customer 
 It has three parts. Do them in order.
 
 1. [Part 1: Set up Hourglass](#part-1-set-up-hourglass). Run the container over HTTPS, with its data on a volume.
-2. [Part 2: Build the integration service](#part-2-build-the-integration-service). Report deployments and pressure, react to events, reconcile.
+2. [Part 2: Build the integration service](#part-2-build-the-integration-service). Report deployments and pressure, optionally report weights, react to events, reconcile.
 3. [Part 3: Verify and go live](#part-3-verify-and-go-live).
 
 [Deploying Hourglass](deploying.md) is the full operator reference (every setting, OIDC, backup, upgrade). You need it only for something this guide does not cover.
@@ -43,16 +43,17 @@ It has three parts. Do them in order.
 
 A **setup** is one shared lab environment, identified by a name such as `lab-03`. A **hold** is one user holding one setup. Your service always refers to a setup by its Hourglass name.
 
-## The four jobs
+## The five jobs
 
 | Job | Call | How often |
 | --- | --- | --- |
 | Report what is deployed | `PUT /api/v1/integration/deployments` | Every 60 seconds, and right after you deploy or tear down |
 | Report lab pressure | `PUT /api/v1/integration/pressure` | Every 60 seconds |
+| Report weights (optional) | `PUT /api/v1/integration/weights` | Every 60 seconds, if the admin has turned reported weights on |
 | React to events | Receive webhooks from Hourglass | As they arrive |
 | Reconcile | `GET /api/v1/integration/state` | At startup and every 5 minutes |
 
-Only the first two are required to make metering work. Add the others when you want Hourglass to drive deployment and teardown.
+Only the first two are required to make metering work. Report weights when the price of a setup should follow what the setup currently reserves. Add the others when you want Hourglass to drive deployment and teardown.
 
 **Reporting more often than every 60 seconds gains nothing.** Hourglass reads your latest report once per poll. Reporting less often than every few minutes is dangerous: see [If you stop reporting](#if-you-stop-reporting).
 
@@ -216,7 +217,7 @@ CSRF=$(curl -sS -b cookies.txt $HOURGLASS/api/v1/session | jq -r .csrf_token)   
 
 ```sh
 ACCOUNT=$(curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
-  -d '{"name":"lab-automation","scopes":["deployments:write","pressure:write","state:read","holds:release"]}' \
+  -d '{"name":"lab-automation","scopes":["deployments:write","pressure:write","weights:write","state:read","holds:release"]}' \
   $HOURGLASS/api/v1/admin/service-accounts | jq -r .id)
 
 (umask 077; curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -X POST \
@@ -227,6 +228,7 @@ ACCOUNT=$(curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'Content-Type: app
 | --- | --- |
 | `deployments:write` | Reporting what is deployed |
 | `pressure:write` | Reporting lab pressure |
+| `weights:write` | Reporting weights. Only the weights route accepts it, and no other scope allows that route. Leave it out if you do not report weights |
 | `state:read` | Reading setups and holds |
 | `holds:release` | Releasing a hold after your automation tears a setup down |
 
@@ -361,15 +363,153 @@ Response (`observed_at` and `expires_at` as for deployments):
 {"value": 0.72, "observed_at": "...", "received_at": "...", "expires_at": "..."}
 ```
 
+## Report weights
+
+By default the price of a setup comes from the admin's rate rules and changes only when an admin edits a rule or a label. If the price should follow what a setup currently reserves, for example its provisioned memory and storage, and come down when the setup shrinks, your service can report a **weight** for each setup. Your service works the weight out; Hourglass applies it, within limits the admin sets, and never learns what it was computed from. This job is optional. Without it, nothing in this guide changes.
+
+A charge is the weight times the pressure multiplier times the hours elapsed. A reported weight changes the weight and nothing else: it cannot move lab pressure or the multiplier.
+
+### An admin turns it on first
+
+The feature is off until an admin turns it on, and the route refuses every report until then. The switch and its limits are settings in Hourglass (Admin, Settings, "Reported weights"), not keys of the config file. They are changed through the admin API like this, signed in as in [step 6](#step-6-set-the-admin-password):
+
+```sh
+curl -sS -b cookies.txt -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -X PUT \
+  -d "$(curl -sS -b cookies.txt $HOURGLASS/api/v1/admin/settings \
+        | jq '.settings | .reported_weights = {enabled: true, min: 0, max: 20, max_age: "10m"}')" \
+  $HOURGLASS/api/v1/admin/settings | jq -c .settings.reported_weights
+```
+
+```json
+{"enabled":true,"min":0,"max":20,"max_age":"10m"}
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | The switch. It can be turned on only when `max` is set |
+| `min` | `0` | The lowest weight a report may carry, inclusive |
+| `max` | none | The highest weight a report may carry, inclusive. The admin chooses it: an upper bound that catches a unit mistake in your service |
+| `max_age` | `10m` | How long a weights report applies after its `observed_at`. From `1m` to `24h` |
+
+Turning the switch on without a `max` is refused: `enabled can be true only when max is set: set a maximum weight to turn reported weights on`. A change applies from the next poll and is not retroactive. Ask the admin for a `max_age` of at least twice the poll interval (see [If you stop reporting](#if-you-stop-reporting)).
+
+### The request
+
+```sh
+curl -sS -X PUT "$HOURGLASS/api/v1/integration/weights" \
+  -H "Authorization: Bearer $HOURGLASS_TOKEN" -H 'Content-Type: application/json' \
+  -d '{
+        "weights": [
+          {"setup": "lab-03", "weight": 1.15, "attributes": {"memory-gb": "512", "storage-gb": "4000", "tier": "gold"}},
+          {"setup": "lab-07", "weight": 0.8}
+        ]
+      }'
+```
+
+Response:
+
+```json
+{"observed_at": "2026-11-24T06:19:04.255Z", "received_at": "2026-11-24T06:19:04.255Z", "expires_at": "2026-11-24T06:29:04.255Z", "accepted": 2, "unknown": []}
+```
+
+`observed_at` is optional, in RFC 3339 UTC, and works as in the other two reports (see below). `expires_at` is `observed_at` plus the admin's `max_age`. `unknown` lists names that match no setup in Hourglass: they are checked like any other entry, stored and ignored, and a setup created later with that name takes the weight. A report with `{"setup": "lab-99", ...}` answers `"accepted": 2, "unknown": ["lab-99"]`.
+
+Rules:
+
+- **The weight should describe what the setup reserves, not live utilisation.** Report its provisioned size: the memory and storage it holds, not how busy it is. A weight that follows CPU load would make a user pay more for using the setup they hold. Hourglass cannot check this; it is yours to get right.
+- **Send the complete set, from one service, every time.** The list replaces the stored report whole. A setup you leave out has no reported weight and falls back to the admin's rate rules. An empty list, `{"weights": []}`, is valid and means no setup has one. A missing or `null` `weights` is a `400`. Do not have two services each report part of the set: the last report wins and the other's setups fall back.
+- **Send weights before deployments.** The two reports are separate calls and a poll can run between them. See the next rule for why the order matters at the end of a hold.
+- **Keep reporting a setup's weight until its `hold` is `null` in the state.** A setup left out of the report is charged at the rate-rule price while it is held, including the last interval of a release: when a user releases, Hourglass charges the interval up to the poll that sees the setup gone, and if your service already dropped the setup from its weights report at teardown, that interval is charged at the rate-rule price. Stop reporting the weight only after the hold has ended.
+- **If you cannot size a setup, leave it out. Never send 0 in its place.** A weight of 0 is valid, when the admin's minimum allows it, and means the setup is free; a setup you could not size is not free. Leaving it out sends it to the rate rules.
+- **A weight is a number, not a string.** `1.15` is accepted; `"1.15"` is refused, as are `null`, `true`, and a number too large for a 64-bit float. The weight must be finite and between the admin's `min` and `max`, both inclusive. `-0` counts as 0. A value above `max` is refused whole, not clamped: the most likely cause is a bug in your service, and Hourglass does not charge the top price for a bug.
+- **A report is accepted or refused as a whole.** One invalid entry refuses the report, nothing is stored, and the previous report stays in force until it expires.
+- A weight may be reported for any setup, whether it is deployed or not, held or free, enabled or disabled. If you report only deployed setups, a free setup shows its rate-rule price in the Setups list and in the acquire dialog, and the price changes once it is deployed. To avoid that, report every setup you can size.
+- `setup` is the Hourglass setup name, exactly, a non-empty string, not repeated in one report.
+- An entry holds only `setup`, `weight` and `attributes`. Any other field in an entry is refused. (The top-level keys of the body are matched without regard to case, as in the other two reports; the keys inside an entry are strict.)
+- `attributes` is optional: at most 16 entries, keys of 1 to 63 lowercase letters, digits, `.`, `_`, `/` or `-` that start and end with a letter or digit, and string values of at most 63 characters. Hourglass stores them, returns them and shows them next to the weight in the Setups list and the acquire dialog. It never interprets them, and no rate rule or filter matches them. They are shown only while the entry applies.
+- A usable reported weight replaces the rate rules for that setup, even a rule of weight 0. The way to exempt a setup is the admin's per-setup weight override, which pins the setup's weight above both a report and the rate rules.
+- **Ordering and clock skew** are the rules of the other reports: an `observed_at` older than the one Hourglass holds is `409 stale_report`, an equal one replaces it, and one more than 2 minutes ahead of Hourglass's clock is `400 validation`. Without `observed_at`, Hourglass uses the time it received the report. The weights report is ordered separately from the deployments report, so the two may carry the same `observed_at` or different ones.
+- At most 10,000 entries and a 1 MB body. A report cannot be split across calls, so a large report with many attributes reaches the body limit first.
+
+What Hourglass does with it:
+
+- The report takes effect at the next poll and in every screen and API answer from then on. It never triggers a poll, a debit or an event.
+- A poll charges the whole time since the previous poll at the weight it resolves at that moment. A weight reported one second before a poll prices that whole interval, and no earlier charge changes.
+- Every charge records its weight and where it came from (`override`, `reported`, `rule`, `default` or, for a Go metering policy's weight, `policy`). Users see the weight on their holds and on each debit.
+- A setup without a usable reported weight is charged at the weight it would have had without this feature, in every state of the hold, and the poll does not fail for that reason.
+
+### What can be refused
+
+Checks run in this order: your token's scope, then whether reported weights are on, then the body, then the ordering.
+
+- **`409 not_configured`**: `reported weights are off: an admin turns them on with the reported_weights setting; the report was not stored`. An admin has not turned the setting on. This is not a change to the config file, and there is nothing to fix in your service: ask the admin. It is answered whatever the body, and nothing is stored.
+- **`400 validation`** with `field` `weights`. The message always gives the entry's position, counted from 0, its setup name when the entry has a non-empty one, and the reason. The first invalid entry is reported. Real examples, each of which refused the whole report:
+
+  ```
+  weights[3] (setup "lab-03"): weight 25 is above the maximum 20
+  weights[0] (setup "lab-03"): weight must be a JSON number, not a string
+  weights[0] (setup "lab-03"): weight is required
+  weights[0] (setup "lab-03"): weight -1 is below the minimum 0
+  weights[0]: setup must be a non-empty string
+  weights[1] (setup "lab-03"): setup is repeated (first at weights[0])
+  weights[0] (setup "lab-03"): unknown field "memory" (an entry holds only setup, weight and attributes)
+  weights[0] (setup "lab-03"): attributes "memory-gb" must be a string
+  weights is required (an empty list means no setup has a reported weight)
+  ```
+
+  A body that is not valid JSON at all gets `request body is not valid JSON` and cannot name an entry. This includes a bare `NaN` or `Infinity`, which some JSON encoders write for an invalid number: encode your numbers so that this cannot happen, and check them before you send.
+- **`409 stale_report`** and `400 validation` for `observed_at`, as for the other reports.
+- **`403 forbidden`** if the token lacks `weights:write`. An account that holds every other scope is refused too.
+
+**Alert on every `400` from this route.** It means your service sent a value Hourglass does not accept, and, unlike the other two reports, nothing stops charging to tell you: the previous report stays in force until `max_age` and then the prices quietly go back to the rate rules. An admin sees the last refused report, with its time, your account's name and the message, on the Settings page and in the collector view.
+
+### Check that it was taken
+
+The state route ([Reconcile](#reconcile)) tells your service what Hourglass applies now, so it can check that its report was taken. Read the setup's `weight`: `source` is `reported` and `applied` equals what you sent.
+
+```sh
+curl -sS "$HOURGLASS/api/v1/integration/state" -H "Authorization: Bearer $HOURGLASS_TOKEN" \
+  | jq '{weights, setups: [.setups[] | {name, weight}]}'
+```
+
+```json
+{
+  "weights": {"enabled": true, "min": 0, "max": 20, "observed_at": "2026-11-24T06:18:46.000Z", "expires_at": "2026-11-24T06:28:46.000Z"},
+  "setups": [
+    {"name": "lab-03", "weight": {"applied": 1.15, "source": "reported", "reported": 1.15, "not_applied": null,
+                                  "attributes": {"memory-gb": "512", "storage-gb": "4000", "tier": "gold"}}},
+    {"name": "lab-07", "weight": {"applied": 0.8, "source": "reported", "reported": 0.8, "not_applied": null, "attributes": {}}},
+    {"name": "lab-09", "weight": {"applied": 1, "source": "default", "reported": null, "not_applied": null, "attributes": {}}}
+  ]
+}
+```
+
+- `applied` and `source` are what Hourglass applies right now and what the next poll charges if nothing changes before it. `source` is `override`, `reported`, `rule` or `default`.
+- `reported` is the weight in the stored report for the setup, or `null`. `not_applied` says why a reported weight is not applied: `expired` (the report is older than `max_age`), `out_of_bounds` (the admin's limits now exclude it) or `override` (the admin pinned this setup's weight). It is `null` when the weight applies or there is none.
+- `attributes` is `{}` when there are none or the entry is not applied.
+- At the top level, `weights` holds the switch, the limits (`max` is `null` when none is set), and the stored report's `observed_at` and `expires_at`. The two times are `null` before the first report and while the setting is off.
+- With the setting off, `reported` and `not_applied` are `null` for every setup and `source` is `rule` or `default`.
+- The rate rule that matched is not returned: it is admin configuration.
+
+### What the admin can do to your weights
+
+- **Tighten the limits.** A stored weight outside the new `min` or `max` stops applying at once, and that setup is charged at its rate-rule price (`not_applied` is `out_of_bounds`). Every later report that still holds such a weight is refused whole, so your service sees `400` until it reports weights inside the limits; after `max_age` every setup is back on the rate rules, with polls still succeeding. Real run, with the maximum lowered from 20 to 1 while `lab-03` was reported at 1.15: `lab-03` went to `{"applied": 2, "source": "rule", "reported": 1.15, "not_applied": "out_of_bounds"}`, and the same report was refused with `weights[0] (setup "lab-03"): weight 1.15 is above the maximum 1`.
+- **Pin one setup.** A weight override beats a report. The state shows the override as `source` and `override` as `not_applied` for the setup's reported weight.
+- **Turn the setting off.** Reports are then refused with `409 not_configured`. Nothing stored is deleted: if it is turned on again while the report is still within `max_age`, it applies again. Raising `max_age` makes an expired report apply again in the same way.
+
 ## If you stop reporting
 
-Each report expires `max_age` after its `observed_at` (10 minutes by default; the response's `expires_at` tells you exactly when). Once either report that the config selects has expired (or before the first one has arrived):
+Each report expires `max_age` after its `observed_at` (10 minutes by default; the response's `expires_at` tells you exactly when). Once either of those two reports that the config selects has expired (or before the first one has arrived):
 
 - Every poll fails until a fresh report arrives, with an error that names `max_age`. `poll.failed` is sent.
 - **Nobody is charged** for that time. Once reports resume, Hourglass records the gap as an outage and shows it to admins.
 - No hold is marked deployed or released by a poll.
 
 This is deliberate: stale data never bills anyone. It also means an outage of your service stops metering for the whole lab, so run it with a restart policy and alert on a failed report.
+
+**The weights report is the exception.** An expired or missing weights report does not stop charging and does not fail a poll. The prices go back to the admin's rate rules (the state shows `not_applied: "expired"` and `source: "rule"` or `"default"`), polls keep succeeding, and every hold keeps being charged, at the rate-rule price. Nothing tells you this happened except the state, so check `weights.expires_at` in it, and alert on a `400` from the weights route. A real run with `max_age` of `1m`: 75 seconds after the last report, the state showed `lab-03` at `{"applied": 2, "source": "rule", "reported": 1.15, "not_applied": "expired"}`, and the next poll succeeded.
+
+Keep the admin's `max_age` for weights at least twice the poll interval (so at least 10 minutes with the default 5-minute poll). With a shorter value, polls can alternate between the reported price and the rate-rule price without any error.
 
 ## React to events
 
@@ -423,7 +563,7 @@ Requirements for your receiver:
 curl -sS "$HOURGLASS/api/v1/integration/state" -H "Authorization: Bearer $HOURGLASS_TOKEN"
 ```
 
-The response lists every setup, disabled ones included, with its labels, details, enabled flag and current hold (`null` when free), plus the reports Hourglass currently holds from you and when they expire. Trimmed example:
+The response lists every setup, disabled ones included, with its labels, details, enabled flag and current hold (`null` when free), plus the reports Hourglass currently holds from you and when they expire, and the weight Hourglass applies to each setup. Trimmed example:
 
 ```json
 {
@@ -432,9 +572,11 @@ The response lists every setup, disabled ones included, with its labels, details
   "pressure": {"source": "reported", "reported": {"value": 0.72, "observed_at": "...", "expires_at": "..."},
                "smoothed": 0.68, "multiplier": 1},
   "deployments": {"provider": "reported", "observed_at": "...", "expires_at": "..."},
+  "weights": {"enabled": true, "min": 0, "max": 20, "observed_at": "...", "expires_at": "..."},
   "setups": [
     {"name": "lab-03", "labels": {"size": "large"}, "details": {"note": "sample"}, "enabled": true,
      "reported_deployed": true,
+     "weight": {"applied": 1.15, "source": "reported", "reported": 1.15, "not_applied": null, "attributes": {"memory-gb": "512"}},
      "hold": {"id": 7, "user": {"id": 2, "username": "", "email": "alice@example.com", "name": "Alice Example"},
               "acquired_at": "...", "metering_started_at": "...", "deployed_at": "...", "release_requested_at": null}}
   ]
@@ -443,7 +585,8 @@ The response lists every setup, disabled ones included, with its labels, details
 
 - `reported_deployed` says whether your latest stored report lists the setup. It is not what the last poll acted on: `hold.deployed_at` and `release_requested_at` are.
 - `poll.last_ok_at` is `null` until the first successful poll after Hourglass starts. `pressure.smoothed` is `null` until then too. `pressure.reported`, `deployments.observed_at` and `deployments.expires_at` are `null` before your first report (and when that extension is not `reported`).
-- There are no balances, ledger entries, other users, settings or audit data in it.
+- `weights` and each setup's `weight` are described under [Report weights](#check-that-it-was-taken); `weights.observed_at` and `weights.expires_at` are `null` before the first weights report and while the setting is off.
+- There are no balances, ledger entries, other users, audit data or settings in it, apart from the weights switch and limits.
 
 At startup and every 5 minutes, compare it with your infrastructure and correct the difference:
 
@@ -454,7 +597,7 @@ At startup and every 5 minutes, compare it with your infrastructure and correct 
 | Free | Deployed | Tear it down, or leave it and let admins see the orphan, according to your policy |
 | Held | Deployed | Nothing |
 
-Also check `pressure.reported.expires_at` and `deployments.expires_at`. If either is null or in the past, your reporting loop is not working.
+Also check `pressure.reported.expires_at` and `deployments.expires_at`. If either is null or in the past, your reporting loop is not working. If you report weights, check `weights.expires_at` too, and that each setup you reported shows `source: "reported"` with `applied` equal to what you sent. Unlike the other two, an expired weights report stops no charging: prices quietly go back to the rate rules.
 
 Use `hold.id` from the state response for the release call below.
 
@@ -483,7 +626,7 @@ You do **not** need this call for the normal release path. When a user asks to r
 2. You deploy the setup. This can take as long as it takes; the default policy does not charge until you report it deployed or 2 hours pass.
 3. Your next deployments report includes the setup. At the next poll Hourglass marks the hold deployed and starts charging.
 4. The user clicks Release. The setup is still deployed, so Hourglass marks the hold as releasing, keeps charging, and sends `hold.releasing`.
-5. You tear the setup down and send a deployments report without it.
+5. You tear the setup down and send a deployments report without it. If you report weights, keep the setup in your weights report until the hold is gone from the state.
 6. At the next poll Hourglass releases the hold, stops charging, and sends `hold.released`. That last poll's interval is still charged, because the hold was metered until the poll saw the setup gone.
 
 Charging starts and stops on poll boundaries, so allow up to one poll interval between your report and its effect. A user's second click on Release changes nothing, and a pending release cannot be cancelled.
@@ -495,12 +638,13 @@ Every error has the shape `{"error": {"code": "...", "message": "..."}}`.
 | Status | Code | Meaning | What to do |
 | --- | --- | --- | --- |
 | 401 | `unauthenticated` | Missing, wrong, expired or revoked token, a disabled or deleted account, or a user's cookie instead of a token | Stop and alert. Do not retry in a loop |
-| 403 | `forbidden` | The token lacks the scope for this route | Ask the admin to add the scope |
+| 403 | `forbidden` | The token lacks the scope for this route (`weights:write` for the weights route) | Ask the admin to add the scope |
 | 404 | `not_found` | No such hold | Re-read the state |
 | 409 | `stale_report` | Hourglass already holds a report with a later `observed_at` (an equal one is accepted) | Drop this report; send a fresh one on the next cycle |
 | 409 | `not_configured` | The config does not select the `reported` provider or pressure source | Fix the Hourglass config; the message names the key |
+| 409 | `not_configured` | On the weights route: reported weights are off. The message names the `reported_weights` setting | Ask an admin to turn it on (Admin, Settings). It is not a config file change |
 | 409 | `conflict` | The hold is already released | Treat as success |
-| 400 | `validation` | Bad body: not valid JSON, over 1 MB; `value` missing, not a number or outside 0 to 1; `deployments` missing or `null` (an empty list is fine); an empty or repeated setup name; more than 10,000 deployments or 32 labels in one; `observed_at` more than 2 minutes ahead; `reason` missing or over 500 characters. `message` says which, and `field` names it for most | Fix the request. Do not retry unchanged |
+| 400 | `validation` | Bad body: not valid JSON, over 1 MB; `value` missing, not a number or outside 0 to 1; `deployments` missing or `null` (an empty list is fine); an empty or repeated setup name; more than 10,000 deployments or 32 labels in one; `observed_at` more than 2 minutes ahead; `reason` missing or over 500 characters. On the weights route: `weights` missing or `null`; an entry whose `weight` is missing, not a JSON number, below the admin's minimum or above the maximum, whose `setup` is empty, missing or repeated, whose `attributes` break their limits, or that holds a field other than `setup`, `weight` and `attributes`; more than 10,000 entries. For an entry, `field` is `weights` and `message` gives its position (from 0) and its setup name. `message` says which, and `field` names it for most | Fix the request. Do not retry unchanged |
 | 429 | `rate_limited` | Too many failed authentication attempts from your address (5 in 15 minutes). The `Retry-After` header says how many seconds to wait. A request with a valid token is never refused for this | Back off, then check the token |
 | 5xx | | Hourglass is unhealthy or restarting | Retry on the next cycle |
 
@@ -524,6 +668,7 @@ Do this with a real person's account that has the `developer` role. The local ad
 4. After your next report and one poll, the hold in the state response has `deployed_at` and `metering_started_at` set.
 5. Have the person release it. Your receiver gets `hold.releasing`; your service tears the setup down and reports without it. After one poll the hold is gone from the state response and you receive `hold.released`.
 6. Stop your service for longer than `max_age`. Polls fail, `poll.failed` arrives, and your alert fires. Start it again and polls recover.
+7. If you report weights: ask the admin to turn reported weights on with a maximum. Send a report and read the state back: each reported setup shows `source: "reported"` and `applied` equal to what you sent. Send a weight above the maximum and see the `400` with the setup's name (your alert fires and the previous weights stay in force). Stop only the weights report for longer than `max_age`: the state shows `not_applied: "expired"` and the rate-rule price, and polls keep succeeding.
 
 ### Go live
 
@@ -543,9 +688,12 @@ Do this with a real person's account that has the `developer` role. The local ad
 - [ ] Both reports are sent every 60 seconds from a loop that survives a single failure.
 - [ ] A failed infrastructure query skips the report; it never sends an empty list or a zero.
 - [ ] The deployments report always contains the full set.
+- [ ] If you report weights: the weights report always contains the complete set from one service, is sent before the deployments report, and keeps a setup in it until its `hold` is `null` in the state.
+- [ ] Weights are JSON numbers that describe what a setup reserves, not live utilisation. A setup you cannot size is left out, never sent as 0.
+- [ ] An admin turned reported weights on with a minimum and a maximum. The service reads back `weights.expires_at` and each setup's `source` and `applied`, and alerts on a `400` from the weights route: an expired weights report stops no charging, it only puts prices back on the rate rules.
 - [ ] Clocks are synchronised (NTP). `observed_at` more than 2 minutes ahead of Hourglass is rejected.
 - [ ] The webhook receiver verifies the signature, replies within 30 seconds, and is idempotent per hold id.
 - [ ] Reconciliation runs at startup and every 5 minutes.
 - [ ] There is an alert on a failed report, on a 401, and on `poll.failed`.
 - [ ] `enforcement` is still off unless the customer asked for it.
-- [ ] The service account has only the scopes the service uses.
+- [ ] The service account has only the scopes the service uses (`weights:write` only if it reports weights).

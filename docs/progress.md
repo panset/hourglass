@@ -88,6 +88,31 @@ Built on the branch `ledger-labels-onboarding`, cut from `main` at `d96a950`, to
 - The release itself (merge, version number, tag, image workflow) has not been done. No version tag exists yet, and `internal/version` has not been checked for what the released binary reports.
 - `docs/SPEC.md` and the spec's source still lack the new requirements and table rows; D79 lists the edits they need.
 
+## Reported weights (owner-directed, 2026-11-23)
+
+Built on the branch `reported-weights`, cut from `main` at `753cc50` (release `v1.1.0`), to [design/reported-weights.md](design/reported-weights.md) (D80 to D88, and the entries after them). The task record is under `.orchestrator/reported-weights/`. Nothing here is merged to `main`, tagged or released: that waits for the owner's go-ahead and version number. `docs/SPEC.md` is not edited; the edits its source needs are listed in the last decision of this work.
+
+**Built**
+
+- A customer's service reports a weight per setup on `PUT /api/v1/integration/weights` under the new scope `weights:write`, stored whole and replaced atomically (migration `0008`; WGT-7 to WGT-11, WGT-21). An invalid entry refuses the whole report with a message that gives its position, counted from 0, and its setup name; the last refusal is kept in memory for admins.
+- One resolver (`internal/weights`) gives every reader the same weight and its source: override, usable reported weight, first matching rate rule, default (WGT-2, WGT-3, WGT-12, WGT-14). The collector charges the resolved weight, records the source on every usage sample (`weight_source`) and hands the pressure source and the policy the base weight, so a report cannot move pressure or the multiplier (WGT-1, WGT-4 to WGT-6).
+- Admin controls: the `reported_weights` setting (switch, minimum, maximum, `max_age`; off by default; audited; optional on `PUT`) and the per-setup `weight_override` (WGT-17, WGT-18).
+- Reading back: the weight fields on the state route, the Setups list, the admin setup views, holds and burn figures, ledger entries (`weight_min`, `weight_max`, `weight_sources`), and the collector view with the last accepted and last refused report (WGT-13, WGT-15, WGT-16, WGT-22, WGT-23).
+- UI: weight tag and attributes on Setups and the acquire dialog, weight on holds and ledger debits in My usage, weight and override on Setup inventory, the "Reported weights" section of Settings, and the fifth scope on Service accounts (UI-12 to UI-14).
+- Compatibility with `v1.1.0`: fixtures recorded from the tag (`testdata/upgrade-v1.1.0/`) and tests that a database from that release upgrades, charges and answers the same with the feature off, apart from the added fields and the two deliberate changes (WGT-19, WGT-20; D81, D88). The `d96a950` fixtures and their tests are unchanged except for the schema version number (D82).
+- Documentation: `docs/integrating.md` has a fifth job, "Report weights", written from the code as built; every command and response in it was run against a real `hourglassd` built from this tree (transcript in `.orchestrator/reported-weights/tasks/11-m7c-docs/examples.log`). `docs/deploying.md` has the setting, what tightening the limits does, the override, the `max_age` advice and the upgrade entry for migration `0008`; `docs/extending.md`, the README and `docs/ui-notes.md` are current.
+
+**Not finished, not verified, or left as is**
+
+- The examples in the guide were run against a host process on 127.0.0.1, not the bundled compose stack, and with the local admin only: a charge at a reported weight, and the Setups page and acquire dialog, were not exercised there. Those are covered by the unit tests named after WGT-1, WGT-4, WGT-14 and UI-12 to UI-14 and by the end-to-end integration scenario, whose run belongs to the milestone's verification task.
+- The last refused report is kept in memory and is lost at a restart (D20).
+- A Go metering policy and a pressure source cannot see a reported weight. A field can be added later without breaking anything.
+- The ledger weight fields depend on `usage_samples`, kept 13 months; older entries show the weight as unknown.
+- The top-level keys of a weights report are matched without regard to case, as in the other two reports (D86).
+- Between the upgrade and the first poll, a hold priced by a Go metering policy shows its rate-rule weight on screens; charges are not affected (D86).
+- The release itself (merge, version number, tag, image workflow) has not been done.
+- `docs/SPEC.md` and the spec's source still lack the new requirements and table rows.
+
 ## Milestones
 
 | # | Milestone | Status |
