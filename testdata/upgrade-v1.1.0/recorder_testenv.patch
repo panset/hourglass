@@ -1,0 +1,24 @@
+diff --git a/internal/api/testenv_test.go b/internal/api/testenv_test.go
+index ee489bb..02a7eb3 100644
+--- a/internal/api/testenv_test.go
++++ b/internal/api/testenv_test.go
+@@ -93,6 +93,9 @@ type backendOpts struct {
+ 	// dbCopy is a database file to start from: a copy of it is opened in the
+ 	// test's temporary directory (the upgrade tests, UPG-1 and UPG-2).
+ 	dbCopy string
++	// dbPath, when set, is the path of the database file the backend opens
++	// (the fixture recorder keeps it after the test).
++	dbPath string
+ }
+ 
+ func newBackend(t *testing.T, o backendOpts) *backend {
+@@ -102,6 +105,9 @@ func newBackend(t *testing.T, o backendOpts) *backend {
+ 		o.start = time.Now()
+ 	}
+ 	dbPath := filepath.Join(t.TempDir(), "api.db")
++	if o.dbPath != "" {
++		dbPath = o.dbPath
++	}
+ 	if o.dbCopy != "" {
+ 		raw, err := os.ReadFile(o.dbCopy)
+ 		if err != nil {

@@ -1,0 +1,2570 @@
+# SPDX-License-Identifier: MIT
+openapi: 3.0.3
+info:
+  title: Hourglass API
+  version: 1.0.0
+  description: |
+    The UI-to-backend contract of Hourglass (docs/SPEC.md "HTTP API", UI-2).
+    The UI's only interface to the backend is this API; every number a page
+    shows comes from a response below.
+
+    **Conventions**
+    - Token amounts are JSON numbers with up to three decimals, in whole
+      tokens (the API converts from milli-tokens). Field names end in `_tokens`.
+    - Every timestamp is an RFC 3339 UTC string with millisecond precision and
+      a `Z` suffix, for example `2026-11-19T10:00:00.000Z`, in every response and
+      in the `before`/`after` of audit entries; one helper formats them all and
+      the contract test checks every `date-time` field. Ids are integers.
+      Periods are `YYYY-MM`.
+    - Pressure values are fractions from 0 to 1 (0.82 is 82%).
+    - Dates without a time (`YYYY-MM-DD`) are in the configured timezone.
+    - Sessions are cookie based. State-changing requests of a signed-in user
+      carry the session's CSRF token in `X-CSRF-Token` (AUTH-3). The two
+      pre-session sign-in calls cannot (no session exists yet) and are marked
+      `x-csrf: false`.
+    - Operations carry `x-roles` (`public`, `session`, `role`, `admin`,
+      `local-admin`, `service`) matching the spec's "Who" column, and
+      `x-csrf: true` when they change state and require the CSRF header.
+    - `service` operations live under `/api/v1/integration/` and take only a
+      service token, `Authorization: Bearer hgsa_...`, with the scope the
+      operation names. They read no cookie and need no CSRF token. A service
+      token sent to any other route is ignored (the request is anonymous).
+      Failed bearer attempts are rate-limited per client address (429).
+    - Every route except those marked `public` and `GET /api/v1/session`,
+      `POST /auth/logout` requires at least one role (AUTH-4): a user with no
+      role gets 403 `no_role` and no data. While `must_change_password` is true
+      every data route returns 403 `password_change_required`.
+    - Every error uses one shape, `{"error": {"code", "message"}}` (see `Error`).
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: /
+    description: Same origin as the UI (bundled and split mode, UI-4)
+tags:
+  - name: Auth
+    description: Sign-in, sign-out and password change (AUTH-1 to AUTH-8).
+  - name: Health
+    description: Liveness.
+  - name: Session
+    description: Identity of the signed-in user (AUTH-5, UI-5).
+  - name: Me
+    description: The signed-in user's own balance, holds, ledger and usage.
+  - name: Pressure
+    description: Lab pressure and multiplier.
+  - name: Setups
+    description: Setup list, acquire (HOLD-1).
+  - name: Holds
+    description: Release and force-release (HOLD-2).
+  - name: Admin users
+    description: Users, roles, grants, resets and pre-approved SSO users (ADM-1, ADM-5, LED-4, LED-5, PRE-5).
+  - name: Admin setups
+    description: Setup inventory (SET-1 to SET-5).
+  - name: Admin rules
+    description: Rate rules (RULE-1 to RULE-4).
+  - name: Admin settings
+    description: Metering settings and read-only runtime names (ADM-2).
+  - name: Admin collector
+    description: Collector health, outages, orphans, event delivery (ADM-4).
+  - name: Admin audit
+    description: Audit log (ADM-3).
+  - name: Admin service accounts
+    description: Service accounts and their tokens (SVC-4 to SVC-6).
+  - name: Integration
+    description: Routes a customer's service calls with a service token (docs/design/integration-api.md).
+security:
+  - cookieAuth: []
+paths:
+  /auth/oidc/start:
+    get:
+      operationId: oidcStart
+      tags: [Auth]
+      summary: Begin the OIDC authorization code flow with PKCE
+      description: |
+        Redirects (302) to the issuer's authorization endpoint. The UI links
+        here from "Sign in with SSO"; it never sees a token (AUTH-1).
+      security: []
+      x-roles: public
+      responses:
+        '302':
+          description: Redirect to the identity provider.
+          headers:
+            Location:
+              schema: {type: string}
+              description: Authorization endpoint URL.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/callback:
+    get:
+      operationId: oidcCallback
+      tags: [Auth]
+      summary: Finish the OIDC flow
+      description: |
+        Exchanges the code, creates or refreshes the user (AUTH-2), sets the
+        session cookie and redirects (302) back to the UI at `/`, whatever the
+        user's roles; the UI decides what to show from `GET /api/v1/session`
+        (UI-7). On failure it redirects to `/?auth_error=<code>` using an error
+        code from `ErrorCode`; every failure of the flow is such a redirect,
+        never a JSON error.
+      security: []
+      x-roles: public
+      parameters:
+        - {name: code, in: query, schema: {type: string}, description: Authorization code.}
+        - {name: state, in: query, schema: {type: string}, description: Anti-forgery state.}
+        - {name: error, in: query, schema: {type: string}, description: Error reported by the issuer.}
+      responses:
+        '302':
+          description: Redirect back to the UI.
+          headers:
+            Location:
+              schema: {type: string}
+            Set-Cookie:
+              schema: {type: string}
+              description: Session cookie (HttpOnly, Secure, SameSite=Lax), set only when sign-in succeeded.
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /auth/local:
+    post:
+      operationId: localSignIn
+      tags: [Auth]
+      summary: Sign in as the local admin
+      description: |
+        Used only by the local `admin` account (AUTH-6). Rate limited to 5
+        failures per 15 minutes (AUTH-7); 429 `rate_limited` carries
+        `Retry-After`. Wrong credentials return 401 `unauthenticated`. The
+        response session may have `must_change_password: true`.
+      security: []
+      x-roles: public
+      x-csrf: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LocalSignInRequest'}
+      responses:
+        '200':
+          description: Signed in; session cookie set.
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/local/password:
+    post:
+      operationId: changeLocalPassword
+      tags: [Auth]
+      summary: Change the local admin password
+      description: |
+        Minimum 12 characters (AUTH-7). Allowed while `must_change_password`
+        is true. A wrong `current_password` or a short new one returns 400
+        `validation` with `field`; wrong passwords count toward the same
+        5-failures-per-15-minutes limit as sign-in (429 `rate_limited`). Returns the refreshed session.
+      x-roles: local-admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangePasswordRequest'}
+      responses:
+        '200':
+          description: Password changed.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [Auth]
+      summary: End the session
+      x-roles: session
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Session ended; cookie cleared.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /healthz:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Liveness
+      description: Reports the database and the age of the last successful poll. 503 with the same body when the database is unreachable.
+      security: []
+      x-roles: public
+      responses:
+        '200':
+          description: Healthy.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Health'}
+        '503':
+          description: Not healthy.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Health'}
+  /api/v1/auth/methods:
+    get:
+      operationId: getAuthMethods
+      tags: [Auth]
+      summary: Sign-in methods the sign-in page should show
+      description: Nothing else is returned.
+      security: []
+      x-roles: public
+      responses:
+        '200':
+          description: Methods.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthMethods'}
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/session:
+    get:
+      operationId: getSession
+      tags: [Session]
+      summary: Identity, roles, status and CSRF token
+      description: |
+        The only data route open to a user with no role (AUTH-5). For such a
+        user the response holds exactly the `Session` fields and nothing else.
+        The not-authorized page shows `email` from here.
+      x-roles: session
+      responses:
+        '200':
+          description: The session.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me:
+    get:
+      operationId: getMe
+      tags: [Me]
+      summary: Balance, burn rate, projection, hold count and limit
+      description: 'Feeds the top bar balance and the My usage stat cards. The local admin has `balance_tokens: null` and `hold_limit: 0`.'
+      x-roles: role
+      responses:
+        '200':
+          description: Own summary.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Me'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/holds:
+    get:
+      operationId: listMyHolds
+      tags: [Me]
+      summary: Current and past holds
+      description: Newest first. Without `state` both are returned.
+      x-roles: role
+      parameters:
+        - name: state
+          in: query
+          schema: {type: string, enum: [active, released]}
+          description: Restrict to active or released holds.
+      responses:
+        '200':
+          description: Holds.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [holds]
+                properties:
+                  holds:
+                    type: array
+                    items: {$ref: '#/components/schemas/Hold'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/ledger:
+    get:
+      operationId: listMyLedger
+      tags: [Me]
+      summary: Own ledger entries for a period
+      description: >-
+        Newest first, by descending `id`. `period` defaults to the current period; a malformed value is 400 `validation`.
+        `available_periods` feeds the Month select. Without `rollup`, `limit` and `cursor` the response is one entry per
+        stored row of the period, unpaged, with `next_cursor` null (LED-11). `rollup=day` merges the debit rows of one hold
+        and local day (configured timezone), raw or rolled up in storage, into one entry (LED-12). `limit` pages the view and
+        `next_cursor` leads to the next older page; the cursor applies to the view's entries after merging, so a walk returns
+        no entry twice (LED-13). `balance_after_tokens` is the running sum of the view's entries of the period up to and
+        including the entry, in id order, on every page (LED-14). Bad `rollup`, `limit` or `cursor` values are 400 `validation`.
+      x-roles: role
+      parameters:
+        - $ref: '#/components/parameters/PeriodQuery'
+        - name: rollup
+          in: query
+          required: false
+          description: '`day` merges debit rows into one entry per hold and local day. Absent: one entry per stored row.'
+          schema: {type: string, enum: [day]}
+        - name: limit
+          in: query
+          required: false
+          description: Page size. Absent, every entry of the view is returned and `next_cursor` is null.
+          schema: {type: integer, minimum: 1, maximum: 200}
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            The `next_cursor` of the previous page, for the same `period` and `rollup`. Opaque to clients. Requires `limit`;
+            without it, or malformed, is 400 `validation`.
+          schema: {type: string}
+      responses:
+        '200':
+          description: Ledger.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LedgerResponse'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/usage:
+    get:
+      operationId: getMyUsage
+      tags: [Me]
+      summary: Tokens debited per day
+      description: One entry per calendar day of the period up to today (the whole month for a past period), including zero days.
+      x-roles: role
+      parameters:
+        - $ref: '#/components/parameters/PeriodQuery'
+      responses:
+        '200':
+          description: Usage.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UsageResponse'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/pressure:
+    get:
+      operationId: getPressure
+      tags: [Pressure]
+      summary: Current lab pressure, multiplier, bands and 7-day history
+      description: Feeds the top bar pill and the My usage pressure card.
+      x-roles: role
+      responses:
+        '200':
+          description: Pressure.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pressure'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/setups:
+    get:
+      operationId: listSetups
+      tags: [Setups]
+      summary: Setups with labels, weight, state, holder and holder's balance
+      description: |
+        Visible to every user with a role. Also returns `display_label_keys`
+        (SET-6). Admins additionally get disabled setups and the `admin`
+        sub-object; for other users `admin` is null and disabled setups are
+        omitted. `selector` uses the RULE-2 syntax; a bad one is 400
+        `invalid_selector` with the parse error. The state and label filters
+        of the Setups page are applied client-side on this list.
+      x-roles: role
+      parameters:
+        - name: selector
+          in: query
+          schema: {type: string}
+          description: Label selector, e.g. `tier=a,site in (x,y)`.
+      responses:
+        '200':
+          description: Setups.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SetupList'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/setups/{id}/acquire:
+    post:
+      operationId: acquireSetup
+      tags: [Setups]
+      summary: Acquire a free setup
+      description: |
+        HOLD-1. Errors (all 409 unless noted): `insufficient_tokens`,
+        `hold_limit`, `setup_held`, `setup_disabled`, `hook_veto` (message is
+        the hook's). The local admin cannot acquire: 403 `forbidden`. Unknown
+        id is 404 `not_found`.
+      x-roles: role
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '201':
+          description: The new hold.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/holds/{id}/release:
+    post:
+      operationId: releaseHold
+      tags: [Holds]
+      summary: Release a hold, or force-release as admin
+      description: |
+        HOLD-2, HOLD-6. The owner or an admin may call it. With an empty body
+        or `{"force": false}` it is a normal release. While the provider still
+        reports the setup and `release_requires_teardown` is on, the hold is
+        not released: the answer is 202 with the still-active hold, whose
+        `release_requested_at` is set (once; a repeat request returns the same
+        202 and fires nothing) and `hold.releasing` fires. The hold stays
+        active and metered, and the collector releases it at the first
+        successful poll in which the setup is no longer reported. A pending
+        release cannot be cancelled. In every other situation the release is
+        immediate (200). `{"force": true, "reason": "..."}` is the admin
+        force-release: it skips the teardown check, completes a pending release
+        at once, needs a non-empty reason (400 `validation`, `field` =
+        `reason`) and is audited. `force` by a non-admin, or a normal release
+        of another user's hold, is 403 `forbidden`. An already released hold is
+        409 `conflict`.
+      x-roles: role
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReleaseRequest'}
+      responses:
+        '200':
+          description: The released hold.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '202':
+          description: The setup is still deployed. The hold is still active with `release_requested_at` set; it is released when the setup is no longer reported.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [Admin users]
+      summary: List users, with pending count and page totals
+      description: |
+        ADM-1, ADM-5. `status=pending` returns only pending requests, oldest
+        first. Without a filter every user is returned, overdrawn users first
+        and then by name. `pending_count` (for the navigation "Users · N
+        pending") and `summary` (the four stat cards) are always present and
+        ignore the filter. The users-page search box filters this list
+        client-side.
+      x-roles: admin
+      parameters:
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/UserStatus'}
+      responses:
+        '200':
+          description: Users.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserList'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/users/{id}/roles:
+    put:
+      operationId: setUserRoles
+      tags: [Admin users]
+      summary: Replace a user's role set
+      description: |
+        A non-empty set approves a pending (or rejected) user and credits the
+        allowance once per period. An empty set returns the user to
+        unassigned. Errors (409): `has_active_hold` (emptying the roles of a
+        user who holds a setup), `self_demote` (an admin removing their own
+        `admin`), `last_admin`, `local_admin_protected` (the local admin).
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetRolesRequest'}
+      responses:
+        '200':
+          description: The updated user.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUser'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/users/{id}/reject:
+    post:
+      operationId: rejectUser
+      tags: [Admin users]
+      summary: Reject a pending access request
+      description: The user leaves the pending list and keeps seeing the not-authorized page. Only a `pending` user can be rejected (otherwise 409 `conflict`); the local admin is 409 `local_admin_protected`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: The updated user.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUser'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/users/{id}/grants:
+    post:
+      operationId: grantTokens
+      tags: [Admin users]
+      summary: Grant tokens to a user
+      description: |
+        LED-4. Negative amounts are allowed for corrections; zero is 400
+        `validation`. A reason is required. The target must have a role (else
+        409 `conflict`) and a balance (the local admin is 409
+        `local_admin_protected`).
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GrantRequest'}
+      responses:
+        '201':
+          description: The ledger entry and the updated user.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BalanceChangeResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/users/{id}/reset:
+    post:
+      operationId: resetBalance
+      tags: [Admin users]
+      summary: Reset a user's balance to the default allowance
+      description: LED-5. A `reset` entry brings the balance to exactly the default allowance and clears carried debt. A reason is required. Same target rules as grants.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ResetRequest'}
+      responses:
+        '201':
+          description: The ledger entry and the updated user.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BalanceChangeResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/preapprovals:
+    get:
+      operationId: listPreapprovals
+      tags: [Admin users]
+      summary: List pre-approved SSO users from the database and the file
+      description: |
+        PRE-5, PRE-6. Every pre-approval, by email: the database list managed
+        here (`source` = `database`) and the read-only file named by
+        `preapproved_users_file` (`source` = `config`). An email in both
+        sources appears twice, the database entry first. A file entry has
+        `id`, `created_at`, `created_by`, `used_at` and `used_by` null. A
+        database entry has `used_at` and `used_by` null until a pending SSO
+        user with that email claim first signs in; an entry is never consumed.
+        A user who signs in with a matching email claim gets the union of the
+        roles of both sources.
+      x-roles: admin
+      responses:
+        '200':
+          description: Pre-approvals.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PreapprovalList'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: addPreapprovals
+      tags: [Admin users]
+      summary: Pre-approve SSO users by email
+      description: |
+        PRE-5. Adds 1 to 1,000 emails to the database list with one role set.
+        An email already in the list gets the new roles and keeps its id,
+        creator and use record. Emails are stored trimmed and in lower case;
+        an email given more than once in a request counts once. An email is
+        valid when it is at most 254 characters after trimming, has exactly
+        one `@` with text on both sides, and contains no whitespace, comma or
+        `*`. Roles must not be empty and follow the rules of `setUserRoles`.
+        All or nothing: any invalid email or role is 400 `validation` naming
+        the first bad value (`field` = `emails` or `roles`), and nothing is
+        stored. A pending user is approved at their next sign-in. Audited as
+        `preapproval.add` with the emails and roles.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AddPreapprovalsRequest'}
+      responses:
+        '200':
+          description: How many emails were added and how many existing entries were updated.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AddPreapprovalsResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/preapprovals/{id}:
+    delete:
+      operationId: deletePreapproval
+      tags: [Admin users]
+      summary: Remove a pre-approval from the database list
+      description: |
+        PRE-5. Removes one database entry. It changes no user, including one
+        it already approved. File entries have no id and cannot be removed
+        here. Audited as `preapproval.delete`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Removed.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/setups:
+    post:
+      operationId: createSetup
+      tags: [Admin setups]
+      summary: Add a setup
+      description: SET-1 to SET-3. A duplicate name is 409 `conflict`. Invalid labels or `details` (not JSON, over 256 KB) are 400 `validation` with `field`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetupInput'}
+      responses:
+        '201':
+          description: The new setup (admin view).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Setup'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/setups/{id}:
+    put:
+      operationId: updateSetup
+      tags: [Admin setups]
+      summary: Replace a setup's editable fields
+      description: 'Full replacement of `SetupInput`. Setting `enabled: false` on a held setup is 409 `has_active_hold` (SET-5). Changing the name of a held setup is also 409 `has_active_hold` (the name ties the setup to what the provider reports, D40); release the hold first. Other edits to a held setup are allowed. A duplicate name is 409 `conflict`.'
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetupInput'}
+      responses:
+        '200':
+          description: The updated setup (admin view).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Setup'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteSetup
+      tags: [Admin setups]
+      summary: Delete a setup
+      description: A setup with an active hold is 409 `has_active_hold` (SET-5).
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/rules:
+    get:
+      operationId: getRules
+      tags: [Admin rules]
+      summary: Ordered rate rules with match counts
+      description: RULE-3. `default_weight` is read-only here; it is edited through settings. `unmatched_setups` lists enabled setups that fall through to the default weight.
+      x-roles: admin
+      responses:
+        '200':
+          description: Rules.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RulesResponse'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: replaceRules
+      tags: [Admin rules]
+      summary: Replace the ordered rule list
+      description: |
+        The array order is the position. An invalid selector rejects the whole
+        request with 400 `invalid_selector`, `field` = `rules[N].selector` and
+        the parse error as `message` (RULE-3). Applies from the next poll,
+        never retroactively, and is audited (RULE-4). Returns the new list with
+        match counts.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RulesInput'}
+      responses:
+        '200':
+          description: Saved rules.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RulesResponse'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/settings:
+    get:
+      operationId: getSettings
+      tags: [Admin settings]
+      summary: Metering settings and read-only runtime names
+      description: ADM-2. `runtime` holds names only, never secrets.
+      x-roles: admin
+      responses:
+        '200':
+          description: Settings.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SettingsResponse'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: updateSettings
+      tags: [Admin settings]
+      summary: Replace the metering settings
+      description: |
+        The body is the complete `Settings` object; unknown fields are
+        rejected. The first invalid value is 400 `validation` with `field`
+        (negative weight, bad label key, bad bands, poll interval under 1 minute, and so
+        on). Applies from the next poll, never retroactively; changed keys are
+        audited. Returns the same body as GET.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Settings'}
+      responses:
+        '200':
+          description: Saved settings.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SettingsResponse'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/collector:
+    get:
+      operationId: getCollector
+      tags: [Admin collector]
+      summary: Collector health, outages, orphans and event delivery
+      description: ADM-4, HOLD-4, EXT-6, EXT-7. Orphans, outage history, recent failed event deliveries and the event queue length are carried here.
+      x-roles: admin
+      responses:
+        '200':
+          description: Collector state.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Collector'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/audit:
+    get:
+      operationId: listAudit
+      tags: [Admin audit]
+      summary: Audit log, newest first
+      description: ADM-3. Filter by actor user id and by exact action; page with `limit` (default 50, max 200) and `offset`.
+      x-roles: admin
+      parameters:
+        - name: actor
+          in: query
+          schema: {type: integer}
+          description: Actor user id.
+        - name: action
+          in: query
+          schema: {type: string}
+          description: Exact action name, e.g. `ledger.grant`.
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+        - name: offset
+          in: query
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: Audit entries.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuditList'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts:
+    get:
+      operationId: listServiceAccounts
+      tags: [Admin service accounts]
+      summary: List service accounts with their tokens
+      description: |
+        SVC-6. Every account by name, with its scopes, enabled flag and each
+        token's id, creation, expiry and last-used times. A token itself is
+        never listed (SVC-4).
+      x-roles: admin
+      responses:
+        '200':
+          description: Service accounts.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceAccountList'}
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: createServiceAccount
+      tags: [Admin service accounts]
+      summary: Create a service account
+      description: |
+        SVC-6. The account starts enabled and without a token. `name` is 1 to
+        64 letters, digits, `.`, `_` or `-`, starting with a letter or digit,
+        and cannot change later; a duplicate is 409 `conflict`. `scopes` is any
+        subset of the four scopes; an unknown scope is 400 `validation`
+        (`field` = `scopes`). Audited as `service_account.create`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateServiceAccountRequest'}
+      responses:
+        '201':
+          description: The new account.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceAccount'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts/{id}:
+    put:
+      operationId: updateServiceAccount
+      tags: [Admin service accounts]
+      summary: Change a service account's description, scopes and enabled flag
+      description: |
+        SVC-5, SVC-6. Full replacement of the three fields, all required.
+        Disabling the account, or removing a scope, takes effect on the
+        account's next request. Audited as `service_account.update`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateServiceAccountRequest'}
+      responses:
+        '200':
+          description: The updated account.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceAccount'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteServiceAccount
+      tags: [Admin service accounts]
+      summary: Delete a service account and its tokens
+      description: |
+        SVC-5, SVC-6. Its tokens are refused from the next request on. Holds
+        and audit entries keep the account's name. Audited as
+        `service_account.delete`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts/{id}/tokens:
+    post:
+      operationId: issueServiceToken
+      tags: [Admin service accounts]
+      summary: Issue a token for a service account
+      description: |
+        SVC-4, SVC-6. The response is the only place the token ever appears:
+        Hourglass stores only a SHA-256 hash of its secret and cannot show it
+        again. The token has the form `hgsa_<token id>_<secret>` and is sent
+        as `Authorization: Bearer <token>`. The body is optional;
+        `expires_at`, when given, must be in the future (400 `validation`,
+        `field` = `expires_at`). An account may hold several live tokens, for
+        rotation. Audited as `service_account.token_issue` (token id and
+        expiry only).
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueServiceTokenRequest'}
+      responses:
+        '201':
+          description: The new token, shown once.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssuedServiceToken'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/service-accounts/{id}/tokens/{tokenId}:
+    delete:
+      operationId: revokeServiceToken
+      tags: [Admin service accounts]
+      summary: Revoke one token
+      description: |
+        SVC-5, SVC-6. The token is refused from the next request on. A token
+        id that does not belong to the account is 404 `not_found`. Audited as
+        `service_account.token_revoke`.
+      x-roles: admin
+      x-csrf: true
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: tokenId
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Revoked.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/pressure:
+    put:
+      operationId: reportPressure
+      tags: [Integration]
+      summary: Report the raw lab pressure
+      description: |
+        Scope `pressure:write`. `value` is required, finite, from 0 to 1
+        inclusive (INT-1); `observed_at` defaults to the time of receipt.
+        `expires_at` is `observed_at` plus the configured `max_age`. A report
+        older than the stored one is 409 `stale_report` (INT-3); an equal
+        `observed_at` replaces it. An `observed_at` more than 2 minutes in the
+        future is 400 `validation`. Without the `reported` pressure source
+        configured it is 409 `not_configured` (INT-4). A report takes effect
+        at the next poll.
+      x-roles: service
+      x-csrf: false
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PressureReport'}
+      responses:
+        '200':
+          description: The stored report.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PressureReportResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/deployments:
+    put:
+      operationId: reportDeployments
+      tags: [Integration]
+      summary: Report the complete set of deployed setups
+      description: |
+        Scope `deployments:write`. The list is the complete set deployed now;
+        an absent setup is not deployed, an empty list means nothing is. It
+        replaces the stored set atomically (INT-2). A name that matches no
+        setup is accepted, ignored and listed in `unknown`. A duplicate name
+        is 400 `validation`. Limits: 10,000 entries, 32 labels per entry, 1 MB
+        body. Ordering, clock skew and `not_configured` (the `reported`
+        provider) are as for the pressure report.
+      x-roles: service
+      x-csrf: false
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeploymentsReport'}
+      responses:
+        '200':
+          description: The stored report.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentsReportResult'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/state:
+    get:
+      operationId: getIntegrationState
+      tags: [Integration]
+      summary: Everything a service needs to act and to reconcile
+      description: |
+        Scope `state:read` (INT-8). Every setup, disabled ones included, with
+        its active hold (`null` for a free setup) and the holder's id,
+        username, email and name. `reported_deployed` reflects the stored
+        report, not the last poll. `reported` and the `observed_at` fields are
+        `null` before the first report, and always `null` (and nothing is
+        `reported_deployed`) when the pressure source or the provider is not
+        the `reported` one. Never includes balances, ledger
+        entries, other users, settings or audit data.
+      x-roles: service
+      security:
+        - serviceToken: []
+      responses:
+        '200':
+          description: The state.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IntegrationState'}
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/integration/holds/{id}/release:
+    post:
+      operationId: serviceReleaseHold
+      tags: [Integration]
+      summary: Release a hold from the service's automation
+      description: |
+        Scope `holds:release` (HOLD-8). `reason` is required, 1 to 500
+        characters after trimming (400 `validation`, `field` = `reason`). The
+        teardown check is skipped. The hold, including one with a pending
+        release, is released at once, `released_by` stays null, the account's
+        name is recorded on it, an audit entry
+        `hold.service_release` is written and `hold.released` fires with
+        `service_account` in `data`. 404 `not_found` for an unknown id, 409
+        `conflict` if already released.
+      x-roles: service
+      x-csrf: false
+      security:
+        - serviceToken: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceReleaseRequest'}
+      responses:
+        '200':
+          description: The released hold.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Hold'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/ServiceUnauthenticated'
+        '403':
+          $ref: '#/components/responses/ServiceForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: hourglass_session
+      description: Server-side session; HttpOnly, Secure, SameSite=Lax, 8-hour idle timeout (AUTH-3).
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: A service account token, `hgsa_<token id>_<secret>`. Accepted only under `/api/v1/integration/` (SVC-1).
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: The `csrf_token` from `GET /api/v1/session`. A missing or wrong token is 403 `csrf`.
+      schema: {type: string}
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: integer, format: int64}
+    PeriodQuery:
+      name: period
+      in: query
+      required: false
+      description: Period as `YYYY-MM`; defaults to the current period.
+      schema: {type: string, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$', example: '2026-11'}
+  responses:
+    BadRequest:
+      description: 400 `validation` (optional `field`) or `invalid_selector`.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: validation, message: reason is required, field: reason}}
+    Unauthenticated:
+      description: 401 `unauthenticated`.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: unauthenticated, message: sign in required}}
+    Forbidden:
+      description: 403 `no_role`, `forbidden`, `csrf` or `password_change_required`.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: no_role, message: you have no role}}
+    NotFound:
+      description: 404 `not_found`.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: not_found, message: not found}}
+    Conflict:
+      description: 409 with one of the conflict codes named in the operation description.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: hold_limit, message: you already hold 2 setups}}
+    RateLimited:
+      description: 429 `rate_limited`.
+      headers:
+        Retry-After:
+          schema: {type: integer}
+          description: Seconds until another attempt is allowed.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: rate_limited, message: too many failed attempts}}
+    ServiceUnauthenticated:
+      description: 401 `unauthenticated`. Missing, wrong, expired or revoked token, or a disabled or deleted account; the reason is not given (SVC-5). A session cookie is not read (SVC-2).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: unauthenticated, message: a valid service token is required}}
+    ServiceForbidden:
+      description: 403 `forbidden`. The token lacks the route's scope; nothing else is said (SVC-3).
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: forbidden, message: not allowed}}
+    InternalError:
+      description: 500 `internal`.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: internal, message: internal error}}
+  schemas:
+    ErrorCode:
+      type: string
+      description: |
+        Machine-readable error code. HTTP status per code is in `x-http-status`.
+      enum:
+        - unauthenticated
+        - no_role
+        - forbidden
+        - csrf
+        - password_change_required
+        - not_found
+        - validation
+        - invalid_selector
+        - insufficient_tokens
+        - hold_limit
+        - setup_held
+        - setup_disabled
+        - hook_veto
+        - has_active_hold
+        - last_admin
+        - self_demote
+        - local_admin_protected
+        - conflict
+        - stale_report
+        - not_configured
+        - rate_limited
+        - internal
+      x-http-status:
+        unauthenticated: 401
+        no_role: 403
+        forbidden: 403
+        csrf: 403
+        password_change_required: 403
+        not_found: 404
+        validation: 400
+        invalid_selector: 400
+        insufficient_tokens: 409
+        hold_limit: 409
+        setup_held: 409
+        setup_disabled: 409
+        hook_veto: 409
+        has_active_hold: 409
+        last_admin: 409
+        self_demote: 409
+        local_admin_protected: 409
+        conflict: 409
+        stale_report: 409
+        not_configured: 409
+        rate_limited: 429
+        internal: 500
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {$ref: '#/components/schemas/ErrorCode'}
+            message:
+              type: string
+              description: Human-readable; safe to show. For `hook_veto` it is the hook's message.
+            field:
+              type: string
+              description: For `validation` and `invalid_selector`, the request field at fault, e.g. `reason` or `rules[1].selector`.
+    Tokens:
+      type: number
+      description: Tokens with up to three decimals.
+      example: 142.2
+    Labels:
+      type: object
+      description: Label key to value (SET-3).
+      additionalProperties: {type: string, maxLength: 63}
+      example: {tier: a, site: x}
+    Role:
+      type: string
+      enum: [developer, admin]
+    UserStatus:
+      type: string
+      enum: [pending, active, rejected]
+    AuthSource:
+      type: string
+      enum: [oidc, local]
+    Health:
+      type: object
+      required: [status, database, last_poll_age_seconds]
+      properties:
+        status: {type: string, enum: [ok, degraded]}
+        database: {type: string, enum: [ok, error]}
+        last_poll_age_seconds:
+          type: integer
+          nullable: true
+          description: Seconds since the last successful poll; null before the first one.
+    AuthMethods:
+      type: object
+      required: [oidc, local]
+      properties:
+        oidc: {type: boolean, description: Show "Sign in with SSO".}
+        local: {type: boolean, description: Show the local admin form.}
+    LocalSignInRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: {type: string, example: admin}
+        password: {type: string, format: password}
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: {type: string, format: password}
+        new_password: {type: string, format: password, minLength: 12}
+    Session:
+      type: object
+      description: |
+        Identity of the signed-in user. For a user with no role this is exactly
+        these fields and nothing else (AUTH-5, AUTH-9): `roles` is empty.
+        `display_name` is the name, else the username, else the email, by the
+        same rule the rest of the API uses to show a user; it is derived only
+        from fields this response already carries.
+      required: [user_id, username, email, name, display_name, auth_source, status, roles, csrf_token, must_change_password, is_local_admin]
+      properties:
+        user_id: {type: integer, format: int64}
+        username: {type: string}
+        email: {type: string}
+        name: {type: string}
+        display_name:
+          type: string
+          description: Name, else username, else email; empty only when all three are empty.
+        auth_source: {$ref: '#/components/schemas/AuthSource'}
+        status: {$ref: '#/components/schemas/UserStatus'}
+        roles:
+          type: array
+          items: {$ref: '#/components/schemas/Role'}
+        csrf_token: {type: string}
+        must_change_password: {type: boolean}
+        is_local_admin: {type: boolean}
+      additionalProperties: false
+    Burning:
+      type: object
+      description: One metering hold's current burn.
+      required: [hold_id, setup_id, setup_name, weight, multiplier, tokens_per_hour]
+      properties:
+        hold_id: {type: integer, format: int64}
+        setup_id: {type: integer, format: int64}
+        setup_name: {type: string, example: lab-01}
+        weight: {type: number, example: 1}
+        multiplier: {type: number, example: 2}
+        tokens_per_hour: {$ref: '#/components/schemas/Tokens'}
+    Me:
+      type: object
+      required: [period, period_ends_at, balance_tokens, allowance_tokens, granted_tokens, carryover_tokens, debited_tokens, burn_per_hour_tokens, burning, projection, projected_runout_at, hold_count, hold_limit, enforcement, overdrawn, can_acquire, cannot_acquire_reason]
+      properties:
+        period: {type: string, example: '2026-11'}
+        period_ends_at:
+          type: string
+          format: date-time
+          description: Start of the next period; unused tokens expire here.
+        balance_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          type: number
+          nullable: true
+          description: Null for the local admin (no balance).
+        allowance_tokens: {$ref: '#/components/schemas/Tokens'}
+        granted_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Sum of `grant` entries this period.
+        carryover_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Debt carried in at the period start (negative or 0).
+        debited_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Month-to-date debits as a positive number.
+        burn_per_hour_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Current burn per hour, summed over metering holds.
+        burning:
+          type: array
+          items: {$ref: '#/components/schemas/Burning'}
+        projection:
+          type: string
+          enum: [date, not_this_month, not_burning]
+          description: '`date`: `projected_runout_at` is set. `not_this_month`: the projection passes month end. `not_burning`: nothing is metering.'
+        projected_runout_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Balance divided by the average hourly burn over the last 24 hours; null unless `projection` is `date`.
+        hold_count: {type: integer}
+        hold_limit:
+          type: integer
+          description: '`max_holds_per_user`; 0 for the local admin, who cannot hold.'
+        enforcement:
+          type: boolean
+          description: False means shadow mode (nobody is blocked at zero).
+        overdrawn:
+          type: boolean
+          description: Balance is zero or below.
+        can_acquire:
+          type: boolean
+          description: Whether this user may acquire a setup now, apart from the setup itself (taken, disabled, hook veto). Computed by the same rule as acquire (UI-1); the UI shows it and decides nothing.
+        cannot_acquire_reason:
+          type: string
+          nullable: true
+          enum: [insufficient_tokens, hold_limit, local_admin, null]
+          description: Why `can_acquire` is false; null when it is true. `local_admin` is the operator account, which cannot hold setups.
+    MeteringState:
+      type: object
+      description: Metering status of a hold.
+      required: [active, started_at, expected_start_at, reason]
+      properties:
+        active: {type: boolean}
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        expected_start_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the policy expects to start metering (for example 2 h after acquire); null when unknown or already started.
+        reason:
+          type: string
+          nullable: true
+          description: The metering policy's reason text, e.g. `2 h since acquire`.
+    CostPerHour:
+      type: object
+      required: [now, at_peak]
+      properties:
+        now:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Tokens per hour at the current multiplier.
+        at_peak:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Tokens per hour at the highest band's multiplier.
+    Hold:
+      type: object
+      required: [id, setup_id, setup_name, setup_labels, user_id, active, weight, acquired_at, metering_started_at, deployed_at, release_requested_at, released_at, deployed, metering, cost_per_hour_tokens, charged_tokens, released_by, release_reason, forced]
+      properties:
+        id: {type: integer, format: int64}
+        setup_id: {type: integer, format: int64}
+        setup_name: {type: string}
+        setup_labels: {$ref: '#/components/schemas/Labels'}
+        user_id: {type: integer, format: int64}
+        active: {type: boolean}
+        weight: {type: number}
+        acquired_at: {type: string, format: date-time}
+        metering_started_at: {type: string, format: date-time, nullable: true}
+        deployed_at: {type: string, format: date-time, nullable: true}
+        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set when the owner asked to release while the setup was still deployed; the hold stays active until the setup is no longer reported. Always sent, null when unset."}
+        released_at: {type: string, format: date-time, nullable: true}
+        deployed: {type: boolean, description: The provider currently reports the setup.}
+        metering: {$ref: '#/components/schemas/MeteringState'}
+        cost_per_hour_tokens:
+          allOf: [{$ref: '#/components/schemas/CostPerHour'}]
+          type: object
+          nullable: true
+          description: Null once released.
+        charged_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Total debited for this hold so far (positive).
+        released_by:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: {type: integer, format: int64}
+            name: {type: string}
+        release_reason: {type: string, nullable: true}
+        forced: {type: boolean, description: Released by an admin other than the holder.}
+    LedgerEntryType:
+      type: string
+      enum: [allowance, grant, debit, expiry, carryover, reset]
+    LedgerEntry:
+      type: object
+      description: >-
+        A ledger entry: a stored ledger row, or, in `GET /api/v1/me/ledger` with `rollup=day`, the debit rows of one hold
+        and local day merged.
+      required: [id, created_at, period, type, amount_tokens, balance_after_tokens, multiplier, setup_name, hold_id, actor_name, reason]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The stored row's id; for a merged `rollup=day` entry, the id of its newest row (the row storage compaction keeps).
+        created_at:
+          type: string
+          format: date-time
+          description: For a merged `rollup=day` entry, that of its newest row.
+        period: {type: string, example: '2026-11'}
+        type: {$ref: '#/components/schemas/LedgerEntryType'}
+        amount_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Signed; debits are negative.
+        balance_after_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: On `GET /api/v1/me/ledger`, the running sum of the view's entries of the period, in id order, up to and including this entry.
+        multiplier:
+          type: number
+          nullable: true
+          description: Multiplier of the poll, for debits (shown as "Debit · 2×"). Null when `entry_count` is above 1.
+        setup_name: {type: string, nullable: true}
+        hold_id: {type: integer, format: int64, nullable: true}
+        actor_name:
+          type: string
+          nullable: true
+          description: Granting or resetting admin. Null for a merged `rollup=day` entry.
+        reason:
+          type: string
+          nullable: true
+          description: Null for a merged `rollup=day` entry.
+        entry_count:
+          type: integer
+          minimum: 1
+          description: >-
+            Always present on `GET /api/v1/me/ledger` entries, and absent on the admin grant and reset responses. The
+            number of polls the entry stands for: 1 for a raw debit or a non-debit row, the stored roll-up count for a
+            row compacted in storage, the sum over the merged rows in the `rollup=day` view.
+    LedgerResponse:
+      type: object
+      required: [period, available_periods, entries, next_cursor]
+      properties:
+        period: {type: string}
+        available_periods:
+          type: array
+          description: Periods with data, newest first (feeds the Month select).
+          items: {type: string, example: '2026-10'}
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/LedgerEntry'}
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass as `cursor` (with the same `period`, `rollup` and `limit`) for the next older page. Null when no older entry exists, and always null without `limit`.
+    UsageDay:
+      type: object
+      required: [date, debited_tokens]
+      properties:
+        date: {type: string, format: date}
+        debited_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Positive amount debited that day.
+    UsageResponse:
+      type: object
+      required: [period, available_periods, total_debited_tokens, days]
+      properties:
+        period: {type: string}
+        available_periods:
+          type: array
+          items: {type: string}
+        total_debited_tokens: {$ref: '#/components/schemas/Tokens'}
+        days:
+          type: array
+          items: {$ref: '#/components/schemas/UsageDay'}
+    BandStep:
+      type: object
+      required: [from, multiplier]
+      properties:
+        from: {type: number, minimum: 0, maximum: 1, description: "Pressure fraction at which this band starts", example: 0.5}
+        multiplier: {type: number, minimum: 0, example: 1}
+    Bands:
+      type: object
+      description: 'Below the first step the multiplier is `base`; from each step''s `from` upward it is that step''s multiplier. Default: base 0, steps 0.5 to 1, 0.75 to 2, 0.9 to 3.'
+      required: [base, steps]
+      properties:
+        base: {type: number, minimum: 0, example: 0}
+        steps:
+          type: array
+          items: {$ref: '#/components/schemas/BandStep'}
+    PressurePoint:
+      type: object
+      required: [at, raw, smoothed, multiplier]
+      properties:
+        at: {type: string, format: date-time}
+        raw: {type: number}
+        smoothed: {type: number}
+        multiplier: {type: number}
+    Pressure:
+      type: object
+      required: [raw, smoothed, multiplier, bands, source, updated_at, setups_enabled, setups_deployed, history]
+      properties:
+        raw: {type: number, minimum: 0, maximum: 1, description: Latest source value.}
+        smoothed: {type: number, minimum: 0, maximum: 1, description: 15-minute average used for the multiplier.}
+        multiplier: {type: number}
+        bands: {$ref: '#/components/schemas/Bands'}
+        source: {type: string, description: "Pressure source name", example: inventory}
+        updated_at: {type: string, format: date-time, nullable: true}
+        setups_enabled: {type: integer, description: Enabled setups.}
+        setups_deployed: {type: integer, description: Enabled setups the provider reports ("9 of 11 setups deployed").}
+        history:
+          type: array
+          description: Up to 7 days of samples, oldest first.
+          items: {$ref: '#/components/schemas/PressurePoint'}
+    Holder:
+      type: object
+      required: [user_id, hold_id, name, balance_tokens, overdrawn, is_you, release_requested_at]
+      properties:
+        user_id: {type: integer, format: int64}
+        hold_id: {type: integer, format: int64, description: "Use with POST /api/v1/holds/{id}/release."}
+        name: {type: string}
+        balance_tokens: {$ref: '#/components/schemas/Tokens'}
+        overdrawn: {type: boolean}
+        is_you: {type: boolean}
+        release_requested_at: {type: string, format: date-time, nullable: true, description: "Set while the holder's release waits for the setup to be torn down (HOLD-6). Always sent, null when unset."}
+    SetupAdminFields:
+      type: object
+      description: Admin-only fields.
+      required: [enabled, last_seen_at, matched_rule_selector]
+      properties:
+        enabled: {type: boolean}
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last time the provider reported an allocation with the setup's exact name; null if never.
+        matched_rule_selector:
+          type: string
+          nullable: true
+          description: Selector of the rate rule that set the weight; null for the default weight.
+    Setup:
+      type: object
+      required: [id, name, labels, weight, state, holder, held_since, deployed, metering, cost_per_hour_tokens, details, admin]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string, example: lab-01}
+        labels: {$ref: '#/components/schemas/Labels'}
+        weight: {type: number, description: "Resolved weight from the rate rules", example: 1}
+        state:
+          type: string
+          enum: [free, held, disabled]
+        holder:
+          allOf: [{$ref: '#/components/schemas/Holder'}]
+          type: object
+          nullable: true
+        held_since: {type: string, format: date-time, nullable: true}
+        deployed:
+          type: boolean
+          description: The provider currently reports the setup ("Deployed" vs "Acquired · deploying").
+        metering:
+          allOf: [{$ref: '#/components/schemas/MeteringState'}]
+          type: object
+          nullable: true
+          description: Null unless held.
+        cost_per_hour_tokens: {$ref: '#/components/schemas/CostPerHour'}
+        details:
+          description: Opaque JSON returned unmodified (SET-2).
+          example: {note: opaque}
+        admin:
+          allOf: [{$ref: '#/components/schemas/SetupAdminFields'}]
+          type: object
+          nullable: true
+          description: Null for users who are not admins.
+    SetupList:
+      type: object
+      required: [setups, display_label_keys, label_index, summary, metering_description]
+      properties:
+        setups:
+          type: array
+          items: {$ref: '#/components/schemas/Setup'}
+        label_index:
+          type: array
+          description: |
+            Every label key and value over every setup the caller may see
+            (enabled setups for a developer, all setups for an admin),
+            ignoring `selector` like `summary`. Keys sorted, values sorted and
+            distinct. `[]` when no setup has a label (SET-8).
+          items: {$ref: '#/components/schemas/LabelIndexKey'}
+        display_label_keys:
+          type: array
+          items: {type: string}
+          example: [tier]
+        summary:
+          type: object
+          required: [enabled, deployed, free]
+          description: Counts over all enabled setups, ignoring `selector` ("9 of 11 setups deployed · 2 free").
+          properties:
+            enabled: {type: integer}
+            deployed: {type: integer}
+            free: {type: integer}
+        metering_description:
+          type: string
+          nullable: true
+          description: Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`.
+    LabelIndexKey:
+      type: object
+      required: [key, values]
+      properties:
+        key: {type: string, example: site}
+        values:
+          type: array
+          items: {$ref: '#/components/schemas/LabelIndexValue'}
+    LabelIndexValue:
+      type: object
+      required: [value, selector]
+      properties:
+        value: {type: string, example: sjc}
+        selector:
+          type: string
+          nullable: true
+          example: site=sjc
+          description: |
+            The selector term that selects exactly the setups with this value
+            (`key=value`, `key=` for an empty value). Null when the value
+            cannot be written in a selector: it contains whitespace or one of
+            `, ( ) = !`.
+    SetupInput:
+      type: object
+      required: [name, labels, details, enabled]
+      properties:
+        name: {type: string, minLength: 1, example: lab-01}
+        labels: {$ref: '#/components/schemas/Labels'}
+        details:
+          description: Any well-formed JSON, at most 256 KB.
+          example: {note: opaque}
+        enabled: {type: boolean}
+      additionalProperties: false
+    ReleaseRequest:
+      type: object
+      properties:
+        force: {type: boolean, default: false, description: Admin force-release.}
+        reason: {type: string, description: Required when `force` is true.}
+      additionalProperties: false
+    ActiveHoldRef:
+      type: object
+      required: [hold_id, setup_id, setup_name]
+      properties:
+        hold_id: {type: integer, format: int64}
+        setup_id: {type: integer, format: int64}
+        setup_name: {type: string}
+    AdminUser:
+      type: object
+      required: [id, username, email, name, auth_source, status, roles, is_local_admin, balance_tokens, overdrawn, month_to_date_burn_tokens, burn_per_hour_tokens, active_holds, first_sign_in_at, last_login_at]
+      properties:
+        id: {type: integer, format: int64}
+        username: {type: string}
+        email: {type: string}
+        name: {type: string}
+        auth_source: {$ref: '#/components/schemas/AuthSource'}
+        status: {$ref: '#/components/schemas/UserStatus'}
+        roles:
+          type: array
+          items: {$ref: '#/components/schemas/Role'}
+        is_local_admin: {type: boolean, description: Role cannot be changed; no balance; cannot hold.}
+        balance_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          type: number
+          nullable: true
+          description: Null for the local admin, for users with no role (they have no allowance) and for users who never had a role.
+        overdrawn: {type: boolean}
+        month_to_date_burn_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          type: number
+          nullable: true
+          description: Null for users with no role; 0 for the local admin.
+        burn_per_hour_tokens: {$ref: '#/components/schemas/Tokens'}
+        active_holds:
+          type: array
+          items: {$ref: '#/components/schemas/ActiveHoldRef'}
+        first_sign_in_at: {type: string, format: date-time}
+        last_login_at: {type: string, format: date-time, nullable: true}
+    AdminUserList:
+      type: object
+      required: [users, pending_count, summary, period, period_ends_at, default_allowance_tokens]
+      properties:
+        users:
+          type: array
+          items: {$ref: '#/components/schemas/AdminUser'}
+        pending_count: {type: integer, description: "Pending requests, for the navigation"}
+        summary:
+          type: object
+          required: [user_count, admin_count, overdrawn_count, debited_this_month_tokens, granted_this_month_tokens, grant_count_this_month]
+          properties:
+            user_count: {type: integer}
+            admin_count: {type: integer, description: Admins including the local admin.}
+            overdrawn_count: {type: integer}
+            debited_this_month_tokens: {$ref: '#/components/schemas/Tokens'}
+            granted_this_month_tokens: {$ref: '#/components/schemas/Tokens'}
+            grant_count_this_month: {type: integer}
+        period: {type: string}
+        period_ends_at:
+          type: string
+          format: date-time
+          description: When unused tokens expire and debt carries over.
+        default_allowance_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: What "Reset to N" sets the balance to.
+    SetRolesRequest:
+      type: object
+      required: [roles]
+      properties:
+        roles:
+          type: array
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Role'}
+      additionalProperties: false
+    PreapprovalSource:
+      type: string
+      enum: [database, config]
+      description: '`database`: added through the admin API or page. `config`: read from `preapproved_users_file`.'
+    PreapprovalUser:
+      type: object
+      nullable: true
+      required: [id, name]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string, description: 'The display name, or "unknown user".'}
+    Preapproval:
+      type: object
+      required: [id, email, roles, source, created_at, created_by, used_at, used_by]
+      properties:
+        id: {type: integer, format: int64, nullable: true, description: Null for a file entry.}
+        email: {type: string, description: Trimmed and in lower case.}
+        roles:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/Role'}
+        source: {$ref: '#/components/schemas/PreapprovalSource'}
+        created_at: {type: string, format: date-time, nullable: true, description: Null for a file entry.}
+        created_by:
+          allOf: [{$ref: '#/components/schemas/PreapprovalUser'}]
+          nullable: true
+          description: The admin who added the entry. Null for a file entry.
+        used_at: {type: string, format: date-time, nullable: true, description: 'The first sign-in it approved; null until used, always null for a file entry.'}
+        used_by:
+          allOf: [{$ref: '#/components/schemas/PreapprovalUser'}]
+          nullable: true
+          description: The user that first sign-in approved; null until used, always null for a file entry.
+    PreapprovalList:
+      type: object
+      required: [preapprovals]
+      properties:
+        preapprovals:
+          type: array
+          description: By email; for an email in both sources, the database entry first.
+          items: {$ref: '#/components/schemas/Preapproval'}
+    AddPreapprovalsRequest:
+      type: object
+      required: [emails, roles]
+      properties:
+        emails:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: {type: string}
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Role'}
+      additionalProperties: false
+    AddPreapprovalsResult:
+      type: object
+      required: [added, updated]
+      properties:
+        added: {type: integer, description: Emails that were not in the database list.}
+        updated: {type: integer, description: Emails already in the list whose roles were replaced.}
+    GrantRequest:
+      type: object
+      required: [amount_tokens, reason]
+      properties:
+        amount_tokens:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Non-zero; negative corrects mistakes.
+          example: 100
+        reason: {type: string, minLength: 1, example: soak test week}
+      additionalProperties: false
+    ResetRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1}
+      additionalProperties: false
+    BalanceChangeResult:
+      type: object
+      required: [entry, user]
+      properties:
+        entry: {$ref: '#/components/schemas/LedgerEntry'}
+        user: {$ref: '#/components/schemas/AdminUser'}
+    RuleInput:
+      type: object
+      required: [selector, weight]
+      properties:
+        selector: {type: string, example: tier=a}
+        weight: {type: number, minimum: 0, example: 2}
+      additionalProperties: false
+    RulesInput:
+      type: object
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          items: {$ref: '#/components/schemas/RuleInput'}
+      additionalProperties: false
+    Rule:
+      type: object
+      required: [id, position, selector, weight, match_count]
+      properties:
+        id: {type: integer, format: int64}
+        position: {type: integer, minimum: 1}
+        selector: {type: string}
+        weight: {type: number}
+        match_count:
+          type: integer
+          description: Setups that this rule currently sets the weight of (first match).
+    SetupRef:
+      type: object
+      required: [id, name, labels]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+        labels: {$ref: '#/components/schemas/Labels'}
+    RulesResponse:
+      type: object
+      required: [rules, default_weight, unmatched_setups]
+      properties:
+        rules:
+          type: array
+          items: {$ref: '#/components/schemas/Rule'}
+        default_weight:
+          type: number
+          description: Read-only here; edit through settings.
+        unmatched_setups:
+          type: array
+          description: Enabled setups that fall through to the default weight.
+          items: {$ref: '#/components/schemas/SetupRef'}
+    Settings:
+      type: object
+      description: Admin-editable metering settings (ADM-2); unknown fields are rejected.
+      required: [default_weight, display_label_keys, bands, default_allowance, max_holds_per_user, release_requires_teardown, poll_interval, enforcement]
+      properties:
+        default_weight: {type: number, minimum: 0, default: 1}
+        display_label_keys:
+          type: array
+          maxItems: 32
+          uniqueItems: true
+          items: {type: string}
+          example: [tier]
+        bands: {$ref: '#/components/schemas/Bands'}
+        default_allowance:
+          allOf: [{$ref: '#/components/schemas/Tokens'}]
+          description: Whole tokens, decimals allowed.
+          example: 300
+        max_holds_per_user: {type: integer, minimum: 0, default: 2}
+        release_requires_teardown: {type: boolean, default: true}
+        poll_interval:
+          type: string
+          description: Duration string, at least `1m`.
+          example: 5m
+        enforcement: {type: boolean, default: false, description: False is shadow mode.}
+      additionalProperties: false
+    Runtime:
+      type: object
+      description: Read-only names from the config file; never secrets.
+      required: [provider, pressure_source, metering_policy, hooks, oidc_issuer, timezone]
+      properties:
+        provider: {type: string, nullable: true, description: Null when none is configured.}
+        pressure_source: {type: string, example: inventory}
+        metering_policy:
+          type: object
+          required: [name, description]
+          properties:
+            name: {type: string, example: default}
+            description: {type: string, nullable: true, description: Always null; the extension interfaces have no describe method.}
+        hooks:
+          type: array
+          items: {type: string}
+        oidc_issuer: {type: string, nullable: true}
+        timezone: {type: string, example: UTC}
+    SettingsResponse:
+      type: object
+      required: [settings, runtime]
+      properties:
+        settings: {$ref: '#/components/schemas/Settings'}
+        runtime: {$ref: '#/components/schemas/Runtime'}
+    CollectorRun:
+      type: object
+      required: [id, started_at, finished_at, ok, error]
+      properties:
+        id: {type: integer, format: int64}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time, nullable: true}
+        ok: {type: boolean}
+        error: {type: string, nullable: true}
+    Outage:
+      type: object
+      description: A gap longer than twice the poll interval that was not charged (MET-4), or a failed-provider gap.
+      required: [started_at, ended_at, duration_minutes]
+      properties:
+        started_at: {type: string, format: date-time}
+        ended_at: {type: string, format: date-time, nullable: true}
+        duration_minutes: {type: integer}
+    Orphan:
+      type: object
+      required: [resource_name, first_seen_at, last_seen_at, setup, labels]
+      properties:
+        resource_name: {type: string, example: lab-09, description: "The name the provider reported, which is the setup's name (D40)."}
+        first_seen_at: {type: string, format: date-time}
+        last_seen_at: {type: string, format: date-time}
+        setup:
+          type: object
+          nullable: true
+          description: The setup the resource name matches (it exists but nobody holds it).
+          required: [id, name]
+          properties:
+            id: {type: integer, format: int64}
+            name: {type: string}
+        labels:
+          type: object
+          description: Provider-specific labels.
+          additionalProperties: {type: string}
+    FailedDelivery:
+      type: object
+      required: [id, event_type, hook, error, started_at, finished_at]
+      properties:
+        id: {type: integer, format: int64}
+        event_type: {type: string, example: hold.acquired}
+        hook: {type: string}
+        error: {type: string}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time, nullable: true}
+    ReportedReportTimes:
+      type: object
+      required: [observed_at, received_at, service_account]
+      properties:
+        observed_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        service_account: {type: string, description: Name of the service account that sent the report.}
+    Collector:
+      type: object
+      required: [extensions, last_pressure_report, last_deployments_report, last_successful_poll_at, last_error, matched_setups, orphan_count, outages_this_month, recent_runs, outages, orphans, failed_deliveries, queue_length]
+      properties:
+        extensions:
+          type: object
+          required: [provider, pressure_source, metering_policy, hooks]
+          properties:
+            provider: {type: string, nullable: true}
+            pressure_source: {type: string}
+            metering_policy: {type: string}
+            hooks:
+              type: array
+              items: {type: string}
+        last_pressure_report:
+          allOf: [{$ref: '#/components/schemas/ReportedReportTimes'}]
+          nullable: true
+          description: The stored pressure report. Null before the first one and when the pressure source is not `reported`.
+        last_deployments_report:
+          allOf: [{$ref: '#/components/schemas/ReportedReportTimes'}]
+          nullable: true
+          description: The stored deployment report. Null before the first one and when the provider is not `reported`.
+        last_successful_poll_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          required: [message, at]
+          properties:
+            message: {type: string}
+            at: {type: string, format: date-time}
+        matched_setups: {type: integer, description: Enabled setups the latest poll matched to an allocation.}
+        orphan_count: {type: integer}
+        outages_this_month:
+          type: object
+          required: [count, minutes_not_charged]
+          properties:
+            count: {type: integer}
+            minutes_not_charged: {type: integer}
+        recent_runs:
+          type: array
+          description: Latest runs, newest first (up to 20).
+          items: {$ref: '#/components/schemas/CollectorRun'}
+        outages:
+          type: array
+          description: Outage history, newest first.
+          items: {$ref: '#/components/schemas/Outage'}
+        orphans:
+          type: array
+          items: {$ref: '#/components/schemas/Orphan'}
+        failed_deliveries:
+          type: array
+          description: Recent failed event deliveries, newest first (up to 20).
+          items: {$ref: '#/components/schemas/FailedDelivery'}
+        queue_length: {type: integer, description: Events waiting in the in-memory delivery queue.}
+    AuditEntry:
+      type: object
+      required: [id, actor, action, target, before, after, created_at]
+      properties:
+        id: {type: integer, format: int64}
+        actor:
+          type: object
+          required: [id, name]
+          properties:
+            id: {type: integer, format: int64}
+            name: {type: string}
+        action: {type: string, example: ledger.grant}
+        target: {type: string, description: "What was changed, e.g. `user:12` or `setup:4`", example: 'user:12'}
+        before: {type: object, nullable: true, additionalProperties: true}
+        after: {type: object, nullable: true, additionalProperties: true}
+        created_at: {type: string, format: date-time}
+    AuditList:
+      type: object
+      required: [entries, total, limit, offset]
+      properties:
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/AuditEntry'}
+        total: {type: integer, description: Entries matching the filters.}
+        limit: {type: integer}
+        offset: {type: integer}
+    ServiceScope:
+      type: string
+      description: What a service account may call (one integration route each).
+      enum: [state:read, pressure:write, deployments:write, holds:release]
+    ServiceToken:
+      type: object
+      description: A token as listed. The token itself is shown only once, when issued.
+      required: [id, created_at, expires_at, last_used_at]
+      properties:
+        id: {type: integer, format: int64}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time, nullable: true}
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Recorded at most once a minute.
+    IssuedServiceToken:
+      type: object
+      required: [id, created_at, expires_at, last_used_at, token]
+      properties:
+        id: {type: integer, format: int64}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time, nullable: true}
+        last_used_at: {type: string, format: date-time, nullable: true}
+        token:
+          type: string
+          description: '`hgsa_<token id>_<secret>`. Shown in this response only; store it now.'
+          pattern: '^hgsa_[0-9]+_[0-9a-f]{64}$'
+    ServiceAccount:
+      type: object
+      required: [id, name, description, scopes, enabled, created_at, tokens]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+        description: {type: string}
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/ServiceScope'}
+        enabled: {type: boolean}
+        created_at: {type: string, format: date-time}
+        tokens:
+          type: array
+          description: Oldest first.
+          items: {$ref: '#/components/schemas/ServiceToken'}
+    ServiceAccountList:
+      type: object
+      required: [service_accounts]
+      properties:
+        service_accounts:
+          type: array
+          description: By name.
+          items: {$ref: '#/components/schemas/ServiceAccount'}
+    CreateServiceAccountRequest:
+      type: object
+      required: [name, scopes]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+        description: {type: string, maxLength: 500}
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/ServiceScope'}
+    UpdateServiceAccountRequest:
+      type: object
+      required: [description, scopes, enabled]
+      properties:
+        description: {type: string, maxLength: 500}
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/ServiceScope'}
+        enabled: {type: boolean}
+    IssueServiceTokenRequest:
+      type: object
+      properties:
+        expires_at: {type: string, format: date-time, description: Optional; must be in the future.}
+    PressureReport:
+      type: object
+      required: [value]
+      properties:
+        value: {type: number, minimum: 0, maximum: 1, description: Raw pressure; Hourglass smooths it.}
+        observed_at: {type: string, format: date-time, description: Defaults to the time of receipt.}
+    PressureReportResult:
+      type: object
+      required: [value, observed_at, received_at, expires_at]
+      properties:
+        value: {type: number}
+        observed_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+    DeploymentReport:
+      type: object
+      required: [setup]
+      properties:
+        setup: {type: string, minLength: 1, description: The setup's name in Hourglass.}
+        labels:
+          allOf: [{$ref: '#/components/schemas/Labels'}]
+          maxProperties: 32
+          description: Free-form; shown to admins like a provider's allocation labels.
+    DeploymentsReport:
+      type: object
+      required: [deployments]
+      properties:
+        observed_at: {type: string, format: date-time, description: Defaults to the time of receipt.}
+        deployments:
+          type: array
+          maxItems: 10000
+          description: The complete set deployed now; empty means nothing is deployed.
+          items: {$ref: '#/components/schemas/DeploymentReport'}
+    DeploymentsReportResult:
+      type: object
+      required: [observed_at, received_at, expires_at, accepted, unknown]
+      properties:
+        observed_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        accepted: {type: integer}
+        unknown:
+          type: array
+          description: Reported names that match no setup.
+          items: {type: string}
+    StateHolder:
+      type: object
+      required: [id, username, email, name]
+      properties:
+        id: {type: integer, format: int64}
+        username: {type: string}
+        email: {type: string}
+        name: {type: string}
+    StateHold:
+      type: object
+      required: [id, user, acquired_at, metering_started_at, deployed_at, release_requested_at]
+      properties:
+        id: {type: integer, format: int64}
+        user: {$ref: '#/components/schemas/StateHolder'}
+        acquired_at: {type: string, format: date-time}
+        metering_started_at: {type: string, format: date-time, nullable: true}
+        deployed_at: {type: string, format: date-time, nullable: true}
+        release_requested_at: {type: string, format: date-time, nullable: true}
+    StateSetup:
+      type: object
+      required: [name, labels, details, enabled, reported_deployed, hold]
+      properties:
+        name: {type: string}
+        labels: {$ref: '#/components/schemas/Labels'}
+        details: {type: object, additionalProperties: true}
+        enabled: {type: boolean}
+        reported_deployed: {type: boolean, description: "From the stored report, not the last poll."}
+        hold:
+          allOf: [{$ref: '#/components/schemas/StateHold'}]
+          type: object
+          nullable: true
+          description: The active hold; null for a free setup.
+    IntegrationState:
+      type: object
+      required: [server_time, poll, pressure, deployments, setups]
+      properties:
+        server_time: {type: string, format: date-time}
+        poll:
+          type: object
+          required: [interval_seconds, last_ok_at]
+          properties:
+            interval_seconds: {type: integer}
+            last_ok_at: {type: string, format: date-time, nullable: true}
+        pressure:
+          type: object
+          required: [source, reported, smoothed, multiplier]
+          properties:
+            source: {type: string, nullable: true, description: The configured pressure source.}
+            reported:
+              type: object
+              nullable: true
+              required: [value, observed_at, expires_at]
+              properties:
+                value: {type: number}
+                observed_at: {type: string, format: date-time}
+                expires_at: {type: string, format: date-time}
+            smoothed: {type: number, nullable: true}
+            multiplier: {type: number}
+        deployments:
+          type: object
+          required: [provider, observed_at, expires_at]
+          properties:
+            provider: {type: string, nullable: true, description: The configured provider.}
+            observed_at: {type: string, format: date-time, nullable: true}
+            expires_at: {type: string, format: date-time, nullable: true}
+        setups:
+          type: array
+          items: {$ref: '#/components/schemas/StateSetup'}
+    ServiceReleaseRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 1, maxLength: 500}

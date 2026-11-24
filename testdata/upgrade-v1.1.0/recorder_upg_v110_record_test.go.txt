@@ -1,0 +1,600 @@
+// SPDX-License-Identifier: MIT
+
+package api
+
+// Temporary recorder, run only in the throwaway worktree of the tag v1.1.0
+// (commit 753cc50), after recorder_testenv.patch. It builds the compatibility
+// fixture of the reported-weights work (WGT-19, WGT-20) and records what the
+// v1.1.0 code writes and answers. The clock, the ids and the secrets are fixed,
+// so a second run writes identical files.
+
+import (
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sort"
+	"testing"
+	"time"
+
+	_ "modernc.org/sqlite"
+
+	"github.com/panset/hourglass/internal/auth"
+	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/pkg/hourglass"
+)
+
+// recAdminHash is a fixed argon2id hash of the unit tests' own admin password
+// (testAdminPassword). HashPassword salts at random, so the recorder stores
+// this constant to make the database reproducible.
+const recAdminHash = "$argon2id$v=19$m=65536,t=3,p=4$ab/QzhiQLT9WdToLshVWbg$c2nEno0PNk3gZAoWwbT/+Lqr7JkpOSoCAM92coneTT0"
+
+// recSecret is the secret part of the fixture's service tokens, derived from a
+// label so that the recorder holds no token-shaped literal. It opens nothing
+// but the fixture database.
+func recSecret(label string) string {
+	sum := sha256.Sum256([]byte("upgrade-v1.1.0-fixture/" + label))
+	return hex.EncodeToString(sum[:])
+}
+
+// recSession stores a session with a fixed id for the user and returns it. Only
+// the id is fixed: the sessions are never written to a fixture (recNormalize
+// deletes them), and the recorded responses carry no session time.
+func recSession(b *backend, u store.User) sess {
+	raw := sha256.Sum256([]byte("upgrade-v1.1.0-fixture/session/" + u.Username + u.Name))
+	sum := sha256.Sum256(raw[:])
+	id := hex.EncodeToString(sum[:])
+	now := time.Now() // the auth service checks sessions against the wall clock
+	if err := b.st.CreateSession(uBg, id, u.ID, now, now.Add(time.Hour)); err != nil {
+		b.t.Fatal(err)
+	}
+	return sess{user: u, cookie: base64.RawURLEncoding.EncodeToString(raw[:]), csrf: b.auth.CSRFToken(id)}
+}
+
+// recAccount creates a service account and one token with a fixed secret.
+func recAccount(b *backend, name, description string, scopes ...string) (store.ServiceAccount, string) {
+	a, err := b.st.CreateServiceAccount(uBg, store.ServiceAccount{Name: name, Description: description, Scopes: scopes, Enabled: true}, b.clk.Now())
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	secret := recSecret(name)
+	tk, err := b.st.InsertServiceToken(uBg, a.ID, auth.HashServiceSecret(secret), nil, b.clk.Now())
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	return a, auth.FormatServiceToken(tk.ID, secret)
+}
+
+func recRuntime() Runtime {
+	return Runtime{Provider: "reported", PressureSource: "reported", MeteringPolicy: "fake-policy",
+		ReportedProviderMaxAge: 10 * time.Minute, ReportedPressureMaxAge: 15 * time.Minute}
+}
+
+// recEnv is a backend as the upgrade tests start it. Names and the policy are
+// the same in every phase.
+func recEnv(t *testing.T, start time.Time, loc *time.Location, dbPath, dbCopy string) *uenv {
+	t.Helper()
+	b := newBackend(t, backendOpts{start: start, loc: loc, dbPath: dbPath, dbCopy: dbCopy, runtime: recRuntime()})
+	b.prov.SetName("reported")
+	b.pressure.SetName("reported")
+	b.policy.SetFunc(recPolicy)
+	return &uenv{b}
+}
+
+// recPolicy meters every hold; the hold of lab-08 gets a weight of its own.
+func recPolicy(h hourglass.HoldState, _ hourglass.Snapshot) hourglass.Decision {
+	if h.Setup.Name == "lab-08" {
+		return hourglass.Decision{Meter: true, Weight: 3.25, Reason: "policy weight"}
+	}
+	return hourglass.Decision{Meter: true, Reason: "test reason"}
+}
+
+func recAllocs(names ...string) []hourglass.Allocation {
+	var out []hourglass.Allocation
+	for _, n := range names {
+		out = append(out, hourglass.Allocation{ResourceName: n})
+	}
+	return out
+}
+
+func recJSON(rec *httptest.ResponseRecorder) any {
+	var v any
+	if err := json.Unmarshal(rec.Body.Bytes(), &v); err != nil {
+		return rec.Body.String()
+	}
+	return v
+}
+
+// recNormalize makes the database file reproducible: the local admin's
+// creation time and password hash come from the wall clock and a random salt,
+// a token's last use, the migrations and the event outbox carry the wall clock,
+// and the sessions hold hashed ids of the recording. It also returns the number
+// of rows of each table.
+func recNormalize(t *testing.T, path string, adminCreated, tokenUsed time.Time) map[string]int {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE users SET created_at = ?, password_hash = ? WHERE auth_source = 'local'`,
+		store.FormatTime(adminCreated), recAdminHash); err != nil {
+		t.Fatal(err)
+	}
+	// The auth service stamps a token's use with the wall clock; the reports
+	// were sent at the recorded time.
+	if _, err := db.Exec(`UPDATE service_tokens SET last_used_at = ? WHERE last_used_at IS NOT NULL`, store.FormatTime(tokenUsed)); err != nil {
+		t.Fatal(err)
+	}
+	// The migrations were applied at the wall-clock time of the recording.
+	if _, err := db.Exec(`UPDATE schema_migrations SET applied_at = ?`, store.FormatTime(adminCreated)); err != nil {
+		t.Fatal(err)
+	}
+	// The event outbox holds the undelivered events of the recording (no
+	// delivery worker ran), stamped with the wall clock.
+	if _, err := db.Exec(`DELETE FROM event_deliveries`); err != nil {
+		t.Fatal(err)
+	}
+	// CreateSetup inserts a setup's labels in map order; store them in key order.
+	lrows, err := db.Query(`SELECT setup_id, key, value FROM setup_labels ORDER BY setup_id, key`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type lab struct {
+		id         int64
+		key, value string
+	}
+	var labs []lab
+	for lrows.Next() {
+		var l lab
+		_ = lrows.Scan(&l.id, &l.key, &l.value)
+		labs = append(labs, l)
+	}
+	lrows.Close()
+	if _, err := db.Exec(`DELETE FROM setup_labels`); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range labs {
+		if _, err := db.Exec(`INSERT INTO setup_labels (setup_id, key, value) VALUES (?, ?, ?)`, l.id, l.key, l.value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`DELETE FROM sessions`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for rows.Next() {
+		var n string
+		_ = rows.Scan(&n)
+		names = append(names, n)
+	}
+	rows.Close()
+	counts := map[string]int{}
+	for _, n := range names {
+		var c int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM "` + n + `"`).Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		counts[n] = c
+	}
+	if _, err := db.Exec(`VACUUM`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		t.Fatal(err)
+	}
+	return counts
+}
+
+func TestRecordUpgradeFixtureV110(t *testing.T) {
+	out := os.Getenv("RECORD_DIR")
+	if out == "" {
+		t.Skip("RECORD_DIR not set")
+	}
+	_ = os.MkdirAll(out, 0o755)
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+	start := time.Date(2026, 11, 2, 21, 0, 0, 0, time.UTC)
+	dbp := filepath.Join(t.TempDir(), "api.db")
+	e := recEnv(t, start, berlin, dbp, "")
+
+	// Settings that differ from the defaults and change no behaviour a test
+	// would trip over: the default weight (not an integer), the label keys the
+	// lists show, and the number of holds one user may have.
+	e.setting("default_weight", `1.25`)
+	e.setting("display_label_keys", `["tier","zone"]`)
+	e.setting("max_holds_per_user", `4`)
+	// Rate rules: a non-integer weight, an integer one, and a weight of 0.
+	if err := e.st.ReplaceRules(uBg, "rate", []store.Rule{
+		{Selector: "tier=gold", Value: 2.5}, {Selector: "memory-gb=64", Value: 4}, {Selector: "tier=free", Value: 0},
+	}, nil, e.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s1 := e.setup("lab-01", true, map[string]string{"tier": "gold", "memory-gb": "64"}) // first rule, 2.5
+	s2 := e.setup("lab-02", true, map[string]string{"tier": "free"})                    // weight 0
+	s3 := e.setup("lab-03", true, map[string]string{"memory-gb": "64", "zone": "east"}) // second rule, 4
+	s4 := e.setup("lab-04", true, map[string]string{"zone": "west"})                    // default weight
+	e.setup("lab-05", false, map[string]string{"tier": "gold"})                         // disabled
+	e.setup("lab-06", true, map[string]string{})                                        // default weight, never held
+	e.setup("lab-07", true, map[string]string{"tier": "gold", "zone": "west"})          // never held
+	s8 := e.setup("lab-08", true, map[string]string{"zone": "east"})                    // policy weight 3.25
+
+	dev := e.dev("dev", store.RoleDeveloper)
+	dev2 := e.dev("dev2", store.RoleDeveloper)
+	other := e.dev("other", store.RoleDeveloper)
+	nor := e.pending("norole")
+	devAdmin := e.dev("ops", store.RoleDeveloper, store.RoleAdmin)
+	// Service accounts with fixed secrets: one with every scope of v1.1.0, one
+	// that may only read the state.
+	reporter, reporterTok := recAccount(e.backend, "reporter", "reports pressure and deployments, reads the state, releases holds",
+		auth.Scopes()...)
+	viewer, viewerTok := recAccount(e.backend, "viewer", "reads the state", auth.ScopeStateRead)
+
+	e.prov.SetAllocations(recAllocs("lab-01", "lab-02", "lab-03", "lab-04", "lab-08")...)
+	h1 := e.acquire(&dev, s1)
+	h2 := e.acquire(&dev, s2)
+	h3 := e.acquire(&dev2, s3)
+	h4 := e.acquire(&dev2, s4)
+	h8 := e.acquire(&dev2, s8)
+	e.poll()
+	for i := 0; i < 9; i++ {
+		e.step(5 * time.Minute)
+	}
+	if _, err := e.led.Grant(uBg, e.admin.ID, dev.user.ID, 50000, "grant"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 10; i++ {
+		e.step(5 * time.Minute)
+	}
+	// The hold of lab-04 is released: requested while deployed, completed by the
+	// poll that no longer sees the setup.
+	if rec := e.post("/api/v1/holds/"+uItoa(h4)+"/release", &dev2, ""); rec.Code != http.StatusAccepted {
+		t.Fatalf("release: %d %s", rec.Code, rec.Body)
+	}
+	e.prov.SetAllocations(recAllocs("lab-01", "lab-02", "lab-03", "lab-08")...)
+	e.step(5 * time.Minute)
+	e.step(5 * time.Minute)
+	// The user of lab-03 asks for the release; the setup stays deployed, so the
+	// release stays pending.
+	if rec := e.post("/api/v1/holds/"+uItoa(h3)+"/release", &dev2, ""); rec.Code != http.StatusAccepted {
+		t.Fatalf("release: %d %s", rec.Code, rec.Body)
+	}
+	for i := 0; i < 8; i++ {
+		e.step(5 * time.Minute)
+	}
+	e.clk.Advance(9*24*time.Hour + 9*time.Hour + 45*time.Minute)
+	e.poll()
+	for i := 0; i < 3; i++ {
+		e.step(5 * time.Minute)
+	}
+	now := e.clk.Now() // the time of the last poll
+
+	// The stored reports, at the recorded time.
+	rec := e.serveService("PUT", "/api/v1/integration/pressure", reporterTok, `{"value":0.8}`)
+	if rec.Code != 200 {
+		t.Fatalf("pressure report: %d %s", rec.Code, rec.Body)
+	}
+	rec = e.serveService("PUT", "/api/v1/integration/deployments", reporterTok,
+		`{"deployments":[{"setup":"lab-01","labels":{"cluster":"c1"}},{"setup":"lab-02"},{"setup":"lab-03"},{"setup":"lab-08"},{"setup":"lab-99"}]}`)
+	if rec.Code != 200 {
+		t.Fatalf("deployments report: %d %s", rec.Code, rec.Body)
+	}
+
+	// Facts read through the store.
+	users := []store.User{e.admin, dev.user, dev2.user, other.user, nor.user, devAdmin.user}
+	bal, sums := map[string]int64{}, map[string]int64{}
+	for _, u := range users {
+		cur, _ := e.st.GetUser(uBg, u.ID)
+		bal[uItoa(u.ID)] = cur.BalanceMT
+		for _, p := range []string{"2026-10", "2026-11"} {
+			s, err := e.st.SumLedger(uBg, u.ID, p, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			sums[uItoa(u.ID)+"/"+p] = s
+		}
+	}
+	holdIDs := []int64{h1, h2, h3, h4, h8}
+	ch, err := e.st.HoldCharges(uBg, holdIDs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	charges := map[string]int64{}
+	for k, v := range ch {
+		charges[uItoa(k)] = v
+	}
+	e.st.Close()
+	if _, err := os.Stat(dbp + "-wal"); err == nil {
+		t.Fatal("a WAL file is left; the copy would be incomplete")
+	}
+	counts := recNormalize(t, dbp, start.Add(-time.Hour), now)
+	dbBytes, err := os.ReadFile(dbp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "hourglass.sqlite3"), dbBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	facts := map[string]any{"balances_mt": bal, "period_sums_mt": sums, "hold_charges_mt": charges,
+		"hold_ids": map[string]int64{"dev/lab-01": h1, "dev/lab-02": h2, "dev2/lab-03": h3, "dev2/lab-04": h4, "dev2/lab-08": h8},
+		"user_ids": map[string]int64{"admin": e.admin.ID, "dev": dev.user.ID, "dev2": dev2.user.ID, "other": other.user.ID,
+			"norole": nor.user.ID, "ops": devAdmin.user.ID},
+		"setup_ids":           map[string]int64{"lab-01": s1, "lab-02": s2, "lab-03": s3, "lab-04": s4, "lab-08": s8},
+		"service_account_ids": map[string]int64{"reporter": reporter.ID, "viewer": viewer.ID},
+		"service_token_names": []string{"reporter", "viewer"},
+		"rows_per_table":      counts}
+
+	recordResponses(t, out, dbp, dbBytes, now, berlin, facts, dev.user, dev2.user, other.user, nor.user, devAdmin.user, reporterTok, viewerTok)
+	recordPolls(t, out, dbBytes, now, berlin, users, []int64{h1, h2, h3, h4, h8})
+}
+
+// recCaller sends the requests of a phase and keeps what came back.
+type recCaller struct {
+	t       *testing.T
+	b       *uenv
+	entries []any
+}
+
+func (c *recCaller) call(name, principal string, s *sess, token, method, path, body string) any {
+	c.t.Helper()
+	var rec *httptest.ResponseRecorder
+	switch {
+	case token != "":
+		rec = c.b.serveService(method, path, token, body)
+	default:
+		rec = c.b.serve(method, path, s, method != "GET", body)
+	}
+	var reqBody any
+	if body != "" {
+		if err := json.Unmarshal([]byte(body), &reqBody); err != nil {
+			reqBody = body
+		}
+	}
+	got := recJSON(rec)
+	c.entries = append(c.entries, map[string]any{"name": name, "principal": principal,
+		"request": map[string]any{"method": method, "path": path, "body": reqBody},
+		"status":  rec.Code, "response": got})
+	return got
+}
+
+func recordResponses(t *testing.T, out, dbp string, db []byte, now time.Time, loc *time.Location, facts map[string]any,
+	dev, dev2, other, nor, ops store.User, reporterTok, viewerTok string) {
+	t.Helper()
+	copyPath := filepath.Join(t.TempDir(), "copy.db")
+	if err := os.WriteFile(copyPath, db, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := recEnv(t, now, loc, "", copyPath)
+	devS, dev2S, otherS, norS := recSession(e.backend, dev), recSession(e.backend, dev2), recSession(e.backend, other), recSession(e.backend, nor)
+	adm := recSession(e.backend, e.admin)
+	opsS := recSession(e.backend, ops)
+	c := &recCaller{t: t, b: e}
+
+	// Reads, in a fresh process state: no poll has run since the start.
+	c.call("setups_dev", "developer", &devS, "", "GET", "/api/v1/setups", "")
+	c.call("setups_dev_selector", "developer", &devS, "", "GET", "/api/v1/setups?selector=tier%3Dgold", "")
+	c.call("setups_dev2", "developer (holder)", &dev2S, "", "GET", "/api/v1/setups", "")
+	c.call("setups_admin", "admin", &adm, "", "GET", "/api/v1/setups", "")
+	c.call("setups_norole", "user with no role", &norS, "", "GET", "/api/v1/setups", "")
+	c.call("session_dev", "developer", &devS, "", "GET", "/api/v1/session", "")
+	c.call("me_dev", "developer", &devS, "", "GET", "/api/v1/me", "")
+	c.call("me_dev2", "developer (holder)", &dev2S, "", "GET", "/api/v1/me", "")
+	c.call("me_other", "developer (no activity)", &otherS, "", "GET", "/api/v1/me", "")
+	c.call("me_admin", "admin", &adm, "", "GET", "/api/v1/me", "")
+	c.call("me_holds_dev", "developer", &devS, "", "GET", "/api/v1/me/holds", "")
+	c.call("me_holds_dev2", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/holds", "")
+	c.call("me_holds_dev2_active", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/holds?state=active", "")
+	c.call("me_ledger_dev", "developer", &devS, "", "GET", "/api/v1/me/ledger", "")
+	c.call("me_ledger_dev_day", "developer", &devS, "", "GET", "/api/v1/me/ledger?rollup=day", "")
+	c.call("me_ledger_dev2", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/ledger", "")
+	c.call("me_ledger_dev2_day", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/ledger?rollup=day", "")
+	c.call("me_usage_dev", "developer", &devS, "", "GET", "/api/v1/me/usage", "")
+	c.call("me_usage_dev2", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/usage", "")
+	c.call("pressure_dev", "developer", &devS, "", "GET", "/api/v1/pressure", "")
+	c.call("me_norole", "user with no role", &norS, "", "GET", "/api/v1/me", "")
+	c.call("admin_users", "admin", &adm, "", "GET", "/api/v1/admin/users", "")
+	c.call("admin_users_ops", "developer and admin", &opsS, "", "GET", "/api/v1/admin/users", "")
+	c.call("admin_users_dev", "developer", &devS, "", "GET", "/api/v1/admin/users", "")
+	c.call("admin_rules", "admin", &adm, "", "GET", "/api/v1/admin/rules", "")
+	set := c.call("admin_settings", "admin", &adm, "", "GET", "/api/v1/admin/settings", "")
+	c.call("admin_collector", "admin", &adm, "", "GET", "/api/v1/admin/collector", "")
+	c.call("admin_service_accounts", "admin", &adm, "", "GET", "/api/v1/admin/service-accounts", "")
+	c.call("integration_state_reporter", "service account, every scope", nil, reporterTok, "GET", "/api/v1/integration/state", "")
+	c.call("integration_state_viewer", "service account, state:read only", nil, viewerTok, "GET", "/api/v1/integration/state", "")
+	c.call("integration_state_dev", "developer session", &devS, "", "GET", "/api/v1/integration/state", "")
+	c.call("integration_state_anonymous", "no credential", nil, "", "GET", "/api/v1/integration/state", "")
+
+	// Writes, last: they change the copy.
+	body, _ := json.Marshal(set.(map[string]any)["settings"])
+	c.call("admin_settings_put", "admin", &adm, "", "PUT", "/api/v1/admin/settings", string(body))
+	c.call("admin_settings_put_dev", "developer", &devS, "", "PUT", "/api/v1/admin/settings", string(body))
+	created := c.call("admin_setup_post", "admin", &adm, "", "POST", "/api/v1/admin/setups",
+		`{"name":"lab-09","labels":{"tier":"gold","zone":"west"},"details":{"note":"opaque","n":[1,2]},"enabled":true}`)
+	cm, _ := created.(map[string]any)
+	if cm["id"] == nil {
+		t.Fatalf("create setup: %v", created)
+	}
+	newID := int64(cm["id"].(float64))
+	c.call("admin_setup_post_no_rule", "admin", &adm, "", "POST", "/api/v1/admin/setups",
+		`{"name":"lab-10","labels":{"zone":"north"},"details":{},"enabled":false}`)
+	c.call("admin_setup_put", "admin", &adm, "", "PUT", "/api/v1/admin/setups/"+uItoa(newID),
+		`{"name":"lab-09","labels":{"tier":"free"},"details":{"note":"edited"},"enabled":true}`)
+	c.call("admin_setup_put_held", "admin", &adm, "", "PUT", "/api/v1/admin/setups/"+uItoa(facts["setup_ids"].(map[string]int64)["lab-01"]),
+		`{"name":"lab-01","labels":{"tier":"gold","memory-gb":"128"},"details":{"k":2},"enabled":true}`)
+	c.call("admin_setup_post_dev", "developer", &devS, "", "POST", "/api/v1/admin/setups",
+		`{"name":"lab-11","labels":{},"details":{},"enabled":true}`)
+	c.call("setups_admin_after_writes", "admin", &adm, "", "GET", "/api/v1/setups", "")
+	c.call("admin_users_after_writes", "admin", &adm, "", "GET", "/api/v1/admin/users", "")
+	c.call("admin_audit_after_writes", "admin", &adm, "", "GET", "/api/v1/admin/audit", "")
+
+	doc := map[string]any{"recorded_from": "v1.1.0", "commit": "753cc50", "now": now.UTC().Format(time.RFC3339Nano),
+		"timezone": loc.String(), "facts": facts,
+		"runtime": map[string]any{"provider": "reported", "pressure_source": "reported", "metering_policy": "fake-policy",
+			"reported_provider_max_age": "10m", "reported_pressure_max_age": "15m"},
+		"responses": c.entries}
+	writeJSONFile(t, filepath.Join(out, "responses.json"), doc)
+}
+
+// recordPolls replays polls of the release code over a copy of the database.
+func recordPolls(t *testing.T, out string, db []byte, now time.Time, loc *time.Location, users []store.User, holdIDs []int64) {
+	t.Helper()
+	copyPath := filepath.Join(t.TempDir(), "copy.db")
+	if err := os.WriteFile(copyPath, db, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := recEnv(t, now, loc, "", copyPath)
+	type step struct {
+		after       time.Duration
+		pressure    float64
+		allocations []string
+	}
+	steps := []step{
+		{5 * time.Minute, 0.8, []string{"lab-01", "lab-02", "lab-03", "lab-08"}},
+		{5 * time.Minute, 0.5, []string{"lab-01", "lab-02", "lab-03", "lab-08"}},
+		{5 * time.Minute, 0.95, []string{"lab-01", "lab-02", "lab-08"}}, // lab-03 left the report: its pending release completes
+	}
+	var calls []map[string]any
+	e.policy.SetFunc(func(h hourglass.HoldState, s hourglass.Snapshot) hourglass.Decision {
+		d := recPolicy(h, s)
+		calls = append(calls, map[string]any{"hold": h, "snapshot": s, "decision": d})
+		return d
+	})
+	periods := []string{"2026-10", "2026-11"}
+	ledgerIDs := func() map[int64]bool {
+		ids := map[int64]bool{}
+		for _, u := range users {
+			for _, p := range periods {
+				rows, err := e.st.ListLedger(uBg, u.ID, p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, r := range rows {
+					ids[r.ID] = true
+				}
+			}
+		}
+		return ids
+	}
+	sampleIDs := func() map[int64]bool {
+		ids := map[int64]bool{}
+		for _, h := range holdIDs {
+			ss, err := e.st.ListUsageSamples(uBg, h)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, s := range ss {
+				ids[s.ID] = true
+			}
+		}
+		return ids
+	}
+	balances := func() map[string]int64 {
+		m := map[string]int64{}
+		for _, u := range users {
+			cur, _ := e.st.GetUser(uBg, u.ID)
+			m[uItoa(u.ID)] = cur.BalanceMT
+		}
+		return m
+	}
+	var polls []any
+	for i, s := range steps {
+		e.clk.Advance(s.after)
+		e.pressure.SetValue(s.pressure)
+		e.prov.SetAllocations(recAllocs(s.allocations...)...)
+		calls = nil
+		beforeBal, beforeLedger, beforeSamples := balances(), ledgerIDs(), sampleIDs()
+		nPressure := e.pressure.Calls()
+		e.poll()
+		snaps := e.pressure.Snapshots()
+		if len(snaps) != nPressure+1 {
+			t.Fatalf("poll %d: the pressure source was called %d times", i+1, len(snaps)-nPressure)
+		}
+		view := e.col.LastPoll()
+		var newLedger, newSamples []any
+		for _, u := range users {
+			for _, p := range periods {
+				rows, _ := e.st.ListLedger(uBg, u.ID, p)
+				for _, r := range rows {
+					if !beforeLedger[r.ID] {
+						newLedger = append(newLedger, map[string]any{"id": r.ID, "user_id": r.UserID, "period": r.Period, "type": r.Type,
+							"amount_mt": r.AmountMT, "hold_id": r.HoldID, "reason": r.Reason, "created_at": r.CreatedAt.UTC().Format(time.RFC3339Nano)})
+					}
+				}
+			}
+		}
+		for _, h := range holdIDs {
+			ss, _ := e.st.ListUsageSamples(uBg, h)
+			for _, x := range ss {
+				if !beforeSamples[x.ID] {
+					newSamples = append(newSamples, map[string]any{"id": x.ID, "hold_id": x.HoldID, "polled_at": x.PolledAt.UTC().Format(time.RFC3339Nano),
+						"weight": x.Weight, "rule_selector": x.RuleSelector, "pressure": x.Pressure, "multiplier": x.Multiplier,
+						"debit_mt": x.DebitMT, "reason": x.Reason})
+				}
+			}
+		}
+		sort.Slice(newLedger, func(a, b int) bool {
+			return newLedger[a].(map[string]any)["id"].(int64) < newLedger[b].(map[string]any)["id"].(int64)
+		})
+		holdState := map[string]any{}
+		for _, h := range holdIDs {
+			row, _ := e.st.GetHold(uBg, h)
+			holdState[uItoa(h)] = map[string]any{"released": row.ReleasedAt != nil, "release_requested": row.ReleaseRequestedAt != nil,
+				"metering_started": row.MeteringStartedAt != nil, "deployed": row.DeployedAt != nil}
+		}
+		polls = append(polls, map[string]any{
+			"at": e.clk.Now().UTC().Format(time.RFC3339Nano), "fake_pressure_value": s.pressure, "provider_allocations": s.allocations,
+			"balances_before_mt": beforeBal, "balances_after_mt": balances(),
+			"snapshot_to_pressure_source": snaps[len(snaps)-1],
+			"policy_calls":                calls,
+			"raw_pressure":                view.RawPressure, "smoothed_pressure": view.SmoothedPressure, "multiplier": view.Multiplier,
+			"usage_samples_written": newSamples, "ledger_rows_written": newLedger, "holds_after": holdState})
+	}
+
+	// Responses after the three polls, in the same process: they show what the
+	// poll view adds (deployed, pending release).
+	var devUser, dev2User store.User
+	for _, u := range users {
+		switch u.Email {
+		case "dev@example.test":
+			devUser = u
+		case "dev2@example.test":
+			dev2User = u
+		}
+	}
+	devS, dev2S, adm := recSession(e.backend, devUser), recSession(e.backend, dev2User), recSession(e.backend, e.admin)
+	c := &recCaller{t: t, b: e}
+	c.call("setups_dev_after_polls", "developer", &devS, "", "GET", "/api/v1/setups", "")
+	c.call("setups_admin_after_polls", "admin", &adm, "", "GET", "/api/v1/setups", "")
+	c.call("me_holds_dev2_after_polls", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/holds", "")
+	c.call("me_usage_dev_after_polls", "developer", &devS, "", "GET", "/api/v1/me/usage", "")
+	c.call("me_ledger_dev2_after_polls", "developer (holder)", &dev2S, "", "GET", "/api/v1/me/ledger", "")
+	c.call("admin_users_after_polls", "admin", &adm, "", "GET", "/api/v1/admin/users", "")
+	c.call("admin_collector_after_polls", "admin", &adm, "", "GET", "/api/v1/admin/collector", "")
+
+	doc := map[string]any{"recorded_from": "v1.1.0", "commit": "753cc50", "start": now.UTC().Format(time.RFC3339Nano),
+		"timezone": loc.String(), "polls": polls, "responses_after_polls": c.entries}
+	writeJSONFile(t, filepath.Join(out, "poll.json"), doc)
+}
+
+func writeJSONFile(t *testing.T, path string, v any) {
+	t.Helper()
+	bs, err := json.MarshalIndent(v, "", " ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(bs, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+var _ = context.Background

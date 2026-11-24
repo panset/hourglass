@@ -1,0 +1,5863 @@
+{
+ "commit": "753cc50",
+ "polls": [
+  {
+   "at": "2026-11-12T09:30:00Z",
+   "balances_after_mt": {
+    "1": 0,
+    "2": 336239,
+    "3": 255943,
+    "4": 300000,
+    "5": 0,
+    "6": 300000
+   },
+   "balances_before_mt": {
+    "1": 0,
+    "2": 336656,
+    "3": 257152,
+    "4": 300000,
+    "5": 0,
+    "6": 300000
+   },
+   "fake_pressure_value": 0.8,
+   "holds_after": {
+    "1": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    },
+    "2": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    },
+    "3": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": true,
+     "released": false
+    },
+    "4": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": true,
+     "released": true
+    },
+    "5": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    }
+   },
+   "ledger_rows_written": [
+    {
+     "amount_mt": -417,
+     "created_at": "2026-11-12T09:30:00Z",
+     "hold_id": 1,
+     "id": 122,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 2
+    },
+    {
+     "amount_mt": -667,
+     "created_at": "2026-11-12T09:30:00Z",
+     "hold_id": 3,
+     "id": 123,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 3
+    },
+    {
+     "amount_mt": -542,
+     "created_at": "2026-11-12T09:30:00Z",
+     "hold_id": 5,
+     "id": 124,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 3
+    }
+   ],
+   "multiplier": 2,
+   "policy_calls": [
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 1,
+       "SetupName": "lab-01",
+       "UserID": 2,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-01",
+       "Labels": {
+        "memory-gb": "64",
+        "tier": "gold"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 2.5
+      },
+      "User": {
+       "ID": 2,
+       "Username": "",
+       "Email": "dev@example.test",
+       "Name": "User dev",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-01",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:30:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 2,
+       "SetupName": "lab-02",
+       "UserID": 2,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-02",
+       "Labels": {
+        "tier": "free"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 0
+      },
+      "User": {
+       "ID": 2,
+       "Username": "",
+       "Email": "dev@example.test",
+       "Name": "User dev",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-02",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:30:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 3,
+       "SetupName": "lab-03",
+       "UserID": 3,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-03",
+       "Labels": {
+        "memory-gb": "64",
+        "zone": "east"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 4
+      },
+      "User": {
+       "ID": 3,
+       "Username": "",
+       "Email": "dev2@example.test",
+       "Name": "User dev2",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-03",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:30:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 3.25,
+      "Reason": "policy weight"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 5,
+       "SetupName": "lab-08",
+       "UserID": 3,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-08",
+       "Labels": {
+        "zone": "east"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 1.25
+      },
+      "User": {
+       "ID": 3,
+       "Username": "",
+       "Email": "dev2@example.test",
+       "Name": "User dev2",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-08",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:30:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    }
+   ],
+   "provider_allocations": [
+    "lab-01",
+    "lab-02",
+    "lab-03",
+    "lab-08"
+   ],
+   "raw_pressure": 0.8,
+   "smoothed_pressure": 0.8000000000000002,
+   "snapshot_to_pressure_source": {
+    "Time": "2026-11-12T09:30:00Z",
+    "Setups": [
+     {
+      "Name": "lab-01",
+      "Labels": {
+       "memory-gb": "64",
+       "tier": "gold"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 2.5
+     },
+     {
+      "Name": "lab-02",
+      "Labels": {
+       "tier": "free"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 0
+     },
+     {
+      "Name": "lab-03",
+      "Labels": {
+       "memory-gb": "64",
+       "zone": "east"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 4
+     },
+     {
+      "Name": "lab-04",
+      "Labels": {
+       "zone": "west"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     },
+     {
+      "Name": "lab-06",
+      "Labels": {},
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     },
+     {
+      "Name": "lab-07",
+      "Labels": {
+       "tier": "gold",
+       "zone": "west"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 2.5
+     },
+     {
+      "Name": "lab-08",
+      "Labels": {
+       "zone": "east"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     }
+    ],
+    "Holds": [
+     {
+      "ID": 1,
+      "SetupName": "lab-01",
+      "UserID": 2,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     },
+     {
+      "ID": 2,
+      "SetupName": "lab-02",
+      "UserID": 2,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     },
+     {
+      "ID": 3,
+      "SetupName": "lab-03",
+      "UserID": 3,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+      "ReleasedAt": null
+     },
+     {
+      "ID": 5,
+      "SetupName": "lab-08",
+      "UserID": 3,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     }
+    ],
+    "Allocations": [
+     {
+      "ResourceName": "lab-01",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-02",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-03",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-08",
+      "Labels": null
+     }
+    ],
+    "ProviderConfigured": true
+   },
+   "usage_samples_written": [
+    {
+     "debit_mt": 417,
+     "hold_id": 1,
+     "id": 158,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:30:00Z",
+     "pressure": 0.8000000000000002,
+     "reason": "test reason",
+     "rule_selector": "tier=gold",
+     "weight": 2.5
+    },
+    {
+     "debit_mt": 0,
+     "hold_id": 2,
+     "id": 159,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:30:00Z",
+     "pressure": 0.8000000000000002,
+     "reason": "test reason",
+     "rule_selector": "tier=free",
+     "weight": 0
+    },
+    {
+     "debit_mt": 667,
+     "hold_id": 3,
+     "id": 160,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:30:00Z",
+     "pressure": 0.8000000000000002,
+     "reason": "test reason",
+     "rule_selector": "memory-gb=64",
+     "weight": 4
+    },
+    {
+     "debit_mt": 542,
+     "hold_id": 5,
+     "id": 161,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:30:00Z",
+     "pressure": 0.8000000000000002,
+     "reason": "policy weight",
+     "rule_selector": "",
+     "weight": 3.25
+    }
+   ]
+  },
+  {
+   "at": "2026-11-12T09:35:00Z",
+   "balances_after_mt": {
+    "1": 0,
+    "2": 336031,
+    "3": 255339,
+    "4": 300000,
+    "5": 0,
+    "6": 300000
+   },
+   "balances_before_mt": {
+    "1": 0,
+    "2": 336239,
+    "3": 255943,
+    "4": 300000,
+    "5": 0,
+    "6": 300000
+   },
+   "fake_pressure_value": 0.5,
+   "holds_after": {
+    "1": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    },
+    "2": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    },
+    "3": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": true,
+     "released": false
+    },
+    "4": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": true,
+     "released": true
+    },
+    "5": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    }
+   },
+   "ledger_rows_written": [
+    {
+     "amount_mt": -208,
+     "created_at": "2026-11-12T09:35:00Z",
+     "hold_id": 1,
+     "id": 125,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 2
+    },
+    {
+     "amount_mt": -333,
+     "created_at": "2026-11-12T09:35:00Z",
+     "hold_id": 3,
+     "id": 126,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 3
+    },
+    {
+     "amount_mt": -271,
+     "created_at": "2026-11-12T09:35:00Z",
+     "hold_id": 5,
+     "id": 127,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 3
+    }
+   ],
+   "multiplier": 1,
+   "policy_calls": [
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 1,
+       "SetupName": "lab-01",
+       "UserID": 2,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-01",
+       "Labels": {
+        "memory-gb": "64",
+        "tier": "gold"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 2.5
+      },
+      "User": {
+       "ID": 2,
+       "Username": "",
+       "Email": "dev@example.test",
+       "Name": "User dev",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-01",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:35:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 2,
+       "SetupName": "lab-02",
+       "UserID": 2,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-02",
+       "Labels": {
+        "tier": "free"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 0
+      },
+      "User": {
+       "ID": 2,
+       "Username": "",
+       "Email": "dev@example.test",
+       "Name": "User dev",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-02",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:35:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 3,
+       "SetupName": "lab-03",
+       "UserID": 3,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-03",
+       "Labels": {
+        "memory-gb": "64",
+        "zone": "east"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 4
+      },
+      "User": {
+       "ID": 3,
+       "Username": "",
+       "Email": "dev2@example.test",
+       "Name": "User dev2",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-03",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:35:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 3.25,
+      "Reason": "policy weight"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 5,
+       "SetupName": "lab-08",
+       "UserID": 3,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-08",
+       "Labels": {
+        "zone": "east"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 1.25
+      },
+      "User": {
+       "ID": 3,
+       "Username": "",
+       "Email": "dev2@example.test",
+       "Name": "User dev2",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-08",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:35:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-03",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    }
+   ],
+   "provider_allocations": [
+    "lab-01",
+    "lab-02",
+    "lab-03",
+    "lab-08"
+   ],
+   "raw_pressure": 0.5,
+   "smoothed_pressure": 0.7000000000000001,
+   "snapshot_to_pressure_source": {
+    "Time": "2026-11-12T09:35:00Z",
+    "Setups": [
+     {
+      "Name": "lab-01",
+      "Labels": {
+       "memory-gb": "64",
+       "tier": "gold"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 2.5
+     },
+     {
+      "Name": "lab-02",
+      "Labels": {
+       "tier": "free"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 0
+     },
+     {
+      "Name": "lab-03",
+      "Labels": {
+       "memory-gb": "64",
+       "zone": "east"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 4
+     },
+     {
+      "Name": "lab-04",
+      "Labels": {
+       "zone": "west"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     },
+     {
+      "Name": "lab-06",
+      "Labels": {},
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     },
+     {
+      "Name": "lab-07",
+      "Labels": {
+       "tier": "gold",
+       "zone": "west"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 2.5
+     },
+     {
+      "Name": "lab-08",
+      "Labels": {
+       "zone": "east"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     }
+    ],
+    "Holds": [
+     {
+      "ID": 1,
+      "SetupName": "lab-01",
+      "UserID": 2,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     },
+     {
+      "ID": 2,
+      "SetupName": "lab-02",
+      "UserID": 2,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     },
+     {
+      "ID": 3,
+      "SetupName": "lab-03",
+      "UserID": 3,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+      "ReleasedAt": null
+     },
+     {
+      "ID": 5,
+      "SetupName": "lab-08",
+      "UserID": 3,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     }
+    ],
+    "Allocations": [
+     {
+      "ResourceName": "lab-01",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-02",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-03",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-08",
+      "Labels": null
+     }
+    ],
+    "ProviderConfigured": true
+   },
+   "usage_samples_written": [
+    {
+     "debit_mt": 208,
+     "hold_id": 1,
+     "id": 162,
+     "multiplier": 1,
+     "polled_at": "2026-11-12T09:35:00Z",
+     "pressure": 0.7000000000000001,
+     "reason": "test reason",
+     "rule_selector": "tier=gold",
+     "weight": 2.5
+    },
+    {
+     "debit_mt": 0,
+     "hold_id": 2,
+     "id": 163,
+     "multiplier": 1,
+     "polled_at": "2026-11-12T09:35:00Z",
+     "pressure": 0.7000000000000001,
+     "reason": "test reason",
+     "rule_selector": "tier=free",
+     "weight": 0
+    },
+    {
+     "debit_mt": 333,
+     "hold_id": 3,
+     "id": 164,
+     "multiplier": 1,
+     "polled_at": "2026-11-12T09:35:00Z",
+     "pressure": 0.7000000000000001,
+     "reason": "test reason",
+     "rule_selector": "memory-gb=64",
+     "weight": 4
+    },
+    {
+     "debit_mt": 271,
+     "hold_id": 5,
+     "id": 165,
+     "multiplier": 1,
+     "polled_at": "2026-11-12T09:35:00Z",
+     "pressure": 0.7000000000000001,
+     "reason": "policy weight",
+     "rule_selector": "",
+     "weight": 3.25
+    }
+   ]
+  },
+  {
+   "at": "2026-11-12T09:40:00Z",
+   "balances_after_mt": {
+    "1": 0,
+    "2": 335614,
+    "3": 254130,
+    "4": 300000,
+    "5": 0,
+    "6": 300000
+   },
+   "balances_before_mt": {
+    "1": 0,
+    "2": 336031,
+    "3": 255339,
+    "4": 300000,
+    "5": 0,
+    "6": 300000
+   },
+   "fake_pressure_value": 0.95,
+   "holds_after": {
+    "1": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    },
+    "2": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    },
+    "3": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": true,
+     "released": true
+    },
+    "4": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": true,
+     "released": true
+    },
+    "5": {
+     "deployed": true,
+     "metering_started": true,
+     "release_requested": false,
+     "released": false
+    }
+   },
+   "ledger_rows_written": [
+    {
+     "amount_mt": -417,
+     "created_at": "2026-11-12T09:40:00Z",
+     "hold_id": 1,
+     "id": 128,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 2
+    },
+    {
+     "amount_mt": -667,
+     "created_at": "2026-11-12T09:40:00Z",
+     "hold_id": 3,
+     "id": 129,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 3
+    },
+    {
+     "amount_mt": -542,
+     "created_at": "2026-11-12T09:40:00Z",
+     "hold_id": 5,
+     "id": 130,
+     "period": "2026-11",
+     "reason": "",
+     "type": "debit",
+     "user_id": 3
+    }
+   ],
+   "multiplier": 2,
+   "policy_calls": [
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 1,
+       "SetupName": "lab-01",
+       "UserID": 2,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-01",
+       "Labels": {
+        "memory-gb": "64",
+        "tier": "gold"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 2.5
+      },
+      "User": {
+       "ID": 2,
+       "Username": "",
+       "Email": "dev@example.test",
+       "Name": "User dev",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-01",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:40:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 2,
+       "SetupName": "lab-02",
+       "UserID": 2,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-02",
+       "Labels": {
+        "tier": "free"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 0
+      },
+      "User": {
+       "ID": 2,
+       "Username": "",
+       "Email": "dev@example.test",
+       "Name": "User dev",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-02",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:40:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 0,
+      "Reason": "test reason"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 3,
+       "SetupName": "lab-03",
+       "UserID": 3,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-03",
+       "Labels": {
+        "memory-gb": "64",
+        "zone": "east"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 4
+      },
+      "User": {
+       "ID": 3,
+       "Username": "",
+       "Email": "dev2@example.test",
+       "Name": "User dev2",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": null
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:40:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    },
+    {
+     "decision": {
+      "Meter": true,
+      "Weight": 3.25,
+      "Reason": "policy weight"
+     },
+     "hold": {
+      "Hold": {
+       "ID": 5,
+       "SetupName": "lab-08",
+       "UserID": 3,
+       "AcquiredAt": "2026-11-02T21:00:00Z",
+       "MeteringStartedAt": "2026-11-02T21:00:00Z",
+       "DeployedAt": "2026-11-02T21:00:00Z",
+       "ReleaseRequestedAt": null,
+       "ReleasedAt": null
+      },
+      "Setup": {
+       "Name": "lab-08",
+       "Labels": {
+        "zone": "east"
+       },
+       "Details": {
+        "note": "opaque",
+        "n": [
+         1,
+         2
+        ]
+       },
+       "Weight": 1.25
+      },
+      "User": {
+       "ID": 3,
+       "Username": "",
+       "Email": "dev2@example.test",
+       "Name": "User dev2",
+       "Roles": [
+        "developer"
+       ]
+      },
+      "Allocation": {
+       "ResourceName": "lab-08",
+       "Labels": null
+      }
+     },
+     "snapshot": {
+      "Time": "2026-11-12T09:40:00Z",
+      "Setups": [
+       {
+        "Name": "lab-01",
+        "Labels": {
+         "memory-gb": "64",
+         "tier": "gold"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-02",
+        "Labels": {
+         "tier": "free"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 0
+       },
+       {
+        "Name": "lab-03",
+        "Labels": {
+         "memory-gb": "64",
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 4
+       },
+       {
+        "Name": "lab-04",
+        "Labels": {
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-06",
+        "Labels": {},
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       },
+       {
+        "Name": "lab-07",
+        "Labels": {
+         "tier": "gold",
+         "zone": "west"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 2.5
+       },
+       {
+        "Name": "lab-08",
+        "Labels": {
+         "zone": "east"
+        },
+        "Details": {
+         "note": "opaque",
+         "n": [
+          1,
+          2
+         ]
+        },
+        "Weight": 1.25
+       }
+      ],
+      "Holds": [
+       {
+        "ID": 1,
+        "SetupName": "lab-01",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 2,
+        "SetupName": "lab-02",
+        "UserID": 2,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       },
+       {
+        "ID": 3,
+        "SetupName": "lab-03",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+        "ReleasedAt": null
+       },
+       {
+        "ID": 5,
+        "SetupName": "lab-08",
+        "UserID": 3,
+        "AcquiredAt": "2026-11-02T21:00:00Z",
+        "MeteringStartedAt": "2026-11-02T21:00:00Z",
+        "DeployedAt": "2026-11-02T21:00:00Z",
+        "ReleaseRequestedAt": null,
+        "ReleasedAt": null
+       }
+      ],
+      "Allocations": [
+       {
+        "ResourceName": "lab-01",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-02",
+        "Labels": null
+       },
+       {
+        "ResourceName": "lab-08",
+        "Labels": null
+       }
+      ],
+      "ProviderConfigured": true
+     }
+    }
+   ],
+   "provider_allocations": [
+    "lab-01",
+    "lab-02",
+    "lab-08"
+   ],
+   "raw_pressure": 0.95,
+   "smoothed_pressure": 0.75,
+   "snapshot_to_pressure_source": {
+    "Time": "2026-11-12T09:40:00Z",
+    "Setups": [
+     {
+      "Name": "lab-01",
+      "Labels": {
+       "memory-gb": "64",
+       "tier": "gold"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 2.5
+     },
+     {
+      "Name": "lab-02",
+      "Labels": {
+       "tier": "free"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 0
+     },
+     {
+      "Name": "lab-03",
+      "Labels": {
+       "memory-gb": "64",
+       "zone": "east"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 4
+     },
+     {
+      "Name": "lab-04",
+      "Labels": {
+       "zone": "west"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     },
+     {
+      "Name": "lab-06",
+      "Labels": {},
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     },
+     {
+      "Name": "lab-07",
+      "Labels": {
+       "tier": "gold",
+       "zone": "west"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 2.5
+     },
+     {
+      "Name": "lab-08",
+      "Labels": {
+       "zone": "east"
+      },
+      "Details": {
+       "note": "opaque",
+       "n": [
+        1,
+        2
+       ]
+      },
+      "Weight": 1.25
+     }
+    ],
+    "Holds": [
+     {
+      "ID": 1,
+      "SetupName": "lab-01",
+      "UserID": 2,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     },
+     {
+      "ID": 2,
+      "SetupName": "lab-02",
+      "UserID": 2,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     },
+     {
+      "ID": 3,
+      "SetupName": "lab-03",
+      "UserID": 3,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": "2026-11-02T22:45:00Z",
+      "ReleasedAt": null
+     },
+     {
+      "ID": 5,
+      "SetupName": "lab-08",
+      "UserID": 3,
+      "AcquiredAt": "2026-11-02T21:00:00Z",
+      "MeteringStartedAt": "2026-11-02T21:00:00Z",
+      "DeployedAt": "2026-11-02T21:00:00Z",
+      "ReleaseRequestedAt": null,
+      "ReleasedAt": null
+     }
+    ],
+    "Allocations": [
+     {
+      "ResourceName": "lab-01",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-02",
+      "Labels": null
+     },
+     {
+      "ResourceName": "lab-08",
+      "Labels": null
+     }
+    ],
+    "ProviderConfigured": true
+   },
+   "usage_samples_written": [
+    {
+     "debit_mt": 417,
+     "hold_id": 1,
+     "id": 166,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:40:00Z",
+     "pressure": 0.75,
+     "reason": "test reason",
+     "rule_selector": "tier=gold",
+     "weight": 2.5
+    },
+    {
+     "debit_mt": 0,
+     "hold_id": 2,
+     "id": 167,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:40:00Z",
+     "pressure": 0.75,
+     "reason": "test reason",
+     "rule_selector": "tier=free",
+     "weight": 0
+    },
+    {
+     "debit_mt": 667,
+     "hold_id": 3,
+     "id": 168,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:40:00Z",
+     "pressure": 0.75,
+     "reason": "test reason",
+     "rule_selector": "memory-gb=64",
+     "weight": 4
+    },
+    {
+     "debit_mt": 542,
+     "hold_id": 5,
+     "id": 169,
+     "multiplier": 2,
+     "polled_at": "2026-11-12T09:40:00Z",
+     "pressure": 0.75,
+     "reason": "policy weight",
+     "rule_selector": "",
+     "weight": 3.25
+    }
+   ]
+  }
+ ],
+ "recorded_from": "v1.1.0",
+ "responses_after_polls": [
+  {
+   "name": "setups_dev_after_polls",
+   "principal": "developer",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/setups"
+   },
+   "response": {
+    "display_label_keys": [
+     "tier",
+     "zone"
+    ],
+    "label_index": [
+     {
+      "key": "memory-gb",
+      "values": [
+       {
+        "selector": "memory-gb=64",
+        "value": "64"
+       }
+      ]
+     },
+     {
+      "key": "tier",
+      "values": [
+       {
+        "selector": "tier=free",
+        "value": "free"
+       },
+       {
+        "selector": "tier=gold",
+        "value": "gold"
+       }
+      ]
+     },
+     {
+      "key": "zone",
+      "values": [
+       {
+        "selector": "zone=east",
+        "value": "east"
+       },
+       {
+        "selector": "zone=west",
+        "value": "west"
+       }
+      ]
+     }
+    ],
+    "metering_description": null,
+    "setups": [
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 7.5,
+       "now": 5
+      },
+      "deployed": true,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": "2026-11-02T21:00:00.000Z",
+      "holder": {
+       "balance_tokens": 335.614,
+       "hold_id": 1,
+       "is_you": true,
+       "name": "User dev",
+       "overdrawn": false,
+       "release_requested_at": null,
+       "user_id": 2
+      },
+      "id": 1,
+      "labels": {
+       "memory-gb": "64",
+       "tier": "gold"
+      },
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "test reason",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "name": "lab-01",
+      "state": "held",
+      "weight": 2.5
+     },
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 0,
+       "now": 0
+      },
+      "deployed": true,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": "2026-11-02T21:00:00.000Z",
+      "holder": {
+       "balance_tokens": 335.614,
+       "hold_id": 2,
+       "is_you": true,
+       "name": "User dev",
+       "overdrawn": false,
+       "release_requested_at": null,
+       "user_id": 2
+      },
+      "id": 2,
+      "labels": {
+       "tier": "free"
+      },
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "test reason",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "name": "lab-02",
+      "state": "held",
+      "weight": 0
+     },
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 12,
+       "now": 8
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 3,
+      "labels": {
+       "memory-gb": "64",
+       "zone": "east"
+      },
+      "metering": null,
+      "name": "lab-03",
+      "state": "free",
+      "weight": 4
+     },
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 3.75,
+       "now": 2.5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 4,
+      "labels": {
+       "zone": "west"
+      },
+      "metering": null,
+      "name": "lab-04",
+      "state": "free",
+      "weight": 1.25
+     },
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 3.75,
+       "now": 2.5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 6,
+      "labels": {},
+      "metering": null,
+      "name": "lab-06",
+      "state": "free",
+      "weight": 1.25
+     },
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 7.5,
+       "now": 5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 7,
+      "labels": {
+       "tier": "gold",
+       "zone": "west"
+      },
+      "metering": null,
+      "name": "lab-07",
+      "state": "free",
+      "weight": 2.5
+     },
+     {
+      "admin": null,
+      "cost_per_hour_tokens": {
+       "at_peak": 3.75,
+       "now": 2.5
+      },
+      "deployed": true,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": "2026-11-02T21:00:00.000Z",
+      "holder": {
+       "balance_tokens": 254.13,
+       "hold_id": 5,
+       "is_you": false,
+       "name": "User dev2",
+       "overdrawn": false,
+       "release_requested_at": null,
+       "user_id": 3
+      },
+      "id": 8,
+      "labels": {
+       "zone": "east"
+      },
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "policy weight",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "name": "lab-08",
+      "state": "held",
+      "weight": 1.25
+     }
+    ],
+    "summary": {
+     "deployed": 3,
+     "enabled": 7,
+     "free": 4
+    }
+   },
+   "status": 200
+  },
+  {
+   "name": "setups_admin_after_polls",
+   "principal": "admin",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/setups"
+   },
+   "response": {
+    "display_label_keys": [
+     "tier",
+     "zone"
+    ],
+    "label_index": [
+     {
+      "key": "memory-gb",
+      "values": [
+       {
+        "selector": "memory-gb=64",
+        "value": "64"
+       }
+      ]
+     },
+     {
+      "key": "tier",
+      "values": [
+       {
+        "selector": "tier=free",
+        "value": "free"
+       },
+       {
+        "selector": "tier=gold",
+        "value": "gold"
+       }
+      ]
+     },
+     {
+      "key": "zone",
+      "values": [
+       {
+        "selector": "zone=east",
+        "value": "east"
+       },
+       {
+        "selector": "zone=west",
+        "value": "west"
+       }
+      ]
+     }
+    ],
+    "metering_description": null,
+    "setups": [
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": "2026-11-12T09:40:00.000Z",
+       "matched_rule_selector": "tier=gold"
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 7.5,
+       "now": 5
+      },
+      "deployed": true,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": "2026-11-02T21:00:00.000Z",
+      "holder": {
+       "balance_tokens": 335.614,
+       "hold_id": 1,
+       "is_you": false,
+       "name": "User dev",
+       "overdrawn": false,
+       "release_requested_at": null,
+       "user_id": 2
+      },
+      "id": 1,
+      "labels": {
+       "memory-gb": "64",
+       "tier": "gold"
+      },
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "test reason",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "name": "lab-01",
+      "state": "held",
+      "weight": 2.5
+     },
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": "2026-11-12T09:40:00.000Z",
+       "matched_rule_selector": "tier=free"
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 0,
+       "now": 0
+      },
+      "deployed": true,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": "2026-11-02T21:00:00.000Z",
+      "holder": {
+       "balance_tokens": 335.614,
+       "hold_id": 2,
+       "is_you": false,
+       "name": "User dev",
+       "overdrawn": false,
+       "release_requested_at": null,
+       "user_id": 2
+      },
+      "id": 2,
+      "labels": {
+       "tier": "free"
+      },
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "test reason",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "name": "lab-02",
+      "state": "held",
+      "weight": 0
+     },
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": "2026-11-12T09:35:00.000Z",
+       "matched_rule_selector": "memory-gb=64"
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 12,
+       "now": 8
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 3,
+      "labels": {
+       "memory-gb": "64",
+       "zone": "east"
+      },
+      "metering": null,
+      "name": "lab-03",
+      "state": "free",
+      "weight": 4
+     },
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": null,
+       "matched_rule_selector": null
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 3.75,
+       "now": 2.5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 4,
+      "labels": {
+       "zone": "west"
+      },
+      "metering": null,
+      "name": "lab-04",
+      "state": "free",
+      "weight": 1.25
+     },
+     {
+      "admin": {
+       "enabled": false,
+       "last_seen_at": null,
+       "matched_rule_selector": "tier=gold"
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 7.5,
+       "now": 5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 5,
+      "labels": {
+       "tier": "gold"
+      },
+      "metering": null,
+      "name": "lab-05",
+      "state": "disabled",
+      "weight": 2.5
+     },
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": null,
+       "matched_rule_selector": null
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 3.75,
+       "now": 2.5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 6,
+      "labels": {},
+      "metering": null,
+      "name": "lab-06",
+      "state": "free",
+      "weight": 1.25
+     },
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": null,
+       "matched_rule_selector": "tier=gold"
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 7.5,
+       "now": 5
+      },
+      "deployed": false,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": null,
+      "holder": null,
+      "id": 7,
+      "labels": {
+       "tier": "gold",
+       "zone": "west"
+      },
+      "metering": null,
+      "name": "lab-07",
+      "state": "free",
+      "weight": 2.5
+     },
+     {
+      "admin": {
+       "enabled": true,
+       "last_seen_at": "2026-11-12T09:40:00.000Z",
+       "matched_rule_selector": null
+      },
+      "cost_per_hour_tokens": {
+       "at_peak": 3.75,
+       "now": 2.5
+      },
+      "deployed": true,
+      "details": {
+       "n": [
+        1,
+        2
+       ],
+       "note": "opaque"
+      },
+      "held_since": "2026-11-02T21:00:00.000Z",
+      "holder": {
+       "balance_tokens": 254.13,
+       "hold_id": 5,
+       "is_you": false,
+       "name": "User dev2",
+       "overdrawn": false,
+       "release_requested_at": null,
+       "user_id": 3
+      },
+      "id": 8,
+      "labels": {
+       "zone": "east"
+      },
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "policy weight",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "name": "lab-08",
+      "state": "held",
+      "weight": 1.25
+     }
+    ],
+    "summary": {
+     "deployed": 3,
+     "enabled": 7,
+     "free": 4
+    }
+   },
+   "status": 200
+  },
+  {
+   "name": "me_holds_dev2_after_polls",
+   "principal": "developer (holder)",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/me/holds"
+   },
+   "response": {
+    "holds": [
+     {
+      "acquired_at": "2026-11-02T21:00:00.000Z",
+      "active": true,
+      "charged_tokens": 18.699,
+      "cost_per_hour_tokens": {
+       "at_peak": 9.75,
+       "now": 6.5
+      },
+      "deployed": true,
+      "deployed_at": "2026-11-02T21:00:00.000Z",
+      "forced": false,
+      "id": 5,
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": "policy weight",
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "metering_started_at": "2026-11-02T21:00:00.000Z",
+      "release_reason": null,
+      "release_requested_at": null,
+      "released_at": null,
+      "released_by": null,
+      "setup_id": 8,
+      "setup_labels": {
+       "zone": "east"
+      },
+      "setup_name": "lab-08",
+      "user_id": 3,
+      "weight": 3.25
+     },
+     {
+      "acquired_at": "2026-11-02T21:00:00.000Z",
+      "active": false,
+      "charged_tokens": 4.16,
+      "cost_per_hour_tokens": null,
+      "deployed": false,
+      "deployed_at": "2026-11-02T21:00:00.000Z",
+      "forced": false,
+      "id": 4,
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": null,
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "metering_started_at": "2026-11-02T21:00:00.000Z",
+      "release_reason": null,
+      "release_requested_at": "2026-11-02T22:35:00.000Z",
+      "released_at": "2026-11-02T22:40:00.000Z",
+      "released_by": {
+       "id": 3,
+       "name": "User dev2"
+      },
+      "setup_id": 4,
+      "setup_labels": {
+       "zone": "west"
+      },
+      "setup_name": "lab-04",
+      "user_id": 3,
+      "weight": 1.25
+     },
+     {
+      "acquired_at": "2026-11-02T21:00:00.000Z",
+      "active": false,
+      "charged_tokens": 23.011,
+      "cost_per_hour_tokens": null,
+      "deployed": false,
+      "deployed_at": "2026-11-02T21:00:00.000Z",
+      "forced": false,
+      "id": 3,
+      "metering": {
+       "active": true,
+       "expected_start_at": null,
+       "reason": null,
+       "started_at": "2026-11-02T21:00:00.000Z"
+      },
+      "metering_started_at": "2026-11-02T21:00:00.000Z",
+      "release_reason": null,
+      "release_requested_at": "2026-11-02T22:45:00.000Z",
+      "released_at": "2026-11-12T09:40:00.000Z",
+      "released_by": {
+       "id": 3,
+       "name": "User dev2"
+      },
+      "setup_id": 3,
+      "setup_labels": {
+       "memory-gb": "64",
+       "zone": "east"
+      },
+      "setup_name": "lab-03",
+      "user_id": 3,
+      "weight": 4
+     }
+    ]
+   },
+   "status": 200
+  },
+  {
+   "name": "me_usage_dev_after_polls",
+   "principal": "developer",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/me/usage"
+   },
+   "response": {
+    "available_periods": [
+     "2026-11"
+    ],
+    "days": [
+     {
+      "date": "2026-11-01",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-02",
+      "debited_tokens": 9.591
+     },
+     {
+      "date": "2026-11-03",
+      "debited_tokens": 2.502
+     },
+     {
+      "date": "2026-11-04",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-05",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-06",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-07",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-08",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-09",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-10",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-11",
+      "debited_tokens": 0
+     },
+     {
+      "date": "2026-11-12",
+      "debited_tokens": 2.293
+     }
+    ],
+    "period": "2026-11",
+    "total_debited_tokens": 14.386
+   },
+   "status": 200
+  },
+  {
+   "name": "me_ledger_dev2_after_polls",
+   "principal": "developer (holder)",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/me/ledger"
+   },
+   "response": {
+    "available_periods": [
+     "2026-11"
+    ],
+    "entries": [
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 254.13,
+      "created_at": "2026-11-12T09:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 130,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 254.672,
+      "created_at": "2026-11-12T09:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 129,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.271,
+      "balance_after_tokens": 255.339,
+      "created_at": "2026-11-12T09:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 127,
+      "multiplier": 1,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.333,
+      "balance_after_tokens": 255.61,
+      "created_at": "2026-11-12T09:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 126,
+      "multiplier": 1,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 255.943,
+      "created_at": "2026-11-12T09:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 124,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 256.485,
+      "created_at": "2026-11-12T09:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 123,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 257.152,
+      "created_at": "2026-11-12T09:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 121,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 257.694,
+      "created_at": "2026-11-12T09:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 120,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 258.361,
+      "created_at": "2026-11-12T09:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 118,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 258.903,
+      "created_at": "2026-11-12T09:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 117,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 259.57,
+      "created_at": "2026-11-12T09:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 115,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 260.112,
+      "created_at": "2026-11-12T09:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 114,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 260.779,
+      "created_at": "2026-11-02T23:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 112,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 261.321,
+      "created_at": "2026-11-02T23:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 111,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 261.988,
+      "created_at": "2026-11-02T23:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 109,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 262.53,
+      "created_at": "2026-11-02T23:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 108,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 263.197,
+      "created_at": "2026-11-02T23:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 106,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 263.739,
+      "created_at": "2026-11-02T23:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 105,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 264.406,
+      "created_at": "2026-11-02T23:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 103,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 264.948,
+      "created_at": "2026-11-02T23:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 102,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 265.615,
+      "created_at": "2026-11-02T23:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 100,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 266.157,
+      "created_at": "2026-11-02T23:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 99,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 266.824,
+      "created_at": "2026-11-02T23:00:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 97,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 267.366,
+      "created_at": "2026-11-02T23:00:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 96,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 268.033,
+      "created_at": "2026-11-02T22:55:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 94,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 268.575,
+      "created_at": "2026-11-02T22:55:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 93,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 269.242,
+      "created_at": "2026-11-02T22:50:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 91,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 269.784,
+      "created_at": "2026-11-02T22:50:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 90,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 270.451,
+      "created_at": "2026-11-02T22:45:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 88,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 270.993,
+      "created_at": "2026-11-02T22:45:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 87,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 271.66,
+      "created_at": "2026-11-02T22:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 85,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 272.202,
+      "created_at": "2026-11-02T22:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 84,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 272.41,
+      "created_at": "2026-11-02T22:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 83,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 273.077,
+      "created_at": "2026-11-02T22:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 81,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 273.619,
+      "created_at": "2026-11-02T22:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 80,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 273.827,
+      "created_at": "2026-11-02T22:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 79,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 274.494,
+      "created_at": "2026-11-02T22:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 77,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 275.036,
+      "created_at": "2026-11-02T22:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 76,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 275.244,
+      "created_at": "2026-11-02T22:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 75,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 275.911,
+      "created_at": "2026-11-02T22:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 73,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 276.453,
+      "created_at": "2026-11-02T22:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 72,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 276.661,
+      "created_at": "2026-11-02T22:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 71,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 277.328,
+      "created_at": "2026-11-02T22:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 69,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 277.87,
+      "created_at": "2026-11-02T22:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 68,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 278.078,
+      "created_at": "2026-11-02T22:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 67,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 278.745,
+      "created_at": "2026-11-02T22:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 65,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 279.287,
+      "created_at": "2026-11-02T22:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 64,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 279.495,
+      "created_at": "2026-11-02T22:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 63,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 280.162,
+      "created_at": "2026-11-02T22:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 61,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 280.704,
+      "created_at": "2026-11-02T22:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 60,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 280.912,
+      "created_at": "2026-11-02T22:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 59,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 281.579,
+      "created_at": "2026-11-02T22:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 57,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 282.121,
+      "created_at": "2026-11-02T22:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 56,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 282.329,
+      "created_at": "2026-11-02T22:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 55,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 282.996,
+      "created_at": "2026-11-02T22:00:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 53,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 283.538,
+      "created_at": "2026-11-02T22:00:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 52,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 283.746,
+      "created_at": "2026-11-02T22:00:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 51,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 284.413,
+      "created_at": "2026-11-02T21:55:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 49,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 284.955,
+      "created_at": "2026-11-02T21:55:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 48,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 285.163,
+      "created_at": "2026-11-02T21:55:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 47,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 285.83,
+      "created_at": "2026-11-02T21:50:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 45,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 286.372,
+      "created_at": "2026-11-02T21:50:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 44,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 286.58,
+      "created_at": "2026-11-02T21:50:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 43,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 287.247,
+      "created_at": "2026-11-02T21:45:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 40,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 287.789,
+      "created_at": "2026-11-02T21:45:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 39,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 287.997,
+      "created_at": "2026-11-02T21:45:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 38,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 288.664,
+      "created_at": "2026-11-02T21:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 36,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 289.206,
+      "created_at": "2026-11-02T21:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 35,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 289.414,
+      "created_at": "2026-11-02T21:40:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 34,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 290.081,
+      "created_at": "2026-11-02T21:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 32,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 290.623,
+      "created_at": "2026-11-02T21:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 31,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 290.831,
+      "created_at": "2026-11-02T21:35:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 30,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 291.498,
+      "created_at": "2026-11-02T21:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 28,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 292.04,
+      "created_at": "2026-11-02T21:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 27,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 292.248,
+      "created_at": "2026-11-02T21:30:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 26,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 292.915,
+      "created_at": "2026-11-02T21:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 24,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 293.457,
+      "created_at": "2026-11-02T21:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 23,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 293.665,
+      "created_at": "2026-11-02T21:25:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 22,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 294.332,
+      "created_at": "2026-11-02T21:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 20,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 294.874,
+      "created_at": "2026-11-02T21:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 19,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 295.082,
+      "created_at": "2026-11-02T21:20:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 18,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 295.749,
+      "created_at": "2026-11-02T21:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 16,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 296.291,
+      "created_at": "2026-11-02T21:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 15,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 296.499,
+      "created_at": "2026-11-02T21:15:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 14,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 297.166,
+      "created_at": "2026-11-02T21:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 12,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 297.708,
+      "created_at": "2026-11-02T21:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 11,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 297.916,
+      "created_at": "2026-11-02T21:10:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 10,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.542,
+      "balance_after_tokens": 298.583,
+      "created_at": "2026-11-02T21:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 5,
+      "id": 8,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-08",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.208,
+      "balance_after_tokens": 299.125,
+      "created_at": "2026-11-02T21:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 4,
+      "id": 7,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-04",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": -0.667,
+      "balance_after_tokens": 299.333,
+      "created_at": "2026-11-02T21:05:00.000Z",
+      "entry_count": 1,
+      "hold_id": 3,
+      "id": 6,
+      "multiplier": 2,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": "lab-03",
+      "type": "debit"
+     },
+     {
+      "actor_name": null,
+      "amount_tokens": 300,
+      "balance_after_tokens": 300,
+      "created_at": "2026-11-02T21:00:00.000Z",
+      "entry_count": 1,
+      "hold_id": null,
+      "id": 2,
+      "multiplier": null,
+      "period": "2026-11",
+      "reason": null,
+      "setup_name": null,
+      "type": "allowance"
+     }
+    ],
+    "next_cursor": null,
+    "period": "2026-11"
+   },
+   "status": 200
+  },
+  {
+   "name": "admin_users_after_polls",
+   "principal": "admin",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/admin/users"
+   },
+   "response": {
+    "default_allowance_tokens": 300,
+    "pending_count": 0,
+    "period": "2026-11",
+    "period_ends_at": "2026-11-30T23:00:00.000Z",
+    "summary": {
+     "admin_count": 2,
+     "debited_this_month_tokens": 60.256,
+     "grant_count_this_month": 1,
+     "granted_this_month_tokens": 50,
+     "overdrawn_count": 0,
+     "user_count": 6
+    },
+    "users": [
+     {
+      "active_holds": [],
+      "auth_source": "local",
+      "balance_tokens": null,
+      "burn_per_hour_tokens": 0,
+      "email": "",
+      "first_sign_in_at": "2026-11-02T20:00:00.000Z",
+      "id": 1,
+      "is_local_admin": true,
+      "last_login_at": null,
+      "month_to_date_burn_tokens": 0,
+      "name": "admin",
+      "overdrawn": false,
+      "roles": [
+       "admin"
+      ],
+      "status": "active",
+      "username": "admin"
+     },
+     {
+      "active_holds": [
+       {
+        "hold_id": 1,
+        "setup_id": 1,
+        "setup_name": "lab-01"
+       },
+       {
+        "hold_id": 2,
+        "setup_id": 2,
+        "setup_name": "lab-02"
+       }
+      ],
+      "auth_source": "oidc",
+      "balance_tokens": 335.614,
+      "burn_per_hour_tokens": 5,
+      "email": "dev@example.test",
+      "first_sign_in_at": "2026-11-02T21:00:00.000Z",
+      "id": 2,
+      "is_local_admin": false,
+      "last_login_at": "2026-11-02T21:00:00.000Z",
+      "month_to_date_burn_tokens": 14.386,
+      "name": "User dev",
+      "overdrawn": false,
+      "roles": [
+       "developer"
+      ],
+      "status": "active",
+      "username": ""
+     },
+     {
+      "active_holds": [
+       {
+        "hold_id": 5,
+        "setup_id": 8,
+        "setup_name": "lab-08"
+       }
+      ],
+      "auth_source": "oidc",
+      "balance_tokens": 254.13,
+      "burn_per_hour_tokens": 2.5,
+      "email": "dev2@example.test",
+      "first_sign_in_at": "2026-11-02T21:00:00.000Z",
+      "id": 3,
+      "is_local_admin": false,
+      "last_login_at": "2026-11-02T21:00:00.000Z",
+      "month_to_date_burn_tokens": 45.87,
+      "name": "User dev2",
+      "overdrawn": false,
+      "roles": [
+       "developer"
+      ],
+      "status": "active",
+      "username": ""
+     },
+     {
+      "active_holds": [],
+      "auth_source": "oidc",
+      "balance_tokens": null,
+      "burn_per_hour_tokens": 0,
+      "email": "norole@example.test",
+      "first_sign_in_at": "2026-11-02T21:00:00.000Z",
+      "id": 5,
+      "is_local_admin": false,
+      "last_login_at": "2026-11-02T21:00:00.000Z",
+      "month_to_date_burn_tokens": null,
+      "name": "User norole",
+      "overdrawn": false,
+      "roles": [],
+      "status": "active",
+      "username": ""
+     },
+     {
+      "active_holds": [],
+      "auth_source": "oidc",
+      "balance_tokens": 300,
+      "burn_per_hour_tokens": 0,
+      "email": "ops@example.test",
+      "first_sign_in_at": "2026-11-02T21:00:00.000Z",
+      "id": 6,
+      "is_local_admin": false,
+      "last_login_at": "2026-11-02T21:00:00.000Z",
+      "month_to_date_burn_tokens": 0,
+      "name": "User ops",
+      "overdrawn": false,
+      "roles": [
+       "admin",
+       "developer"
+      ],
+      "status": "active",
+      "username": ""
+     },
+     {
+      "active_holds": [],
+      "auth_source": "oidc",
+      "balance_tokens": 300,
+      "burn_per_hour_tokens": 0,
+      "email": "other@example.test",
+      "first_sign_in_at": "2026-11-02T21:00:00.000Z",
+      "id": 4,
+      "is_local_admin": false,
+      "last_login_at": "2026-11-02T21:00:00.000Z",
+      "month_to_date_burn_tokens": 0,
+      "name": "User other",
+      "overdrawn": false,
+      "roles": [
+       "developer"
+      ],
+      "status": "active",
+      "username": ""
+     }
+    ]
+   },
+   "status": 200
+  },
+  {
+   "name": "admin_collector_after_polls",
+   "principal": "admin",
+   "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/api/v1/admin/collector"
+   },
+   "response": {
+    "extensions": {
+     "hooks": [],
+     "metering_policy": "fake-policy",
+     "pressure_source": "reported",
+     "provider": "reported"
+    },
+    "failed_deliveries": [],
+    "last_deployments_report": {
+     "observed_at": "2026-11-12T09:25:00.000Z",
+     "received_at": "2026-11-12T09:25:00.000Z",
+     "service_account": "reporter"
+    },
+    "last_error": null,
+    "last_pressure_report": {
+     "observed_at": "2026-11-12T09:25:00.000Z",
+     "received_at": "2026-11-12T09:25:00.000Z",
+     "service_account": "reporter"
+    },
+    "last_successful_poll_at": "2026-11-12T09:40:00.000Z",
+    "matched_setups": 3,
+    "orphan_count": 0,
+    "orphans": [],
+    "outages": [
+     {
+      "duration_minutes": 13545,
+      "ended_at": "2026-11-12T09:10:00.000Z",
+      "started_at": "2026-11-02T23:25:00.000Z"
+     }
+    ],
+    "outages_this_month": {
+     "count": 1,
+     "minutes_not_charged": 13545
+    },
+    "queue_length": 1,
+    "recent_runs": [
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:40:00.000Z",
+      "id": 37,
+      "ok": true,
+      "started_at": "2026-11-12T09:40:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:35:00.000Z",
+      "id": 36,
+      "ok": true,
+      "started_at": "2026-11-12T09:35:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:30:00.000Z",
+      "id": 35,
+      "ok": true,
+      "started_at": "2026-11-12T09:30:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:25:00.000Z",
+      "id": 34,
+      "ok": true,
+      "started_at": "2026-11-12T09:25:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:20:00.000Z",
+      "id": 33,
+      "ok": true,
+      "started_at": "2026-11-12T09:20:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:15:00.000Z",
+      "id": 32,
+      "ok": true,
+      "started_at": "2026-11-12T09:15:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-12T09:10:00.000Z",
+      "id": 31,
+      "ok": true,
+      "started_at": "2026-11-12T09:10:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T23:25:00.000Z",
+      "id": 30,
+      "ok": true,
+      "started_at": "2026-11-02T23:25:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T23:20:00.000Z",
+      "id": 29,
+      "ok": true,
+      "started_at": "2026-11-02T23:20:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T23:15:00.000Z",
+      "id": 28,
+      "ok": true,
+      "started_at": "2026-11-02T23:15:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T23:10:00.000Z",
+      "id": 27,
+      "ok": true,
+      "started_at": "2026-11-02T23:10:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T23:05:00.000Z",
+      "id": 26,
+      "ok": true,
+      "started_at": "2026-11-02T23:05:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T23:00:00.000Z",
+      "id": 25,
+      "ok": true,
+      "started_at": "2026-11-02T23:00:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:55:00.000Z",
+      "id": 24,
+      "ok": true,
+      "started_at": "2026-11-02T22:55:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:50:00.000Z",
+      "id": 23,
+      "ok": true,
+      "started_at": "2026-11-02T22:50:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:45:00.000Z",
+      "id": 22,
+      "ok": true,
+      "started_at": "2026-11-02T22:45:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:40:00.000Z",
+      "id": 21,
+      "ok": true,
+      "started_at": "2026-11-02T22:40:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:35:00.000Z",
+      "id": 20,
+      "ok": true,
+      "started_at": "2026-11-02T22:35:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:30:00.000Z",
+      "id": 19,
+      "ok": true,
+      "started_at": "2026-11-02T22:30:00.000Z"
+     },
+     {
+      "error": null,
+      "finished_at": "2026-11-02T22:25:00.000Z",
+      "id": 18,
+      "ok": true,
+      "started_at": "2026-11-02T22:25:00.000Z"
+     }
+    ]
+   },
+   "status": 200
+  }
+ ],
+ "start": "2026-11-12T09:25:00Z",
+ "timezone": "Europe/Berlin"
+}
