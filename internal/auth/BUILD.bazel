@@ -37,6 +37,7 @@ go_test(
         "preapproval_test.go",
         "service_test.go",
         "session_test.go",
+        "userinfo_test.go",
     ],
     embed = [":auth"],
     deps = [

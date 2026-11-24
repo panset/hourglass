@@ -267,9 +267,14 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		fail("empty subject", nil)
 		return
 	}
+	name := storedName(claims.Name, claimString(claims.GivenName), claimString(claims.FamilyName), claimString(claims.PreferredUsername))
+	if name == "" {
+		// A provider may keep the profile claims out of the ID token and
+		// serve them from its UserInfo endpoint only (AUTH-9, D92).
+		name = s.userInfoName(ctx, p, tok, idt.Subject)
+	}
 	now := s.now()
-	su, created, err := s.st.UpsertOIDCLogin(r.Context(), idt.Subject, claims.Email,
-		storedName(claims.Name, claimString(claims.GivenName), claimString(claims.FamilyName), claimString(claims.PreferredUsername)), now)
+	su, created, err := s.st.UpsertOIDCLogin(r.Context(), idt.Subject, claims.Email, name, now)
 	if err != nil {
 		s.log.Error("storing oidc user failed", "err", err)
 		callbackError(w, r, apierr.Internal)
@@ -292,6 +297,42 @@ func (s *Service) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// and shows the not-authorized page for a user without a role.
 	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// userInfoName is the stored name read from the provider's UserInfo endpoint
+// (AUTH-9, D92), for a sign-in whose ID token gave no name. It runs the same
+// fallback as the ID token's claims and returns "" when the provider has no
+// UserInfo endpoint, the request fails, or the response is for another
+// subject. It never fails a sign-in, and only the name is taken: the subject,
+// the email and email_verified come from the signed ID token alone.
+func (s *Service) userInfoName(ctx context.Context, p *oidc.Provider, tok *oauth2.Token, sub string) string {
+	if p.UserInfoEndpoint() == "" || tok.AccessToken == "" {
+		return ""
+	}
+	ui, err := p.UserInfo(ctx, oauth2.StaticTokenSource(tok))
+	if err != nil {
+		// The error can quote the response body, which may hold personal
+		// data, so it is not logged.
+		s.log.Warn("oidc userinfo request failed; the name stays empty")
+		return ""
+	}
+	// OIDC Core 5.3.2: the response must be for the ID token's subject.
+	if subtle.ConstantTimeCompare([]byte(ui.Subject), []byte(sub)) != 1 {
+		s.log.Warn("oidc userinfo subject does not match the id token; the response is ignored")
+		return ""
+	}
+	// Every claim is lenient here: a value that is not a string counts as empty.
+	var c struct {
+		Name              json.RawMessage `json:"name"`
+		GivenName         json.RawMessage `json:"given_name"`
+		FamilyName        json.RawMessage `json:"family_name"`
+		PreferredUsername json.RawMessage `json:"preferred_username"`
+	}
+	if err := ui.Claims(&c); err != nil {
+		s.log.Warn("oidc userinfo response is not a JSON object; the name stays empty")
+		return ""
+	}
+	return storedName(claimString(c.Name), claimString(c.GivenName), claimString(c.FamilyName), claimString(c.PreferredUsername))
 }
 
 // applyPreapproval runs the pre-approval step (D1) for a signed-in SSO user
@@ -356,10 +397,6 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// storedName is the name kept in users.name for an SSO user (AUTH-9): the
-// first non-empty of name; given_name and family_name joined by a space and
-// trimmed; preferred_username. Whitespace-only claims count as empty. All
-// empty gives an empty name.
 // claimString is a claim's value when it is a JSON string, else "".
 func claimString(raw json.RawMessage) string {
 	var s string
@@ -369,6 +406,10 @@ func claimString(raw json.RawMessage) string {
 	return s
 }
 
+// storedName is the name kept in users.name for an SSO user (AUTH-9): the
+// first non-empty of name; given_name and family_name joined by a space and
+// trimmed; preferred_username. Whitespace-only claims count as empty. All
+// empty gives an empty name.
 func storedName(name, given, family, preferred string) string {
 	if strings.TrimSpace(name) != "" {
 		return name // stored exactly as sent, as before

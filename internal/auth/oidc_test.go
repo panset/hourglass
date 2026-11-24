@@ -48,6 +48,12 @@ type fakeIssuer struct {
 	tokenRequests    int
 	// claims overrides or adds ID token claims; a nil value removes the claim.
 	claims map[string]any
+	// UserInfo endpoint: advertised in discovery only when userinfo is not
+	// nil, so set it before the first sign-in. It answers userinfoStatus
+	// (0 = 200) with userinfo as the JSON body.
+	userinfo         map[string]any
+	userinfoStatus   int
+	userinfoRequests int
 }
 
 type authz struct {
@@ -65,6 +71,7 @@ func newFakeIssuer(t *testing.T, now func() time.Time) *fakeIssuer {
 	mux.HandleFunc("GET /jwks", f.jwks)
 	mux.HandleFunc("GET /authorize", f.authorize)
 	mux.HandleFunc("POST /token", f.token)
+	mux.HandleFunc("GET /userinfo", f.serveUserinfo)
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f
@@ -72,11 +79,40 @@ func newFakeIssuer(t *testing.T, now func() time.Time) *fakeIssuer {
 
 func (f *fakeIssuer) discovery(w http.ResponseWriter, _ *http.Request) {
 	u := f.srv.URL
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	doc := map[string]any{
 		"issuer": u, "authorization_endpoint": u + "/authorize", "token_endpoint": u + "/token",
 		"jwks_uri": u + "/jwks", "response_types_supported": []string{"code"},
 		"subject_types_supported": []string{"public"}, "id_token_signing_alg_values_supported": []string{"RS256"},
-	})
+	}
+	f.mu.Lock()
+	if f.userinfo != nil {
+		doc["userinfo_endpoint"] = u + "/userinfo"
+	}
+	f.mu.Unlock()
+	_ = json.NewEncoder(w).Encode(doc)
+}
+
+func (f *fakeIssuer) serveUserinfo(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.userinfoRequests++
+	body, status := f.userinfo, f.userinfoStatus
+	f.mu.Unlock()
+	if r.Header.Get("Authorization") != "Bearer at-not-real" {
+		http.Error(w, "bad access token", http.StatusUnauthorized)
+		return
+	}
+	if status != 0 {
+		http.Error(w, "userinfo unavailable", status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+func (f *fakeIssuer) userinfoCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.userinfoRequests
 }
 
 func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
