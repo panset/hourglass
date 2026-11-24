@@ -15,10 +15,10 @@ Milestones follow the design's "Suggested task order". Build tasks run one at a 
 | 07 | Verify M4+M5 (independent) | verify | opus | 06 | (read-only) | verified (2 low; 07b fixes the state route) |
 | 08 | M6: UI (UI-12..14) | build | sonnet | 07 | `ui/src`, docs/ui-notes.md | done (browser check comes with e2e, task 10) |
 | 09 | M7a: compatibility tests (WGT-19, WGT-20) against v1.1.0 fixtures | build | sonnet | 08 | internal tests | done |
-| 10 | M7b: e2e integration scenario with weights | build | sonnet | 08 | `e2e/` | blocked (ports 8080, 8091, 8081, 8990, 8443 held by the owner; steps W1-W6 written, not run) |
+| 10 | M7b: e2e integration scenario with weights | build | sonnet | 08 | `e2e/` | done (integration run: 17 steps pass, W1-W6 and I9 among them; ci.sh exit 0) |
 | 11 | M7c: documentation (integrating with run examples, deploying, extending, README, ui-notes, progress) | build | sonnet | 09, 10 | docs, README | done (examples run on a host process; charge, UI and size limits not run by this task) |
 | 12 | Verify M7 and the whole (independent, requirement-by-requirement, mutation checks) | verify | opus | 11 | (read-only) | verified (1 medium, 6 low; 12b fixes; e2e not run) |
-| 13 | Release preparation: ci.sh, `e2e/run.sh both`, `e2e/run.sh integration`, report | build | sonnet | 12 | REPORT.md | pending |
+| 13 | Release preparation: ci.sh, `e2e/run.sh both`, `e2e/run.sh integration`, report | build | sonnet | 12 | REPORT.md | running |
 | 14 | STOP: owner go-ahead and version number, then merge, tag, push, watch workflow | release | orchestrator | 13 | git | pending |
 
 Fix tasks (04b, 07b, 12b) are added when a verification finds something.

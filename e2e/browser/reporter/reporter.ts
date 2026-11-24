@@ -4,8 +4,9 @@
 // It plays both halves of docs/integrating.md without any Hourglass code:
 //   - a webhook receiver that verifies X-Hourglass-Signature (HMAC-SHA256 of the raw body, hex, "sha256=" prefix)
 //     and records every event it accepts;
-//   - a reporter that sends the full set of deployed setups and the lab pressure with its service token, once on
-//     command and then every few seconds like a real service would (a heartbeat), until it is told to go silent.
+//   - a reporter that sends the full set of reported weights (when it has any), the full set of deployed setups and
+//     the lab pressure with its service token, once on command and then every few seconds like a real service would
+//     (a heartbeat), until it is told to go silent. Weights go first, then deployments (docs/integrating.md).
 // Reports carry no observed_at, so Hourglass stamps them with its own (movable) clock.
 import crypto from "node:crypto";
 import http from "node:http";
@@ -88,14 +89,22 @@ export class Receiver {
   }
 }
 
+export interface ReportedWeight {
+  setup: string;
+  weight: number;
+  attributes?: Record<string, string>;
+}
+
 export class Reporter {
+  private weights: ReportedWeight[] | null = null; // null: this service does not report weights (yet)
+  private weightsSilent = false;
   private deployed: string[] = [];
   private pressure = 0.02;
   private silent = false;
   private timer?: NodeJS.Timeout;
   private chain: Promise<unknown> = Promise.resolve();
   /** The last response status of each report route, for assertions. */
-  readonly last: { pressure?: number; deployments?: number } = {};
+  readonly last: { pressure?: number; deployments?: number; weights?: number } = {};
 
   constructor(private readonly base: string, private token: string, private readonly heartbeatMs = 20_000) {}
 
@@ -116,6 +125,18 @@ export class Reporter {
     await this.send();
   }
 
+  /** From now on every send carries this complete set of weights, before the deployments. */
+  async setWeights(weights: ReportedWeight[]) {
+    this.weights = weights;
+    this.weightsSilent = false;
+    await this.send();
+  }
+  /** The service stops sending weights but keeps sending deployments and pressure. */
+  async stopWeights() {
+    this.weightsSilent = true;
+    await this.chain; // a send already under way has finished when this returns
+  }
+
   async report(deployed: string[], pressure = this.pressure) {
     this.deployed = deployed;
     this.pressure = pressure;
@@ -128,6 +149,10 @@ export class Reporter {
     const run = this.chain.then(async () => {
       if (this.silent) return;
       const h = { authorization: `Bearer ${this.token}`, "content-type": "application/json" };
+      if (this.weights !== null && !this.weightsSilent) {
+        const w = await fetch(`${this.base}/api/v1/integration/weights`, { method: "PUT", headers: h, body: JSON.stringify({ weights: this.weights }) });
+        this.last.weights = w.status;
+      }
       const p = await fetch(`${this.base}/api/v1/integration/pressure`, { method: "PUT", headers: h, body: JSON.stringify({ value: this.pressure }) });
       this.last.pressure = p.status;
       const d = await fetch(`${this.base}/api/v1/integration/deployments`, {

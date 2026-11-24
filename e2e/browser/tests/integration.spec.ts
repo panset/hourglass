@@ -8,7 +8,12 @@
 // hold.acquired webhook, I4 reported deployed starts metering, I5 release of a deployed setup is pending
 // (Releasing, 202, one hold.releasing, still charged), I6 teardown reported completes the release, I7 the reporter
 // goes silent past max_age, I8 service release, I9 negative checks from the reporter's side, I10 the service
-// accounts page end to end for a throwaway account (disable, enable, revoke, delete).
+// accounts page end to end for a throwaway account (disable, enable, revoke, delete). Reported weights
+// (docs/design/reported-weights.md, Tests): W1 the admin gives the account the scope and turns the setting on with a
+// maximum, W2 weights for every setup show on the Setups page and in the acquire dialog, W3 a hold is charged at the
+// reported weight and the next debit follows a change, W4 the reporter keeps the weight through teardown and the last
+// debit is at it, W5 a report over the maximum is refused and shown on Settings, W6 weights stop and the price returns
+// to the rate rule after max_age while polls succeed.
 //
 // Driven outside the UI, as the outside world: the reporter and receiver (the customer's service), the e2e clock
 // control (to move past max_age without waiting), one Keycloak admin call (token lifetimes, as in the acceptance
@@ -17,7 +22,7 @@
 import { expect, test, type APIResponse, type BrowserContext, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import { Receiver, Reporter } from "../reporter/reporter";
+import { Receiver, Reporter, type ReportedWeight } from "../reporter/reporter";
 
 const MODE = "integration";
 const OUT = process.env.E2E_OUT ?? path.resolve(__dirname, "..", "..", "out", MODE);
@@ -185,6 +190,20 @@ const myHolds = async (p: Page, state?: "active" | "released"): Promise<J[]> =>
 const myBalance = async (p: Page): Promise<number> => (await json(await p.request.get("/api/v1/me"), 200)).balance_tokens;
 const debitsOf = async (p: Page): Promise<J[]> =>
   ((await json(await p.request.get("/api/v1/me/ledger"), 200)).entries as J[]).filter((e) => e.type === "debit");
+
+/** Debits, newest first (by row id). */
+const debitsNewestFirst = async (p: Page): Promise<J[]> => (await debitsOf(p)).sort((a, b) => b.id - a.id);
+/** Waits until a debit newer than `afterId` exists and returns the newest one. */
+async function debitAfter(p: Page, afterId: number): Promise<J> {
+  let got: J | undefined;
+  await expect
+    .poll(async () => ((got = (await debitsNewestFirst(p))[0]), (got?.id ?? 0) > afterId), { message: `a debit after row ${afterId}`, timeout: 4 * 60_000, intervals: [3_000] })
+    .toBeTruthy();
+  return got!;
+}
+const newestDebitId = async (p: Page) => (await debitsNewestFirst(p))[0]?.id ?? 0;
+const stateOf = async (token: string): Promise<J> => (await svc(token, "GET", "/api/v1/integration/state")).body;
+const setupIn = (st: J, name: string): J => (st.setups as J[]).find((x) => x.name === name)!;
 
 async function acquire(p: Page, setup: string) {
   await nav(p, "Setups");
@@ -509,6 +528,232 @@ test("integration: service account, reported deployments and pressure, webhooks,
       await rep.report([]); // the service has torn it down
     });
 
+
+    // ---- reported weights (design: docs/design/reported-weights.md, Tests, end-to-end)
+    // Rate rules of the seed: size=large weighs 2, so lab-03 and lab-04 cost 2 per hour at 1x without a report.
+    const WEIGHT_MAX = 3;
+    const attrs03 = { "memory-gb": "512", "storage-gb": "4000", tier: "gold" };
+    const allWeights = (w03: number, w04: number): ReportedWeight[] => [
+      { setup: "lab-01", weight: 0.8, attributes: { "memory-gb": "128", tier: "silver" } },
+      { setup: "lab-02", weight: 0.8, attributes: { "memory-gb": "128", tier: "silver" } },
+      { setup: SETUP_A, weight: w03, attributes: attrs03 },
+      { setup: SETUP_B, weight: w04, attributes: { "memory-gb": "256", tier: "gold" } },
+      { setup: "lab-05", weight: 2.5, attributes: { "memory-gb": "1024", tier: "gold" } },
+      { setup: "lab-06", weight: 2.5, attributes: { "memory-gb": "1024", tier: "gold" } },
+    ];
+    let w3HoldId = 0;
+
+    await step("W1", "admin gives the account weights:write and turns reported weights on with a maximum, in the UI", D, async () => {
+      // Without the scope the route is forbidden (D3: no existing account gains it); with the scope and the setting off it is not_configured.
+      const noScope = await svc(token, "PUT", "/api/v1/integration/weights", { weights: [] });
+      expect(noScope.status, JSON.stringify(noScope.body)).toBe(403);
+      expect(noScope.body.error.code).toBe("forbidden");
+      asserted("before the grant the four-scope account gets 403 forbidden on the weights route");
+
+      await admin.goto("/admin/service-accounts");
+      const item = admin.getByRole("listitem", { name: `Service account ${ACCOUNT}` });
+      await item.getByRole("button", { name: `Edit ${ACCOUNT}` }).click();
+      const ed = admin.getByRole("dialog", { name: `Edit ${ACCOUNT}` });
+      await ed.getByRole("checkbox", { name: /^weights:write/ }).check();
+      await ed.getByRole("button", { name: "Save changes" }).click();
+      await expect(admin.getByText(`Saved ${ACCOUNT}.`)).toBeVisible();
+      const acct = ((await json(await admin.request.get("/api/v1/admin/service-accounts"), 200)).service_accounts as J[]).find((a) => a.name === ACCOUNT)!;
+      expect([...acct.scopes].sort()).toEqual(["deployments:write", "holds:release", "pressure:write", "state:read", "weights:write"]);
+      asserted("the Service accounts page's scope list offers weights:write; after saving, the account holds exactly the five scopes");
+
+      const off = await svc(token, "PUT", "/api/v1/integration/weights", { weights: [] });
+      expect(off.status, JSON.stringify(off.body)).toBe(409);
+      expect(off.body.error.code).toBe("not_configured");
+      expect(off.body.error.message).toMatch(/reported_weights/);
+      asserted("with the scope and the setting off the route answers 409 not_configured naming the setting");
+
+      await nav(admin, "Settings");
+      await admin.getByLabel("Accept weights reported by a service account").check();
+      await admin.getByLabel("Maximum weight").fill(String(WEIGHT_MAX));
+      await admin.getByRole("button", { name: "Save changes" }).click();
+      await expect(admin.getByText("Settings saved. They apply from the next poll.")).toBeVisible();
+      const rw = (await json(await admin.request.get("/api/v1/admin/settings"), 200)).settings.reported_weights;
+      expect(rw).toMatchObject({ enabled: true, min: 0, max: WEIGHT_MAX, max_age: "10m" });
+      asserted(`the Settings page saved reported weights on, minimum 0, maximum ${WEIGHT_MAX}, maximum age 10m`);
+      const empty = await svc(token, "PUT", "/api/v1/integration/weights", { weights: [] });
+      expect(empty.status, JSON.stringify(empty.body)).toBe(200);
+      expect(empty.body.accepted).toBe(0);
+      asserted("an empty weights report is accepted now");
+      observe("reported_weights", rw);
+    });
+
+    await step("W2", "the reporter sends weights for every setup; Setups shows weight, tag and attributes before acquire; the dialog warns", A, async () => {
+      await rep.setWeights(allWeights(1.15, 0.9));
+      expect(rep.last.weights).toBe(200);
+      const st = await stateOf(token);
+      expect(st.weights).toMatchObject({ enabled: true, min: 0, max: WEIGHT_MAX });
+      expect(st.weights.observed_at).not.toBeNull();
+      expect(setupIn(st, SETUP_A).weight).toMatchObject({ applied: 1.15, source: "reported", reported: 1.15, not_applied: null, attributes: attrs03 });
+      expect((st.setups as J[]).every((s) => s.weight.source === "reported")).toBeTruthy();
+      asserted("the state route shows the weights block and a reported weight on every setup, with lab-03's attributes");
+
+      await nav(alice, "Setups");
+      await alice.reload(); // the page was loaded before the report; a screen shows what it fetched
+      const row = alice.getByRole("table", { name: "All setups" }).getByRole("row", { name: new RegExp(SETUP_A) });
+      await expect(row).toContainText("1.15");
+      await expect(row.getByText("reported", { exact: true })).toBeVisible();
+      await expect(row).toContainText("memory-gb 512 · storage-gb 4000 · tier gold");
+      await expect(row).toContainText("Free");
+      asserted("before any acquire the Setups page shows lab-03's weight 1.15, the reported tag and the attributes line");
+
+      await alice.getByRole("button", { name: `Acquire ${SETUP_A}` }).click();
+      const dlg = alice.getByRole("dialog");
+      await expect(dlg).toContainText("Weights are reported by automation, so the price can change while the setup is held.");
+      await expect(dlg).toContainText("Weight 1.15 (reported)");
+      await expect(dlg).toContainText("memory-gb 512 · storage-gb 4000 · tier gold");
+      asserted("the acquire dialog shows the weight with its source, the attributes and the change warning");
+      await shot(alice, "W2-dialog");
+      await dlg.getByRole("button", { name: "Acquire", exact: true }).click();
+      await expect(alice.getByText(`Acquired ${SETUP_A}.`)).toBeVisible();
+      w3HoldId = (setupIn(await stateOf(token), SETUP_A).hold as J).id;
+      observe("hold_id", w3HoldId);
+    });
+
+    await step("W3", "a hold is charged at the reported weight; the reporter changes it and the next debit follows", A, async () => {
+      const mark = receiver.mark();
+      const base = await newestDebitId(alice);
+      await rep.report([SETUP_A]);
+      await nextOkPoll(admin); // deployed, metering starts
+      await nextOkPoll(admin); // first debit
+      const d1 = await debitAfter(alice, base);
+      expect(d1.hold_id).toBe(w3HoldId);
+      expect(Math.abs(d1.amount_tokens)).toBeGreaterThan(0);
+      expect(d1).toMatchObject({ weight_min: 1.15, weight_max: 1.15, weight_sources: ["reported"] });
+      asserted("the first debit of the hold records weight 1.15 and the source reported (not the rule weight 2)");
+      const hold = (await myHolds(alice, "active")).find((x) => x.id === w3HoldId)!;
+      expect(hold).toMatchObject({ weight: 1.15, weight_source: "reported", weight_attributes: attrs03 });
+      await nav(alice, "My usage");
+      const hrow = alice.getByRole("table", { name: "Current holds" }).getByRole("row", { name: new RegExp(SETUP_A) });
+      await expect(hrow).toContainText("1.15");
+      await expect(hrow.getByText("reported", { exact: true })).toBeVisible();
+      await expect(alice.getByText(/weight 1\.15 \(reported\)/).first()).toBeVisible();
+      asserted("My usage shows the hold at 1.15 with the reported tag, and the ledger debit as 'weight 1.15 (reported)'");
+
+      await rep.setWeights(allWeights(1.4, 0.9));
+      const hold2 = (await myHolds(alice, "active")).find((x) => x.id === w3HoldId)!;
+      expect(hold2.weight).toBe(1.4);
+      asserted("a screen follows the new report at once: the hold shows 1.4 before any poll");
+      await nextOkPoll(admin);
+      const d2 = await debitAfter(alice, d1.id);
+      expect(d2).toMatchObject({ hold_id: w3HoldId, weight_min: 1.4, weight_max: 1.4, weight_sources: ["reported"] });
+      asserted("the next debit after the change records weight 1.4, source reported; the earlier debit still says 1.15");
+      const earlier = (await debitsOf(alice)).find((e) => e.id === d1.id)!;
+      expect(earlier.weight_min).toBe(1.15);
+      await alice.reload();
+      // By day (the default) one row stands for both debits: the range of their weights (WGT-15); every poll shows each one.
+      await expect(alice.getByText(/weight 1\.15 to 1\.40 \(reported\)/).first()).toBeVisible();
+      await alice.getByRole("button", { name: "Every poll" }).click();
+      await expect(alice.getByText(/weight 1\.4 \(reported\)/).first()).toBeVisible();
+      observe("debits", { first: { id: d1.id, amount: d1.amount_tokens, weight: d1.weight_min }, next: { id: d2.id, amount: d2.amount_tokens, weight: d2.weight_min } });
+      observe("webhooks_since", receiver.of("hold.acquired", () => true, mark).length);
+    });
+
+    await step("W4", "the user releases; the reporter keeps the weight through teardown; the last debit is at the reported weight", A, async () => {
+      const before = (await debitsOf(alice)).filter((e) => e.hold_id === w3HoldId).length;
+      const mark = receiver.mark();
+      await nav(alice, "My usage");
+      const row = alice.getByRole("table", { name: "Current holds" }).getByRole("row", { name: new RegExp(SETUP_A) });
+      const [resp] = await Promise.all([
+        alice.waitForResponse((r) => /\/api\/v1\/holds\/\d+\/release$/.test(r.url()) && r.request().method() === "POST"),
+        row.getByRole("button", { name: "Release" }).click(),
+      ]);
+      expect(resp.status()).toBe(202);
+      await expect(row.getByText("Releasing")).toBeVisible();
+      // The service tears the setup down; it still reports the weight (weights go first, the deployments follow).
+      await rep.report([]);
+      expect(rep.last.weights).toBe(200);
+      expect(setupIn(await stateOf(token), SETUP_A).hold).not.toBeNull();
+      await nextOkPoll(admin);
+      await receiver.waitFor("hold.released", (e) => e.body.setup?.name === SETUP_A, mark);
+      const mine = (await debitsNewestFirst(alice)).filter((e) => e.hold_id === w3HoldId);
+      expect(mine.length, "the poll that completed the release charged its interval (D58)").toBeGreaterThan(before);
+      expect(mine[0]).toMatchObject({ weight_min: 1.4, weight_max: 1.4, weight_sources: ["reported"] });
+      asserted("the hold was released by the poll after the teardown report, and its last debit is at the reported weight 1.4");
+      const rel = (await myHolds(alice, "released")).find((x) => x.id === w3HoldId)!;
+      expect(rel).toMatchObject({ weight: 1.4, weight_source: "reported" });
+      asserted("the released hold shows the weight and source of its last sample: 1.4, reported");
+      expect(setupIn(await stateOf(token), SETUP_A).hold).toBeNull();
+      observe("last_debit", mine[0]);
+    });
+
+    await step("W5", "a report over the maximum is refused, changes nothing, and appears on the Settings page", D, async () => {
+      // A held, deployed setup is charged at its reported weight when the refusal comes.
+      await acquire(alice, SETUP_B);
+      const base = await newestDebitId(alice);
+      await rep.report([SETUP_B]);
+      await nextOkPoll(admin);
+      await nextOkPoll(admin);
+      const d0 = await debitAfter(alice, base);
+      expect(d0).toMatchObject({ weight_min: 0.9, weight_max: 0.9, weight_sources: ["reported"] });
+      asserted("lab-04 is held and deployed and its latest debit is at the reported weight 0.9");
+
+      await rep.stopWeights(); // no accepted weights report after this point, so the refusal is the later event
+      const before = (await stateOf(token)).weights;
+      const bad = await svc(token, "PUT", "/api/v1/integration/weights", { weights: [{ setup: SETUP_A, weight: 3.5 }, { setup: SETUP_B, weight: 1 }] });
+      expect(bad.status, JSON.stringify(bad.body)).toBe(400);
+      expect(bad.body.error).toMatchObject({ code: "validation", field: "weights" });
+      expect(bad.body.error.message).toMatch(/weights\[0\] \(setup "lab-03"\).*above the maximum 3/);
+      asserted(`the over-maximum report got 400 validation, field weights, naming entry 0 and lab-03: ${bad.body.error.message}`);
+      const st = await stateOf(token);
+      expect(st.weights.observed_at).toBe(before.observed_at);
+      expect(setupIn(st, SETUP_B).weight).toMatchObject({ applied: 0.9, source: "reported" });
+      expect(setupIn(st, SETUP_A).weight.reported).toBe(1.4);
+      asserted("nothing changed: the stored report's observed_at is the same, lab-04 still applies 0.9 and lab-03 still holds 1.4");
+
+      const c = await collector(admin);
+      expect(c.last_weights_refusal).toMatchObject({ service_account: ACCOUNT });
+      expect(c.last_weights_refusal.message).toMatch(/above the maximum 3/);
+      await nav(admin, "Settings");
+      await expect(admin.getByText("A weights report was refused after the last accepted one")).toBeVisible();
+      await expect(admin.getByText(/above the maximum 3/).first()).toBeVisible();
+      await expect(admin.getByText(`received from ${ACCOUNT}; observed`).first()).toBeVisible();
+      await shot(admin, "W5-settings");
+      asserted("the Settings page shows the refusal warning with the account and message, and the last accepted report");
+
+      await nextOkPoll(admin);
+      const d1 = await debitAfter(alice, d0.id);
+      expect(d1).toMatchObject({ weight_min: 0.9, weight_max: 0.9, weight_sources: ["reported"] });
+      asserted("the next poll succeeded and charged lab-04 at 0.9 again");
+      observe("refusal", c.last_weights_refusal);
+    });
+
+    await step("W6", "weights stop while deployments and pressure go on; after max_age the price is the rate rule and polls succeed", D, async () => {
+      // The weights reporter is still silent (W5). Deployments and pressure keep coming; the clock passes max_age.
+      const d0 = (await debitsNewestFirst(alice))[0]!;
+      offsetS += (MAX_AGE_MIN + 1) * 60;
+      expect((await fetch(`${CLOCK}/clock`, { method: "PUT", body: JSON.stringify({ offset: `${offsetS}s` }) })).ok).toBeTruthy();
+      await rep.send(); // the service is alive: fresh deployments and pressure, no weights
+      const st = await stateOf(token);
+      expect(setupIn(st, SETUP_B).weight).toMatchObject({ applied: 2, source: "rule", reported: 0.9, not_applied: "expired" });
+      expect(setupIn(st, SETUP_B).weight.attributes).toEqual({});
+      asserted("past max_age the state route shows lab-04 at the rule weight 2 (source rule); the stale 0.9 is listed with not_applied expired");
+      const run = await nextOkPoll(admin);
+      const d1 = await debitAfter(alice, d0.id);
+      expect(d1).toMatchObject({ hold_id: (await myHolds(alice, "active")).find((x) => x.setup_name === SETUP_B)!.id, weight_min: 2, weight_max: 2, weight_sources: ["rule"] });
+      asserted("the poll after expiry succeeded and the new debit is at weight 2, source rule");
+      const c = await collector(admin);
+      // last_error is the latest failed poll ever (I7's); polls succeeding now means a success after it.
+      expect(Date.parse(c.last_successful_poll_at)).toBeGreaterThan(Date.parse(c.last_error.at));
+      expect((c.recent_runs as Run[])[0]!.ok).toBe(true);
+      await nav(alice, "My usage");
+      await expect(alice.getByText(/weight 2(?!\.)/).first()).toBeVisible();
+      await admin.goto("/admin/setups");
+      await expect(admin.getByText("Not applied: the report is older than the maximum age.").first()).toBeVisible();
+      asserted("Setup inventory says in words that the reported weight is older than the maximum age; the collector shows no error");
+      observe("poll_after_expiry", run);
+
+      // Clean up: the service releases the hold and reports an empty set.
+      const hold = setupIn(await stateOf(token), SETUP_B).hold as J;
+      const rel = await svc(token, "POST", `/api/v1/integration/holds/${hold.id}/release`, { reason: "end of the weights scenario" });
+      expect(rel.status, JSON.stringify(rel.body)).toBe(200);
+      await rep.report([]);
+    });
+
     // ---- i
     await step("I9", "negative checks from the reporter's side", D, async () => {
       // The token is not a login: any other route treats it as anonymous (SVC-1).
@@ -529,12 +774,13 @@ test("integration: service account, reported deployments and pressure, webhooks,
         ["PUT", "/api/v1/integration/pressure", { value: 0.5 }],
         ["PUT", "/api/v1/integration/deployments", { deployments: [] }],
         ["POST", "/api/v1/integration/holds/1/release", { reason: "no scope" }],
+        ["PUT", "/api/v1/integration/weights", { weights: [] }],
       ] as const) {
         const r = await svc(t, m, p, b);
         expect(r.status, `${m} ${p}`).toBe(403);
         expect(r.body.error.code).toBe("forbidden");
       }
-      asserted("a token with only state:read reads the state (200) and gets 403 forbidden on pressure, deployments and release");
+      asserted("a token with only state:read reads the state (200) and gets 403 forbidden on pressure, deployments, weights and release");
       // A disabled account is refused on the next request (SVC-5).
       await json(await api(admin, "PUT", `/api/v1/admin/service-accounts/${acct.id}`, { description: "scope check", scopes: ["state:read"], enabled: false }), 200);
       expect((await svc(t, "GET", "/api/v1/integration/state")).status).toBe(401);

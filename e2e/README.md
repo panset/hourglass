@@ -29,10 +29,10 @@ Each mode takes about 12 to 25 minutes, because the collector polls once a minut
 
 ## The integration scenario (`e2e/run.sh integration`)
 
-`e2e/browser/tests/integration.spec.ts` runs the bundled stack with `provider.type: reported` and `pressure.type: reported` (`e2e/config.integration.yaml`, layered on by `e2e/compose.integration.yaml`) and a webhook subscribed to `hold.acquired`, `hold.releasing`, `hold.released` and `poll.failed`. The customer's service is scripted in `e2e/browser/reporter/reporter.ts`, running inside the test process: a receiver on host port 9100 that verifies `X-Hourglass-Signature` and records the events (the container reaches it as `host.docker.internal`), and a reporter that sends deployments and pressure with a service token on command and every 20 s as a heartbeat. Steps:
+`e2e/browser/tests/integration.spec.ts` runs the bundled stack with `provider.type: reported` and `pressure.type: reported` (`e2e/config.integration.yaml`, layered on by `e2e/compose.integration.yaml`) and a webhook subscribed to `hold.acquired`, `hold.releasing`, `hold.released` and `poll.failed`. The customer's service is scripted in `e2e/browser/reporter/reporter.ts`, running inside the test process: a receiver on host port 9100 that verifies `X-Hourglass-Signature` and records the events (the container reaches it as `host.docker.internal`), and a reporter that sends weights (from W2 on), deployments and pressure with a service token on command and every 20 s as a heartbeat. Steps:
 
 - I0 set-up: admin first run, poll interval 1m, alice approved.
-- I1 the admin creates a service account with the four scopes and issues a token in the UI.
+- I1 the admin creates a service account with the four original scopes and issues a token in the UI (W1 adds the fifth).
 - I2 the reporter sends pressure and an empty set; a poll succeeds.
 - I3 alice acquires lab-03; the receiver gets `hold.acquired`.
 - I4 the reporter reports lab-03 deployed; after the next poll the hold is deployed, metering started and the balance falls.
@@ -40,7 +40,13 @@ Each mode takes about 12 to 25 minutes, because the collector polls once a minut
 - I6 the reporter reports the set without lab-03; the next poll releases the hold and `hold.released` arrives.
 - I7 with lab-04 held and deployed the reporter goes silent and the test clock moves past `max_age` (10 minutes): the poll fails, `poll.failed` arrives, no debit is written, the admin collector shows the error; a fresh report recovers and the gap is an uncharged outage.
 - I8 the service releases lab-04 with a reason: `hold.released` carries `service_account`, the audit log shows `hold.service_release` under the account's name.
-- I9 negative checks: the token is anonymous (401) on other routes, a session cookie gets 401 on the state route, a token without a scope gets 403, a disabled account gets 401.
+- W1 the admin gives the account `weights:write` on the Service accounts page (before: 403; with the setting off: 409 `not_configured`) and turns reported weights on with a maximum of 3 on the Settings page.
+- W2 the reporter sends a weight, with attributes, for every setup (weights before deployments); the Setups page shows lab-03's weight, the `reported` tag and the attributes before acquire, and the acquire dialog shows the weight, the attributes and the change warning.
+- W3 lab-03 is held and deployed; its debit is at the reported weight (1.15) and shows so on My usage; the reporter changes the weight to 1.4 and the next debit follows.
+- W4 alice releases; the reporter keeps reporting the weight and reports the teardown; the poll releases the hold and the last debit is at the reported weight.
+- W5 with lab-04 held at its reported weight, a report over the maximum is refused (400, naming the entry), changes nothing, and the Settings page shows the refusal.
+- W6 the reporter stops sending weights but keeps sending deployments and pressure; the test clock passes `max_age`; the price returns to the rate rule (source `rule`, the stale weight listed as expired), polls succeed, and Setup inventory says why.
+- I9 negative checks: the token is anonymous (401) on other routes, a session cookie gets 401 on the state route, a token without a scope gets 403 on every write route including weights, a disabled account gets 401.
 
 Outside the UI: the reporter and receiver (the customer's service), the test clock, the Keycloak lifetime call of D34, and the admin API for the collector, the audit log and the second, scope-limited account of I9 (D63). It needs the same prerequisites and the free port 9100 on the host. It takes about 15 to 20 minutes: the first poll after start-up sleeps up to 5 minutes before the 1 minute interval applies. Artifacts go to `e2e/out/integration/`; `steps.json` also lists the webhooks received.
 

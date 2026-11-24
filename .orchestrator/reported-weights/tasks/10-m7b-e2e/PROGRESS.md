@@ -1,0 +1,13 @@
+# Progress: 10 M7b e2e
+- 2026-11-23 Read brief, intent, contract, design, digest, UI result, e2e files.
+- 2026-11-23 Port check before any run: 8080 (hourglass host process), 8081 and 8990 (docker, compose project hourglass-llo), 8091 (hd process), 8443 (hourglass-llo) are owned by the owner's stacks, not this scenario. Per the brief's hazard: not stopped, `e2e/run.sh integration` NOT run. Status blocked for the run.
+- 2026-11-23 Decision: I1 stays at four scopes; W1 grants the fifth through the UI (so 403 before the grant and 409 with the setting off can be asserted), W1 asserts the five scopes.
+- 2026-11-23 Decision: steps W1..W6 sit between I8 and I9 (existing steps are unaffected because the reporter sends no weights before W2 and the rule weights apply as before). W5 (refusal) comes before W6 (expiry) so the refusal is the later event (Settings shows a refusal only when later than the last accepted report); the weights heartbeat is stopped for that.
+- 2026-11-23 Wrote reporter weights support (weights sent before deployments), steps W1-W6, I9 weights 403, integration-stack.sh fifth scope, README. `npx tsc --noEmit` in e2e/browser clean.
+- 2026-11-23 ./ci.sh first run failed in internal/api (other agent's upgrade_v110_compat_test.go, diffJSON redeclared); rerun after a wait.
+- Next: when the ports are free, run `e2e/run.sh integration > integration.log 2>&1` (45 min), fix test-side problems, then `e2e/run.sh bundled`.
+- 2026-11-24 first integration run: W1 failed (test read .reported_weights, correct path .settings.reported_weights; fixed). Waiting for remaining failures.
+- first integration run: W1 failed (test read .reported_weights, correct .settings.reported_weights; fixed). Waiting for remaining failures.
+- W2 failure: Setups page showed rule weights because it was not refetched after the report (server side is live); added reload. W3-W6 failures were a cascade (W2 failed before acquire). W6 last_error (stale deployments) to re-check after rerun. Rerunning integration.
+- run2: W3 (day view aggregates two debits: 'weight 1.15 to 1.40 (reported)'; per-debit text is in Every poll view) and W6 (last_error is the latest failed poll ever, I7's) were wrong expectations; fixed. Rerunning (run3).
+- run3: integration exit 0, 17 steps pass (I0-I10, W1-W6). Running ci.sh.

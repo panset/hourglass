@@ -4,7 +4,7 @@
 # by hand and left running, for trying the curl examples of docs/integrating.md. Test builds only; fake credentials.
 #
 #   e2e/integration-stack.sh up      load the images if missing, start the stack, set up the admin and a service
-#                                    account "docs-example" with the four scopes, print its token
+#                                    account "docs-example" with the five scopes, print its token
 #   e2e/integration-stack.sh token   issue another token for "docs-example"
 #   e2e/integration-stack.sh down    stop the stack and delete its volume
 #
@@ -43,7 +43,7 @@ issue() {
   signin
   id="$(account_id)"
   if [ -z "$id" ]; then
-    id="$(post /api/v1/admin/service-accounts '{"name":"docs-example","description":"integration stack","scopes":["state:read","pressure:write","deployments:write","holds:release"]}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+    id="$(post /api/v1/admin/service-accounts '{"name":"docs-example","description":"integration stack","scopes":["state:read","pressure:write","deployments:write","holds:release","weights:write"]}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
   fi
   post "/api/v1/admin/service-accounts/$id/tokens" '{}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])'
 }
