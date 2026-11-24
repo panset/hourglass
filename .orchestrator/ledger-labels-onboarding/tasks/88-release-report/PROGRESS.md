@@ -1,0 +1,3 @@
+- 2026-11-23 read brief, sources; git/gh state checked (no tags, FF ok, no workflow runs). Next: bazel build image, load, run version.
+- ci.sh run on HEAD 14283a8: see ci.exit. Version established: 0.0.0-dev. Next: write RESULT/REPORT.
+- RESULT.md and REPORT.md written. Done.
