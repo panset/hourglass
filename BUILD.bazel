@@ -16,7 +16,10 @@ exports_files([
     "testdata/upgrade-d96a950/hourglass.sqlite3",
     "testdata/upgrade-d96a950/openapi.yaml",
     "testdata/upgrade-d96a950/responses.json",
-    # Recorded from the release v1.1.0: the WGT-19 replay (//internal/collector) reads these.
+    # Recorded from the release v1.1.0: the WGT-19 replay (//internal/collector), the application
+    # start (//internal/app) and the WGT-20 comparison (//internal/api) read these.
     "testdata/upgrade-v1.1.0/hourglass.sqlite3",
+    "testdata/upgrade-v1.1.0/openapi.yaml",
     "testdata/upgrade-v1.1.0/poll.json",
+    "testdata/upgrade-v1.1.0/responses.json",
 ])

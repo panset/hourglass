@@ -1,0 +1,22 @@
+# 12 Independent verification of milestones 6 and 7 and of the whole job
+Job intent: .orchestrator/reported-weights/INTENT.md (read it first: its "Done means" is what you check). Contract: .orchestrator/reported-weights/CONTRACT.md (binding; read-only apart from temporary mutations you restore).
+## Goal
+Decide from the code, the docs and the requirements alone whether the job is done. You did not write any of it. Do not read the RESULT.md, PROGRESS.md or mutation logs of the build tasks (`02-*`, `03-*`, `05-*`, `06-*`, `08-*` to `11-*`); earlier verification results (`04-*`, `07-*`) you may read.
+## Do
+1. Requirement coverage: for every id WGT-1 to WGT-23 and UI-12 to UI-14 in docs/design/reported-weights.md, list the tests named after it (Go, UI, e2e step) and confirm they execute and pass under `./ci.sh` (Bazel; run `bazel test //... --nocache_test_results` once) and are not skipped. An id without a passing named test is a high finding. Produce the table "requirement, what it requires in one line, tests, file".
+2. Depth on what has not been independently verified yet:
+   - UI-12, UI-13, UI-14: each bullet of design C3 against the page code and tests; one deliberate break per id turns a named test red; every number shown comes from the API (no weight, cost or range arithmetic in `ui/src` beyond formatting); the settings page never resets `reported_weights` or other settings by omission; clearing the override sends `null`.
+   - WGT-19, WGT-20: read the tests; are the allowed differences an explicit list; would an unexpected changed or added field fail; one deliberate break per id (e.g. change a recorded-field value in a handler, rewrite an old row in the migration) goes red; the fixtures under `testdata/upgrade-v1.1.0/` and `testdata/upgrade-d96a950/` are byte-identical to their first commit (`git log --oneline -- testdata/`, `git diff 0d20688..HEAD -- testdata/` must be empty).
+   - e2e: read `e2e/browser/tests/integration.spec.ts` and `e2e/README.md` against the six end-to-end bullets of the design's Tests section; does each bullet have a step that would fail if the behaviour broke (not just a screenshot)? Read the last run's `e2e/out/integration/steps.json` if present. Do not run e2e yourself.
+   - The first client's eight acceptance scenarios (design Tests table): each maps to a passing named test or e2e step.
+3. Docs against behaviour: every statement and example added to `docs/integrating.md` (the "Report weights" job; the eight "It must say" points of deliverable 1), `docs/deploying.md` (setting, tightening, override, `max_age` advice, the 0008 upgrade entry, the four shifted fields), `docs/extending.md`, `README.md`, `docs/ui-notes.md`, `docs/progress.md`. Check messages, field names, status codes and defaults against the code or by a throwaway test; compare the examples with `.orchestrator/reported-weights/tasks/11-m7c-docs/examples.log` (that log you may read). Report every mismatch. integrating.md must be self-contained (no reference to the design, decisions or source).
+4. Whole-job rules: `git diff 753cc50..HEAD --stat` reviewed for: docs/SPEC.md untouched; the design doc unchanged since its commit (`git diff 9cabece..HEAD -- docs/design/` empty); `pkg/hourglass/types.go` changed only in the `SetupState.Weight` comment; no config file key added; migration 0008 additive; no route, parameter or response field removed; `tools/check_core_generic.sh` passes; `grep -rniE 'lab-connector|mem-gb|disk-gb'` over the repo finds matches only in docs/design/reported-weights.md and `.orchestrator/` briefs that quote the ban; no logic that remembers a removed weight; every pre-existing test edited since `0d20688` judged (weakened or not), with special attention to the two d96a950 tests (D82(j), D85(l)).
+5. docs/decisions.md D80 to the last row: does each match the code, and does any contradict the design? Is any choice the code makes missing from it?
+## Scope
+May write: this task folder only. Restore every mutation; finish with `git status --short` showing nothing of yours.
+## Done when
+RESULT.md has: findings ranked by severity with scenario and `path:line`; the full requirement table; the acceptance-scenario table; docs mismatches; test counts (executed, skipped); what you could not check.
+## Long-running steps
+`./ci.sh` 30 minutes; uncached Bazel 30 minutes. Log into this task folder.
+## Report
+Per CONTRACT.md "Reporting". Reply in at most ten lines with the number of findings by severity.

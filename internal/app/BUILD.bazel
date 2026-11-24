@@ -43,11 +43,15 @@ go_test(
         "seed_test.go",
         "storedreports_test.go",
         "upgrade_test.go",
+        "upgrade_v110_test.go",
     ],
     # UPG-1: the database and the numbers recorded from the release at d96a950.
     data = [
         "//:testdata/upgrade-d96a950/hourglass.sqlite3",
         "//:testdata/upgrade-d96a950/responses.json",
+        # WGT-19: the database and the numbers recorded from the release v1.1.0.
+        "//:testdata/upgrade-v1.1.0/hourglass.sqlite3",
+        "//:testdata/upgrade-v1.1.0/responses.json",
     ],
     embed = [":app"],
     deps = [
