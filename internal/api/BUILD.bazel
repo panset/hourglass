@@ -12,6 +12,7 @@ go_library(
         "handlers_integration.go",
         "handlers_service.go",
         "handlers_user.go",
+        "handlers_weights.go",
         "health.go",
         "helpers.go",
         "middleware.go",
@@ -33,6 +34,7 @@ go_library(
         "//internal/rules",
         "//internal/settings",
         "//internal/store",
+        "//internal/weights",
         "//pkg/hourglass",
     ],
 )
@@ -69,6 +71,7 @@ go_test(
         "upgrade_compat_test.go",
         "user_test.go",
         "user_testenv_test.go",
+        "weights_report_test.go",
     ],
     data = [
         # The contract test reads the OpenAPI file and the permissions test the

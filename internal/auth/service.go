@@ -41,11 +41,14 @@ const (
 	ScopePressureWrite    = "pressure:write"
 	ScopeDeploymentsWrite = "deployments:write"
 	ScopeHoldsRelease     = "holds:release"
+	// ScopeWeightsWrite allows the weights report only
+	// (docs/design/reported-weights.md, D3).
+	ScopeWeightsWrite = "weights:write"
 )
 
 // Scopes returns every valid scope, in the design's order.
 func Scopes() []string {
-	return []string{ScopeStateRead, ScopePressureWrite, ScopeDeploymentsWrite, ScopeHoldsRelease}
+	return []string{ScopeStateRead, ScopePressureWrite, ScopeDeploymentsWrite, ScopeHoldsRelease, ScopeWeightsWrite}
 }
 
 // ValidScope reports whether s is one of Scopes().

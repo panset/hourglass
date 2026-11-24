@@ -98,7 +98,7 @@ func orderScopes(in []string) []string {
 	return out
 }
 
-// parseScopes validates a scope list: every entry one of the four scopes
+// parseScopes validates a scope list: every entry one of auth.Scopes()
 // (unknown is 400 validation, field "scopes").
 func parseScopes(in []string) ([]string, error) {
 	for _, s := range in {

@@ -71,6 +71,7 @@ type backend struct {
 	pre      *Preapprover
 	logs     *syncBuf
 	admin    store.User // the local admin
+	dbPath   string     // the database file
 }
 
 type backendOpts struct {
@@ -93,6 +94,9 @@ type backendOpts struct {
 	// dbCopy is a database file to start from: a copy of it is opened in the
 	// test's temporary directory (the upgrade tests, UPG-1 and UPG-2).
 	dbCopy string
+	// dbPath, when set, opens this database file as it is (a restart of the
+	// backend that wrote it).
+	dbPath string
 }
 
 func newBackend(t *testing.T, o backendOpts) *backend {
@@ -102,6 +106,9 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 		o.start = time.Now()
 	}
 	dbPath := filepath.Join(t.TempDir(), "api.db")
+	if o.dbPath != "" {
+		dbPath = o.dbPath
+	}
 	if o.dbCopy != "" {
 		raw, err := os.ReadFile(o.dbCopy)
 		if err != nil {
@@ -133,7 +140,7 @@ func newBackend(t *testing.T, o backendOpts) *backend {
 	}
 	b := &backend{t: t, st: st, logs: logs, admin: admin, clk: hourglasstest.NewFakeClock(o.start),
 		prov: hourglasstest.NewFakeProvider(), pressure: hourglasstest.NewFakePressureSource(),
-		policy: hourglasstest.NewFakePolicy(), hook: hourglasstest.NewFakeHook()}
+		policy: hourglasstest.NewFakePolicy(), hook: hourglasstest.NewFakeHook(), dbPath: dbPath}
 	b.pressure.SetValue(0.8) // 2x with the default bands
 	b.ev = events.New([]hourglass.Hook{b.hook}, st, events.WithTimeout(time.Second))
 	if o.startEvents {

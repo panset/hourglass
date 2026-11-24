@@ -87,6 +87,7 @@ var routes = []Route{
 	{"PUT", "/api/v1/integration/deployments", AccessService, "reportDeployments", auth.ScopeDeploymentsWrite},
 	{"GET", "/api/v1/integration/state", AccessService, "getIntegrationState", auth.ScopeStateRead},
 	{"POST", "/api/v1/integration/holds/{id}/release", AccessService, "serviceReleaseHold", auth.ScopeHoldsRelease},
+	{"PUT", "/api/v1/integration/weights", AccessService, "reportWeights", auth.ScopeWeightsWrite},
 }
 
 // Routes returns a copy of the route table.

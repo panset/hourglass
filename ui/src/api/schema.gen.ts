@@ -868,8 +868,13 @@ export interface paths {
          *     report, not the last poll. `reported` and the `observed_at` fields are
          *     `null` before the first report, and always `null` (and nothing is
          *     `reported_deployed`) when the pressure source or the provider is not
-         *     the `reported` one. Never includes balances, ledger
-         *     entries, other users, settings or audit data.
+         *     the `reported` one. `weights` is the `reported_weights` switch and
+         *     limits and the stored weights report's times (null when the setting is
+         *     off or before the first report); each setup's `weight` is the weight a
+         *     poll now would charge, its source, the stored reported weight and why
+         *     it is not applied (`reported` and `not_applied` are null for every
+         *     setup with the setting off). Never includes balances, ledger entries,
+         *     other users, rate rules, other settings or audit data.
          *
          */
         get: operations["getIntegrationState"];
@@ -903,6 +908,56 @@ export interface paths {
          *
          */
         post: operations["serviceReleaseHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integration/weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Report the complete set of reported weights
+         * @description Scope `weights:write`; no other scope allows this route and this scope
+         *     allows no other. The list is the complete set of reported weights from
+         *     one writer: an absent setup has no reported weight and is priced by its
+         *     override, rate rule or default; an empty list means no setup has one.
+         *     It replaces the stored set atomically and takes effect at the next poll
+         *     and the next read; it never triggers a poll, a debit or an event.
+         *
+         *     Checks run in this order: scope, then whether the `reported_weights`
+         *     setting is on (off is 409 `not_configured` whatever the body, and
+         *     nothing is stored), then the body, then ordering. A missing or null
+         *     `weights` is 400 `validation`. Each entry is checked in turn; the first
+         *     invalid one refuses the whole report with 400 `validation`, `field`
+         *     `weights`, and a message that gives its position (from 0), its setup
+         *     name when that is a non-empty string, and the reason, for example
+         *     `weights[3] (setup "lab-03"): weight 25 is above the maximum 20`.
+         *     `weight` must be a JSON number (not a string), finite, and within the
+         *     setting's `min` and `max`, both inclusive; negative zero counts as 0.
+         *     `setup` must be a non-empty string, not repeated. `attributes` is
+         *     optional: at most 16, keys under the label key rule, string values of
+         *     at most 63 characters; they are stored and shown, never interpreted.
+         *     An entry holds only these three fields. A body that is not valid JSON
+         *     (bare `NaN` or `Infinity` included) is the generic 400 and names no
+         *     entry. Nothing is stored on any refusal, and the previous report stays
+         *     in force until it expires. A name that matches no setup is validated,
+         *     stored, ignored and listed in `unknown`. Limits: 10,000 entries and a
+         *     1 MB body. Ordering and clock skew are those of the other reports,
+         *     compared with the stored weights report only: an older `observed_at`
+         *     is 409 `stale_report`, an equal one replaces, more than 2 minutes ahead
+         *     is 400 `validation`. `expires_at` is `observed_at` plus the setting's
+         *     `max_age`.
+         *
+         */
+        put: operations["reportWeights"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1687,7 +1742,7 @@ export interface components {
          * @description What a service account may call (one integration route each).
          * @enum {string}
          */
-        ServiceScope: "state:read" | "pressure:write" | "deployments:write" | "holds:release";
+        ServiceScope: "state:read" | "pressure:write" | "deployments:write" | "holds:release" | "weights:write";
         /** @description A token as listed. The token itself is shown only once, when issued. */
         ServiceToken: {
             /** Format: int64 */
@@ -1822,6 +1877,73 @@ export interface components {
             reported_deployed: boolean;
             /** @description The active hold; null for a free setup. */
             hold: components["schemas"]["StateHold"] | null;
+            weight: components["schemas"]["StateSetupWeight"];
+        };
+        /** @description The weight a poll now would charge this setup, and the stored reported weight. The rate rule's selector is not returned. */
+        StateSetupWeight: {
+            /** @description The weight applied now. */
+            applied: number;
+            /**
+             * @description Where `applied` comes from.
+             * @enum {string}
+             */
+            source: "override" | "reported" | "rule" | "default";
+            /** @description The stored report's weight for this setup, usable or not; null when there is none or reported weights are off. */
+            reported: number | null;
+            /**
+             * @description Why `reported` is not applied, the first of `expired`, `out_of_bounds` and `override` that holds; null when it is applied, when there is none, or when reported weights are off.
+             * @enum {string|null}
+             */
+            not_applied: "expired" | "out_of_bounds" | "override" | null;
+            /** @description The entry's attributes when it is usable; `{}` otherwise. */
+            attributes: {
+                [key: string]: string;
+            };
+        };
+        /** @description The `reported_weights` switch and limits, and the stored weights report's times (null when reported weights are off or before the first report). */
+        StateWeights: {
+            enabled: boolean;
+            min: number;
+            /** @description Null when no maximum is set. */
+            max: number | null;
+            /** Format: date-time */
+            observed_at: string | null;
+            /** Format: date-time */
+            expires_at: string | null;
+        };
+        WeightReport: {
+            /** @description The setup's name in Hourglass. */
+            setup: string;
+            /** @description Finite, and within the setting's min and max, both inclusive. */
+            weight: number;
+            /** @description For display only; keys follow the label key rule. */
+            attributes?: {
+                [key: string]: string;
+            };
+        };
+        WeightsReport: {
+            /**
+             * Format: date-time
+             * @description Defaults to the time of receipt.
+             */
+            observed_at?: string;
+            /** @description The complete set of reported weights; empty means no setup has one. */
+            weights: components["schemas"]["WeightReport"][];
+        };
+        WeightsReportResult: {
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: date-time */
+            received_at: string;
+            /**
+             * Format: date-time
+             * @description `observed_at` plus the setting's `max_age`.
+             */
+            expires_at: string;
+            /** @description Entries whose name matches a setup. */
+            accepted: number;
+            /** @description Reported names that match no setup. */
+            unknown: string[];
         };
         IntegrationState: {
             /** Format: date-time */
@@ -1852,6 +1974,7 @@ export interface components {
                 /** Format: date-time */
                 expires_at: string | null;
             };
+            weights: components["schemas"]["StateWeights"];
             setups: components["schemas"]["StateSetup"][];
         };
         ServiceReleaseRequest: {
@@ -3192,6 +3315,36 @@ export interface operations {
             401: components["responses"]["ServiceUnauthenticated"];
             403: components["responses"]["ServiceForbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reportWeights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeightsReport"];
+            };
+        };
+        responses: {
+            /** @description The stored report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeightsReportResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["ServiceUnauthenticated"];
+            403: components["responses"]["ServiceForbidden"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];

@@ -10,8 +10,8 @@ Milestones follow the design's "Suggested task order". Build tasks run one at a 
 | 02 | M2: migration 0008, store queries, `internal/reported` weights report, `reported_weights` setting (WGT-17) | build | opus | 01 | store, reported, settings, settings handler, openapi | done |
 | 03 | M3: resolver `internal/weights` and collector (WGT-1..6, WGT-12) | build | opus | 02 | weights, collector, pkg/hourglass comment | done |
 | 04 | Verify M3 (independent) | verify | opus | 03 | (read-only) | verified (4 test gaps, fixed in 04b) |
-| 05 | M4: scope, report route, state fields (WGT-7..11, 13, 21); OpenAPI + generated types | build | opus | 04 | auth, api, openapi, schema.gen.ts | running |
-| 06 | M5: other readers, ledger fields, setup input, collector view (WGT-14..16, 18, 22, 23) | build | opus | 05 | api, store, openapi, schema.gen.ts | pending |
+| 05 | M4: scope, report route, state fields (WGT-7..11, 13, 21); OpenAPI + generated types | build | opus | 04 | auth, api, openapi, schema.gen.ts | done |
+| 06 | M5: other readers, ledger fields, setup input, collector view (WGT-14..16, 18, 22, 23) | build | opus | 05 | api, store, openapi, schema.gen.ts | running |
 | 07 | Verify M4+M5 (independent) | verify | opus | 06 | (read-only) | pending |
 | 08 | M6: UI (UI-12..14) | build | sonnet | 07 | `ui/src`, docs/ui-notes.md | pending |
 | 09 | M7a: compatibility tests (WGT-19, WGT-20) against v1.1.0 fixtures | build | sonnet | 08 | internal tests | pending |

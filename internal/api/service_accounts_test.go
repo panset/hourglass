@@ -173,7 +173,7 @@ func TestSVC3_EachIntegrationRouteRequiresItsScope(t *testing.T) {
 			t.Errorf("%s %s with only %s: %d %s", r.Method, r.Pattern, r.Scope, rec.Code, rec.Body)
 		}
 	}
-	// The four routes use the four scopes, one each.
+	// The integration routes use the scopes, one each.
 	seen := map[string]bool{}
 	for _, r := range serviceRoutes() {
 		seen[r.Scope] = true
@@ -546,6 +546,8 @@ var svcDesignRoutes = map[string]struct {
 	"reportDeployments":    {"PUT", "/api/v1/integration/deployments", "service", auth.ScopeDeploymentsWrite},
 	"getIntegrationState":  {"GET", "/api/v1/integration/state", "service", auth.ScopeStateRead},
 	"serviceReleaseHold":   {"POST", "/api/v1/integration/holds/{id}/release", "service", auth.ScopeHoldsRelease},
+	// docs/design/reported-weights.md, B1 and D3.
+	"reportWeights": {"PUT", "/api/v1/integration/weights", "service", auth.ScopeWeightsWrite},
 }
 
 // SVC-8: the expected answer for every one of these routes and every principal

@@ -14,6 +14,7 @@ import (
 	"github.com/panset/hourglass/internal/reported"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/internal/weights"
 )
 
 // Handlers of the integration routes (docs/design/integration-api.md,
@@ -197,6 +198,7 @@ type stateSetupJSON struct {
 	Enabled          bool              `json:"enabled"`
 	ReportedDeployed bool              `json:"reported_deployed"`
 	Hold             *stateHoldJSON    `json:"hold"`
+	Weight           *stateWeightJSON  `json:"weight"`
 }
 
 type statePressureReportedJSON struct {
@@ -222,7 +224,8 @@ type integrationStateJSON struct {
 		ObservedAt *string `json:"observed_at"`
 		ExpiresAt  *string `json:"expires_at"`
 	} `json:"deployments"`
-	Setups []stateSetupJSON `json:"setups"`
+	Weights stateWeightsJSON `json:"weights"`
+	Setups  []stateSetupJSON `json:"setups"`
 }
 
 // getIntegrationState is GET /api/v1/integration/state (scope state:read).
@@ -294,6 +297,12 @@ func (a *API) getIntegrationState(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	report, err := a.stateWeightReport(r, l.set.ReportedWeights)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	out.Weights = stateWeightsTop(l.set.ReportedWeights, report)
 	holdOf := make(map[int64]store.Hold, len(active))
 	for _, h := range active {
 		holdOf[h.SetupID] = h
@@ -302,6 +311,15 @@ func (a *API) getIntegrationState(w http.ResponseWriter, r *http.Request) {
 	for _, s := range setups {
 		row := stateSetupJSON{Name: s.Name, Labels: labelsNonNil(s.Labels), Details: detailsJSON(s.DetailsJSON),
 			Enabled: s.Enabled, ReportedDeployed: deployed[s.Name]}
+		// The weight a poll now would charge (B4). A rate rule that cannot be
+		// evaluated fails the request, as it fails the poll.
+		res, err := weights.Resolve(weights.Setup{Name: s.Name, Labels: s.Labels, Override: s.WeightOverride},
+			l.rules, l.set, report, l.now)
+		if err != nil {
+			a.writeError(w, r, err)
+			return
+		}
+		row.Weight = stateWeight(res)
 		if h, ok := holdOf[s.ID]; ok {
 			u := users[h.UserID]
 			row.Hold = &stateHoldJSON{ID: h.ID, AcquiredAt: ts(h.AcquiredAt), MeteringStartedAt: tsPtr(h.MeteringStartedAt),

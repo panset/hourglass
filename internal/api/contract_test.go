@@ -761,6 +761,12 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 	// Integration routes with a token that has every scope: the two reports,
 	// their refusals, and the state with holds, a report and a free setup.
 	rep := w.mintServiceAccount("reporter", allScopes()...)
+	// The weights report: off answers 409 not_configured; then an admin turns
+	// it on (docs/design/reported-weights.md, B1, B2).
+	w.status(c.callBearer(w.backend, "PUT", "/api/v1/integration/weights", rep.token, `{"weights":[]}`), 409)
+	if err := w.st.PutSetting(context.Background(), "reported_weights", `{"enabled":true,"min":0,"max":20,"max_age":"10m"}`, nil, w.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
 		status       int
 		method, path string
@@ -772,6 +778,9 @@ func TestUI2_ContractResponsesMatchSchemas(t *testing.T) {
 		{400, "PUT", "/api/v1/integration/deployments", `{"deployments":[{"setup":"a"},{"setup":"a"}]}`},
 		{409, "PUT", "/api/v1/integration/pressure", `{"value":0.4,"observed_at":"2026-11-19T08:00:00Z"}`},
 		{409, "PUT", "/api/v1/integration/deployments", `{"observed_at":"2026-11-19T08:00:00Z","deployments":[]}`},
+		{200, "PUT", "/api/v1/integration/weights", `{"observed_at":"2026-11-19T09:00:00Z","weights":[{"setup":"` + setupNameOf(t, w.backend, w.setupA) + `","weight":1.15,"attributes":{"memory-gb":"512","tier":"gold"}},{"setup":"no-such-setup","weight":0}]}`},
+		{400, "PUT", "/api/v1/integration/weights", `{"weights":[{"setup":"a","weight":"1.15"}]}`},
+		{409, "PUT", "/api/v1/integration/weights", `{"observed_at":"2026-11-19T08:00:00Z","weights":[]}`},
 		{200, "GET", "/api/v1/integration/state", ""}, // holdA is pending here: release_requested_at is set
 		{400, "POST", fmt.Sprintf("/api/v1/integration/holds/%d/release", w.holdA), `{"reason":"  "}`},
 		{404, "POST", "/api/v1/integration/holds/99999/release", `{"reason":"gone"}`},

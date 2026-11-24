@@ -53,8 +53,8 @@ func TestAPI_RouteTableIsConsistent(t *testing.T) {
 		}
 		seen[k], ops[r.OperationID] = true, true
 	}
-	if len(Routes()) != 43 {
-		t.Errorf("routes = %d, want the 43 operations of api/openapi.yaml", len(Routes()))
+	if len(Routes()) != 44 {
+		t.Errorf("routes = %d, want the 44 operations of api/openapi.yaml", len(Routes()))
 	}
 	// Every non-auth operation has a handler, and the handler map has nothing extra.
 	hs := (&API{}).handlers()

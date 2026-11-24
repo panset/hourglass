@@ -98,6 +98,11 @@ func newPermFix(t *testing.T) *permFix {
 	if err := b.st.PutSetting(ctx, "max_holds_per_user", "50", nil, b.clk.Now()); err != nil {
 		t.Fatal(err)
 	}
+	// Reported weights on, so the weights route answers 200 to a valid report
+	// (docs/design/reported-weights.md, B2).
+	if err := b.st.PutSetting(ctx, "reported_weights", `{"enabled":true,"min":0,"max":20,"max_age":"10m"}`, nil, b.clk.Now()); err != nil {
+		t.Fatal(err)
+	}
 
 	pending := b.newUser("pending-user", store.StatusPending)
 	rejected := b.newUser("rejected-user", store.StatusRejected)
@@ -262,6 +267,7 @@ var probeOps = map[string]bool{
 	"issueServiceToken": true, "revokeServiceToken": true,
 	"listPreapprovals": true, "addPreapprovals": true, "deletePreapproval": true,
 	"reportPressure": true, "reportDeployments": true, "getIntegrationState": true, "serviceReleaseHold": true,
+	"reportWeights": true,
 }
 
 const permSettingsBody = `{"default_weight":1,"display_label_keys":["tier"],` +
@@ -381,6 +387,8 @@ func (f *permFix) probe(op string, a permActor, mode probeMode) permProbe {
 	case "serviceReleaseHold":
 		return permProbe{method: "POST", path: "/api/v1/integration/holds/" + id(f.victimHold()) + "/release",
 			body: `{"reason":"permissions test"}`, scope: auth.ScopeHoldsRelease}
+	case "reportWeights":
+		return permProbe{method: "PUT", path: "/api/v1/integration/weights", body: `{"weights":[]}`, scope: auth.ScopeWeightsWrite}
 	}
 	f.t.Fatalf("no probe for operation %q", op)
 	return permProbe{}
@@ -626,6 +634,8 @@ var permExtraCover = map[string]string{
 	"reportDeployments":    "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
 	"getIntegrationState":  "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
 	"serviceReleaseHold":   "TestSVC8_ (SVC-1 to SVC-3, SVC-8) and the exhaustive test",
+	// The weights report (docs/design/reported-weights.md, D3).
+	"reportWeights": "TestWGT11_ (WGT-11), TestSVC3_, TestSVC8_ and the exhaustive test",
 	// Pre-approved SSO users (docs/design/ledger-labels-onboarding.md, D3):
 	// admin-only like every user management route.
 	"listPreapprovals":  "TestPRE5_RoutesRefusedForEveryPrincipalButAnAdmin and the exhaustive test",

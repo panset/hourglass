@@ -217,6 +217,8 @@ func (a *API) handlers() map[string]http.HandlerFunc {
 		"reportDeployments":   a.reportDeployments,
 		"getIntegrationState": a.getIntegrationState,
 		"serviceReleaseHold":  a.serviceReleaseHold,
+		// handlers_weights.go
+		"reportWeights": a.reportWeights,
 	}
 }
 

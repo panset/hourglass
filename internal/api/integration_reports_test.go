@@ -350,14 +350,18 @@ func TestINT4_NotConfiguredRefusedAndNothingStored(t *testing.T) {
 }
 
 // stateKeys is the allow-list of every key INT-8 lets the state response carry,
-// by path. "labels" and "details" are free-form maps and not walked.
+// by path. "labels", "details" and "attributes" are free-form maps and not
+// walked. "weights" and "setups[].weight" are the fields reported weights add
+// (docs/design/reported-weights.md, B4).
 var stateKeys = map[string][]string{
-	"":                   {"server_time", "poll", "pressure", "deployments", "setups"},
+	"":                   {"server_time", "poll", "pressure", "deployments", "weights", "setups"},
+	"weights":            {"enabled", "min", "max", "observed_at", "expires_at"},
+	"setups[].weight":    {"applied", "source", "reported", "not_applied", "attributes"},
 	"poll":               {"interval_seconds", "last_ok_at"},
 	"pressure":           {"source", "reported", "smoothed", "multiplier"},
 	"pressure.reported":  {"value", "observed_at", "expires_at"},
 	"deployments":        {"provider", "observed_at", "expires_at"},
-	"setups[]":           {"name", "labels", "details", "enabled", "reported_deployed", "hold"},
+	"setups[]":           {"name", "labels", "details", "enabled", "reported_deployed", "hold", "weight"},
 	"setups[].hold":      {"id", "user", "acquired_at", "metering_started_at", "deployed_at", "release_requested_at"},
 	"setups[].hold.user": {"id", "username", "email", "name"},
 }
@@ -382,7 +386,7 @@ func walkStateKeys(t *testing.T, path string, v any) {
 			t.Errorf("keys at %q are %v, want exactly %v", path, keys, want)
 		}
 		for _, k := range keys {
-			if k == "labels" || k == "details" {
+			if k == "labels" || k == "details" || k == "attributes" {
 				continue
 			}
 			child := k
