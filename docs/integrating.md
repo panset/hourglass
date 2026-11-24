@@ -17,7 +17,49 @@ It has three parts. Do them in order.
 - **Never print a secret.** Passwords, the session key, the webhook secret and service tokens go straight into a secret store or a file with mode `0600`. Do not echo them, log them, commit them, or paste them into a chat or a ticket. A service token is shown once: capture it to a file, never to the terminal.
 - **Do not make these changes without being asked:** turning `enforcement` on, deleting the data volume (`docker volume rm`, `docker compose down -v`), force-releasing a user's hold, or changing roles and balances.
 - **Hourglass never touches the infrastructure.** Deploying and tearing down is your service's job, and it is the only part that can damage something. Build it to do nothing when it is unsure.
+- **Do not turn reported weights on, change their limits, or set a weight override without being asked.** They change what users are charged. The admin chooses the maximum weight; you ask for it.
+- **If an integration already runs here,** read [If you already run an integration](#if-you-already-run-an-integration) first. It says what the newest release adds and the steps to adopt it.
 - The examples use `curl`, `jq` and `openssl`. `$HOURGLASS` is the base URL, for example `https://hourglass.example.com`, with no trailing slash.
+
+## If you already run an integration
+
+This section is for a service that was built against an earlier release and already reports deployments and pressure. The newest release adds one optional job, [Report weights](#report-weights): your service can tell Hourglass what each setup costs per hour, so the price follows what the setup currently reserves.
+
+**What stays the same.** After the upgrade your service works unchanged, with no configuration change on either side.
+
+- Every existing call takes the same request and gives the same answer. Fields were added to responses and none was removed or renamed.
+- `GET /api/v1/integration/state` gains a top-level `weights` object and a `weight` object on every setup. If your parser rejects unknown fields, relax it before the upgrade.
+- Charges are the same as before for as long as reported weights stay off, and they are off until an admin turns them on.
+- Your token and its scopes are unchanged. No existing account gains the new scope.
+
+**What is new.**
+
+| New | What it is |
+| --- | --- |
+| `PUT /api/v1/integration/weights` | The complete list of setups with a weight each, and optional attributes to display |
+| The scope `weights:write` | Needed for that route. No other scope allows it |
+| The admin setting `reported_weights` | The switch, a minimum, a maximum and a `max_age`. Off by default |
+| `weights` and `weight` in the state | What Hourglass holds and what it applies to each setup, with the reason when a reported weight is not applied |
+| A per-setup weight override | An admin can pin one setup's weight above your report |
+
+**Steps to adopt it.** Do them in order. Steps 1 to 3 are the admin's; ask for them.
+
+1. **Upgrade Hourglass.** Take a backup first: the upgrade migrates the database and only the backup goes back. See [the upgrade notes](deploying.md#upgrade).
+2. **Add `weights:write` to your service account** in Admin, Service accounts. The token you already use keeps working and has the scope from then on; you do not need a new one. Until then the route answers `403 forbidden`.
+3. **Turn reported weights on** in Admin, Settings, with a maximum weight ([how](#an-admin-turns-it-on-first)). Until then the route answers `409 not_configured`. Agree the maximum with the admin: it should sit a little above the largest weight your formula can produce, so that a unit mistake is refused.
+4. **Decide the formula with the person you work for.** A setup with no rate rule and no report has weight 1, and a weight of 2 costs twice as much per hour. Compute it from what a setup reserves (provisioned memory, storage, a tier), never from how busy it is. Decide also what an existing rate rule gave each setup, because a reported weight replaces the rate rules for that setup: compare your weights with the current prices before you send the first report, and tell the admin what will change.
+5. **Add the call to your reporting loop**, every 60 seconds, before the deployments report, with the complete set every time ([the request](#the-request) and its rules).
+6. **Keep a setup in the weights report through teardown**, until its `hold` is `null` in the state. This is the one place where the weights report must not follow the deployments report.
+7. **Read the state back** after reporting and check that each setup shows `source: "reported"` and `applied` equal to what you sent ([how](#check-that-it-was-taken)).
+8. **Alert on every `400` from the weights route and on `weights.expires_at` in the past.** A refused or expired weights report stops no charging and fails no poll: prices go back to the rate rules without any other signal.
+9. **Verify** with step 7 of [Verify end to end](#verify-end-to-end).
+
+**What can surprise you.**
+
+- A setup you leave out, cannot size, or report after `max_age` is charged at the rate-rule price, not at zero and not at its last reported weight. Hourglass does not remember a weight that is no longer reported.
+- A poll charges the whole interval since the previous poll at the weight it finds at that moment. A weight that changes between two polls prices the whole interval at the newer value.
+- A weight above the admin's maximum refuses the whole report. It is not clamped.
+- If you stop reporting weights, nothing breaks: prices return to the rate rules after `max_age`. To stop for good, ask the admin to turn the setting off as well.
 
 ## What to find out first
 
@@ -433,7 +475,7 @@ Rules:
 
 What Hourglass does with it:
 
-- The report takes effect at the next poll and in every screen and API answer from then on. It never triggers a poll, a debit or an event.
+- The report takes effect at the next poll and in every screen and API answer from then on. It never triggers a poll, a debit or an event. A page that a user already has open shows the new weight when it next loads its data, so a person watching the Setups list may need to reload it to see a change.
 - A poll charges the whole time since the previous poll at the weight it resolves at that moment. A weight reported one second before a poll prices that whole interval, and no earlier charge changes.
 - Every charge records its weight and where it came from (`override`, `reported`, `rule`, `default` or, for a Go metering policy's weight, `policy`). Users see the weight on their holds and on each debit.
 - A setup without a usable reported weight is charged at the weight it would have had without this feature, in every state of the hold, and the poll does not fail for that reason.
