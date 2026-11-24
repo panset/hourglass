@@ -388,10 +388,14 @@ func TestWGT19_ApplicationStartUpgradesV110DatabaseAndKeepsEveryNumber(t *testin
 	checkRecordedNumbers(t, db, f)
 }
 
-// waitForFirstPoll blocks until the application's first poll has finished
-// (the database has more runs than the release's and the newest one has its
-// finish time), so the test stops it after, not before. The run's row is
-// inserted when the poll starts, so its presence alone is not enough.
+// waitForFirstPoll blocks until the application's first poll has succeeded
+// (the database has more runs than the release's and the newest one is
+// finished with ok = 1), so the test stops it after, not before. The run's row
+// is inserted when the poll starts, and a stop during the poll cancels it and
+// records it as failed, so the row's presence alone is not enough. A successful
+// poll records its finish in the transaction that holds everything it writes,
+// so ok = 1 means those writes are committed. A first poll that failed fails
+// the test with the run's error.
 func waitForFirstPoll(t *testing.T, db string, runsBefore int) {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
@@ -400,11 +404,18 @@ func waitForFirstPoll(t *testing.T, db string, runsBefore int) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var n int
-		err = h.QueryRow(`SELECT COUNT(*) FROM collector_runs WHERE
-			(SELECT finished_at FROM collector_runs ORDER BY id DESC LIMIT 1) IS NOT NULL`).Scan(&n)
+		var (
+			n      int
+			ok     sql.NullInt64
+			runErr sql.NullString
+		)
+		err = h.QueryRow(`SELECT (SELECT COUNT(*) FROM collector_runs), ok, error
+			FROM collector_runs ORDER BY id DESC LIMIT 1`).Scan(&n, &ok, &runErr)
 		_ = h.Close()
-		if err == nil && n > runsBefore {
+		if err == nil && n > runsBefore && ok.Valid {
+			if ok.Int64 != 1 {
+				t.Fatalf("the application's first poll failed: %s", runErr.String)
+			}
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
