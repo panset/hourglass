@@ -21,6 +21,7 @@ import (
 	"github.com/panset/hourglass/internal/rules"
 	"github.com/panset/hourglass/internal/settings"
 	"github.com/panset/hourglass/internal/store"
+	"github.com/panset/hourglass/internal/weights"
 	"github.com/panset/hourglass/pkg/hourglass"
 )
 
@@ -337,9 +338,10 @@ type result struct {
 
 // setupInfo is one setup resolved for this poll.
 type setupInfo struct {
-	row      store.Setup
-	state    hourglass.SetupState
-	selector string // matching rule's selector; empty when the default applied
+	row   store.Setup
+	state hourglass.SetupState // Weight is the base weight (design A2)
+	// weight is the resolver's answer at T; the debit uses weight.Weight.
+	weight weights.Result
 }
 
 // holdInfo is one active hold with its setup, user and decision.
@@ -383,8 +385,21 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 	if err != nil {
 		return nil, fmt.Errorf("pressure history: %w", err)
 	}
+	// The stored weights report (design A2). Only a database error fails the
+	// poll; a missing, expired or unusable report falls back in the resolver.
+	var report *weights.Report
+	switch h, set, err := st.GetReportedWeights(ctx); {
+	case err == nil:
+		entries := make([]weights.Entry, len(set))
+		for i, w := range set {
+			entries[i] = weights.Entry{Setup: w.SetupName, Weight: w.Weight, Attributes: w.Attributes}
+		}
+		report = weights.NewReport(h.ObservedAt, entries)
+	case !errors.Is(err, store.ErrNotFound):
+		return nil, fmt.Errorf("weights report: %w", err)
+	}
 
-	// 2. Resolve weights.
+	// 2. Resolve weights at T (design A1, A2).
 	rs := make([]rules.Rule, len(ruleRows))
 	for i, r := range ruleRows {
 		rs[i] = rules.Rule{ID: r.ID, Kind: r.Kind, Position: r.Position, Selector: r.Selector,
@@ -393,16 +408,16 @@ func (c *Collector) poll(ctx context.Context, t time.Time, runID int64) (*result
 	setups := make([]*setupInfo, 0, len(setupRows))
 	byID := make(map[int64]*setupInfo, len(setupRows))
 	for _, s := range setupRows {
-		w, sel, matched, err := rules.Weight(rs, s.Labels, cfg.DefaultWeight)
+		res, err := weights.Resolve(weights.Setup{Name: s.Name, Labels: s.Labels, Override: s.WeightOverride},
+			rs, cfg, report, t)
 		if err != nil {
 			return nil, fmt.Errorf("setup %q: rate rules: %w", s.Name, err)
 		}
-		if !matched {
-			sel = ""
-		}
-		si := &setupInfo{row: s, selector: sel, state: hourglass.SetupState{
+		// The snapshot keeps the base weight: a weights report changes no
+		// pressure value and no multiplier.
+		si := &setupInfo{row: s, weight: res, state: hourglass.SetupState{
 			Setup:  hourglass.Setup{Name: s.Name, Labels: s.Labels, Details: json.RawMessage(s.DetailsJSON)},
-			Weight: w,
+			Weight: res.BaseWeight,
 		}}
 		setups = append(setups, si)
 		byID[s.ID] = si
@@ -599,9 +614,15 @@ func (c *Collector) applyHold(ctx context.Context, tx *store.Tx, h *holdInfo, t 
 	var balanceEvents []hourglass.Event
 	debited := false
 	if d := h.decision; d.Meter {
-		weight, selector := h.setup.state.Weight, h.setup.selector
+		// The debit uses the resolved weight; a policy's weight above 0
+		// replaces it for this hold and poll. rule_selector is set only when
+		// the source is rule (WGT-5).
+		weight, source, selector := h.setup.weight.Weight, h.setup.weight.Source, ""
 		if d.Weight > 0 {
-			weight, selector = d.Weight, ""
+			weight, source = d.Weight, weights.SourcePolicy
+		}
+		if source == weights.SourceRule {
+			selector = h.setup.weight.RuleSelector
 		}
 		var debit int64
 		if cur.MeteringStartedAt == nil {
@@ -616,7 +637,8 @@ func (c *Collector) applyHold(ctx context.Context, tx *store.Tx, h *holdInfo, t 
 			debit = metering.DebitMT(weight, mult, elapsed)
 		}
 		inserted, err := tx.InsertUsageSample(ctx, store.UsageSample{HoldID: cur.ID, PolledAt: t, Weight: weight,
-			RuleSelector: selector, Pressure: pressure, Multiplier: mult, DebitMT: debit, Reason: d.Reason})
+			RuleSelector: selector, Pressure: pressure, Multiplier: mult, DebitMT: debit, Reason: d.Reason,
+			WeightSource: string(source)})
 		if err != nil {
 			return nil, false, fmt.Errorf("usage sample: %w", err)
 		}

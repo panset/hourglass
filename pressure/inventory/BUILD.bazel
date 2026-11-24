@@ -11,9 +11,16 @@ go_library(
 
 go_test(
     name = "inventory_test",
-    srcs = ["inventory_test.go"],
+    srcs = [
+        "inventory_test.go",
+        "wgt6_collector_test.go",
+    ],
     embed = [":inventory"],
     deps = [
+        "//internal/collector",
+        "//internal/ledger",
+        "//internal/reported",
+        "//internal/store",
         "//pkg/hourglass",
         "//pkg/hourglasstest",
     ],

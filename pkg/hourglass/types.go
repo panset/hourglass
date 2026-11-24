@@ -94,8 +94,9 @@ type Hold struct {
 // SetupState is an enabled setup as the core resolves it for one poll.
 type SetupState struct {
 	Setup
-	// Weight is the weight resolved from the rate rules, or the default
-	// weight when no rule matches.
+	// Weight is the setup's base weight: its weight override when it has
+	// one, else the first matching rate rule's weight, else the default
+	// weight. It is never a reported weight.
 	Weight float64
 }
 

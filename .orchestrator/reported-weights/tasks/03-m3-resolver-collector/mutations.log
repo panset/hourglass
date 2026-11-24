@@ -1,0 +1,15 @@
+M1 debit uses base weight: exit 1; failing: TestWGT12_LoweredMaximumChargesTheFallbackAtTheNextPoll, TestWGT1_ReportedWeightIsCharged, TestWGT2_OrderOverrideReportedRuleDefault, TestWGT2_PolicyWeightReplacesResolvedWeightForThatHoldAndPoll, TestWGT2_ReportedBeatsRuleOfWeightZeroAndOfHigherWeight, TestWGT4_ChangedWeightPricesTheNextIntervalOnly
+M2 reported beats override: exit 1; failing: TestWGT2_OrderOverrideReportedRuleDefault, TestWGT2_OverrideBeatsReportedAndKeepsAttributes, TestWGT2_ResolverTable
+M3 rule of weight 0 beats reported: exit 1; failing: TestWGT2_ReportedBeatsRuleOfWeightZeroAndOfHigherWeight, TestWGT2_ResolverTable
+M4 policy weight ignored: exit 1; failing: TestWGT2_PolicyWeightReplacesResolvedWeightForThatHoldAndPoll, TestWGT5_EverySampleHasOneOfFiveSourcesAndSelectorOnlyForRule
+M5 db error on report read ignored: exit 1; failing: TestWGT3_DatabaseErrorReadingTheReportFailsThePoll
+M6 expiry not checked: exit 1; failing: TestWGT2_ResolverTable, TestWGT3_EachFallbackCauseChargesAsWithoutTheFeature
+M7 feature switch ignored: exit 1; failing: TestWGT2_ResolverTable, TestWGT3_EachFallbackCauseChargesAsWithoutTheFeature
+M8 limits not checked at read time (max): exit 1; failing: TestWGT12_LimitsCheckedAtReadTime, TestWGT12_LoweredMaximumChargesTheFallbackAtTheNextPoll, TestWGT3_EachFallbackCauseChargesAsWithoutTheFeature
+M9 selector for every source: exit 1; failing: TestWGT5_EverySampleHasOneOfFiveSourcesAndSelectorOnlyForRule
+M9b source not recorded: exit 1; failing: TestWGT5_EverySampleHasOneOfFiveSourcesAndSelectorOnlyForRule
+M10 snapshot carries resolved weight: exit 1; failing: TestWGT6_InventoryPressureIgnoresReportedWeights, TestWGT6_SnapshotCarriesTheBaseWeight
+M11 report newer than the previous poll not used (pro-rating-like): exit 1; failing: TestWGT4_ChangedWeightPricesTheNextIntervalOnly
+M12 poll fails when a setup has no reported entry: exit 1; failing: TestWGT3_HoldMeteredBeforeItsSetupIsReported
+M13 feature off differs from rules.Weight (default source on rule): exit 1; failing: TestWGT19_ReplayV110PollsWithFeatureOff, TestWGT2_ResolverTable, TestWGT3_EachFallbackCauseChargesAsWithoutTheFeature
+M14 remember a removed weight: --- FAIL: TestWGT3_PendingReleaseCompletedAfterSetupLeftTheReport (0.02s) FAIL FAIL	github.com/panset/hourglass/internal/collector	0.242s FAIL 

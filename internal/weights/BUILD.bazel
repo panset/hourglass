@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "weights",
+    srcs = ["weights.go"],
+    importpath = "github.com/panset/hourglass/internal/weights",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/rules",
+        "//internal/settings",
+    ],
+)
+
+go_test(
+    name = "weights_test",
+    srcs = ["weights_test.go"],
+    embed = [":weights"],
+    deps = [
+        "//internal/rules",
+        "//internal/settings",
+    ],
+)

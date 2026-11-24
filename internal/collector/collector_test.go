@@ -87,6 +87,7 @@ func (f *failingLedger) setFail(err error) { f.mu.Lock(); f.fail = err; f.mu.Unl
 type env struct {
 	t        *testing.T
 	st       *store.Store
+	dbPath   string
 	clk      *hourglasstest.FakeClock
 	rec      *recorder
 	prov     *hourglasstest.FakeProvider
@@ -98,12 +99,13 @@ type env struct {
 
 func newEnv(t *testing.T, withProvider bool) *env {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "h.db"))
+	dbPath := filepath.Join(t.TempDir(), "h.db")
+	st, err := store.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	e := &env{t: t, st: st, clk: hourglasstest.NewFakeClock(time.Time{}), rec: &recorder{},
+	e := &env{t: t, st: st, dbPath: dbPath, clk: hourglasstest.NewFakeClock(time.Time{}), rec: &recorder{},
 		pressure: hourglasstest.NewFakePressureSource(), policy: hourglasstest.NewFakePolicy()}
 	e.pressure.SetValue(0.6) // 1x
 	e.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "test"})
