@@ -48,5 +48,5 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
 }
 
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={[styles.control, className].filter(Boolean).join(" ")} {...rest} />;
+  return <select className={[styles.control, styles.select, className].filter(Boolean).join(" ")} {...rest} />;
 }
