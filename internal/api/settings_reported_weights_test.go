@@ -259,3 +259,19 @@ func TestWGT17_StoredValueLoads(t *testing.T) {
 		t.Errorf("loaded %+v", rw)
 	}
 }
+
+// A min written as -0 is stored and returned as 0, not as the text -0
+// (decoded floats compare equal, so the raw text is what is checked).
+func TestWGT17_NegativeZeroMinIsStoredAndReturnedAsZero(t *testing.T) {
+	e := newAdEnv(t)
+	put := e.send("PUT", settingsPath, withRW(`{"enabled":false,"min":-0,"max":null,"max_age":"10m"}`))
+	if put.Code != 200 {
+		t.Fatalf("PUT %d: %s", put.Code, put.Body)
+	}
+	get := e.get(settingsPath)
+	for name, body := range map[string]string{"PUT": put.Body.String(), "GET": get.Body.String()} {
+		if strings.Contains(body, `"min":-0`) || !strings.Contains(body, `"min":0,`) {
+			t.Errorf("%s body does not carry min 0: %s", name, body)
+		}
+	}
+}

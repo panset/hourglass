@@ -21,7 +21,8 @@ type UsageSample struct {
 	DebitMT      int64
 	Reason       string
 	// WeightSource is override, reported, rule, default or policy; empty when
-	// null (samples written before migration 0008, and for now every sample).
+	// null (samples written before migration 0008). RuleSelector is set only
+	// when the source is rule.
 	WeightSource string
 }
 

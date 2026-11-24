@@ -61,10 +61,8 @@ func asJSON(t *testing.T, v any) any {
 func TestWGT19_ReplayV110PollsWithFeatureOff(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(v110Dir, "poll.json"))
 	if err != nil {
-		if os.Getenv("TEST_SRCDIR") != "" && os.IsNotExist(err) {
-			t.Skip("the v1.1.0 fixture is not in this Bazel test's runfiles; go test runs it")
-		}
-		t.Fatal(err)
+		// Never skip: a missing fixture must fail (Bazel: is it in the test's data?).
+		t.Fatalf("the v1.1.0 fixture is missing: %v", err)
 	}
 	var doc struct {
 		Start    time.Time  `json:"start"`

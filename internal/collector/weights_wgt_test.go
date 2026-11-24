@@ -164,6 +164,25 @@ func TestWGT2_PolicyWeightReplacesResolvedWeightForThatHoldAndPoll(t *testing.T)
 	}
 }
 
+// A policy weight above 0 beats a setup's override (and a usable reported
+// weight) for that hold and poll; the source is policy.
+func TestWGT2_PolicyWeightBeatsOverrideAndReportedWeight(t *testing.T) {
+	e := newEnv(t, false)
+	e.reportedOn(0, 20)
+	u := e.user("dev")
+	s := e.setup("lab-01", true, nil)
+	e.override(s, 3)
+	h := e.hold(s, u)
+	e.submit(rw("lab-01", 1.15)) // usable, but the override beats it
+	e.runOK()
+	e.policy.SetDefault(hourglass.Decision{Meter: true, Weight: 4, Reason: "policy"})
+	e.step(poll)
+	wantSample(t, lastSample(t, e, h.ID), 4, "policy", "", 333)
+	e.policy.SetDefault(hourglass.Decision{Meter: true, Reason: "test"})
+	e.step(poll)
+	wantSample(t, lastSample(t, e, h.ID), 3, "override", "", 250) // only that poll
+}
+
 // ---- WGT-3 ----
 
 // Each fallback cause charges exactly what the same data charges with the
@@ -381,7 +400,9 @@ func TestWGT5_EverySampleHasOneOfFiveSourcesAndSelectorOnlyForRule(t *testing.T)
 		}
 		return hourglass.Decision{Meter: true, Reason: "test"}
 	})
-	e.submit(rw("lab-reported", 1.15), rw("lab-policy", 1.15), rw("lab-override", 1.15))
+	// lab-policy is left out of the report: its resolved source is rule, and a
+	// policy weight must replace the source and null the selector.
+	e.submit(rw("lab-reported", 1.15), rw("lab-override", 1.15))
 	e.runOK()
 	e.step(poll)
 	valid := map[string]bool{"override": true, "reported": true, "rule": true, "default": true, "policy": true}

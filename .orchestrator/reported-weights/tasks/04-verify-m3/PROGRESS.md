@@ -1,0 +1,6 @@
+- 2026-11-23 read brief, intent, contract; started ./ci.sh (log ci.log)
+- 2026-11-23 ./ci.sh exit 0 (all 40 Bazel targets cached). go test -count=1 -v ./... exit 0: 718 top-level tests, 1828 RUN lines incl. subtests, 0 skips, 43 distinct TestWGT* passed.
+- 2026-11-23 bazel test //... --nocache_test_results --test_arg=-test.v: 717 PASS + 1 SKIP (TestWGT19_ReplayV110PollsWithFeatureOff, fixture not in runfiles); same test-name set as go test; ui targets fail only because they reject -test.v (artefact of the flag).
+- 2026-11-23 read design, resolver, collector, settings, store, reported diffs and the M2/M3 tests. Next: mutation runs (backup/restore by cp, not git).
+- 2026-11-23 ran 30 mutations (mutations.txt); 27 red, 3 green (W6 equivalent, S4, R1). Tree restored, git status clean. Next: replay test reading, rules checks.
+- 2026-11-23 extra mutations P1/P2 (policy vs override, selector under policy): green on WGT tests -> findings 2,3. Wrote RESULT.md. Done.

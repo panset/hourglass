@@ -30,6 +30,10 @@ go_test(
         "upgrade_v110_replay_test.go",
         "weights_wgt_test.go",
     ],
+    data = [
+        "//:testdata/upgrade-v1.1.0/hourglass.sqlite3",
+        "//:testdata/upgrade-v1.1.0/poll.json",
+    ],
     embed = [":collector"],
     deps = [
         "//internal/holds",
