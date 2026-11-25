@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
 import { Alert, Badge, BrandMark, Button, Chip, ConfirmDialog, Field, Input, LinkButton, Modal, Select, Table, ToastProvider, TOAST_MS, useToast } from ".";
@@ -122,6 +122,8 @@ describe("Modal and ConfirmDialog", () => {
     const confirm = screen.getByRole("button", { name: "Acquire now" });
     const cancel = screen.getByRole("button", { name: "Cancel" });
     expect(cancel).toHaveFocus(); // the safe button, so a stray Enter does not confirm
+    await userEvent.tab(); // wraps to the first control: the x in the header
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
     await userEvent.tab();
     expect(confirm).toHaveFocus();
     await userEvent.tab();
@@ -147,6 +149,10 @@ describe("Modal and ConfirmDialog", () => {
     );
     expect(screen.getByRole("button", { name: "Do it" })).toBeDisabled();
   });
+
+  // The dialog has two buttons named Close: the x in the header first, the footer's last.
+  const footerClose = () => within(screen.getByRole("dialog")).getAllByRole("button", { name: "Close" }).at(-1)!;
+  const headerClose = () => within(screen.getByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!;
 
   function Panel({ withFallback = true }: { withFallback?: boolean }) {
     const [open, setOpen] = useState(false);
@@ -185,7 +191,7 @@ describe("Modal and ConfirmDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
     expect(screen.getByRole("heading", { name: "Price" })).toHaveFocus();
     await userEvent.tab({ shift: true });
-    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    expect(footerClose()).toHaveFocus();
     expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement);
   });
 
@@ -203,7 +209,7 @@ describe("Modal and ConfirmDialog", () => {
     render(<Panel />);
     const opener = screen.getByRole("button", { name: "Details for setup-01" });
     await userEvent.click(opener);
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(footerClose());
     expect(opener).toHaveFocus();
   });
 
@@ -213,6 +219,204 @@ describe("Modal and ConfirmDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Hide the row" }));
     await userEvent.keyboard("{Escape}");
     expect(screen.getByRole("heading", { name: "Setups" })).not.toHaveFocus();
+  });
+
+  // A2.7 acceptance checks. Numbers refer to .orchestrator/ext-feedback-names-modal/tasks/02-ux-review/UX-REVIEW.md.
+  const backdropOf = () => screen.getByRole("dialog").parentElement as HTMLElement;
+
+  it("A2.7-1/2 the dialog is a header with the x, a body that scrolls, and a footer outside the body", async () => {
+    render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    const dialog = screen.getByRole("dialog");
+    const [header, body, footer] = Array.from(dialog.children) as HTMLElement[];
+    expect(header).toContainElement(screen.getByRole("heading", { name: "Details: setup-01" }));
+    expect(header).toContainElement(headerClose());
+    expect(body).toHaveTextContent("Weight 2");
+    expect(body).not.toContainElement(footerClose());
+    expect(footer).toContainElement(footerClose());
+    expect(headerClose().tagName).toBe("BUTTON");
+    expect(headerClose()).toHaveAttribute("type", "button");
+  });
+
+  it("A2.7-3 a click on the backdrop closes a read-only dialog and focus returns to the opener", async () => {
+    render(<Panel />);
+    const opener = screen.getByRole("button", { name: "Details for setup-01" });
+    await userEvent.click(opener);
+    await userEvent.click(backdropOf());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it("A2.7-4 Escape closes and focus returns to the opener", async () => {
+    render(<Panel />);
+    const opener = screen.getByRole("button", { name: "Details for setup-01" });
+    await userEvent.click(opener);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it("A2.7-5 the x is named Close, closes the dialog, and Shift+Tab from the footer Close reaches it", async () => {
+    render(<Panel />);
+    const opener = screen.getByRole("button", { name: "Details for setup-01" });
+    await userEvent.click(opener);
+    // Tab order: the x, then the footer controls (Hide the row, Close).
+    footerClose().focus();
+    await userEvent.tab({ shift: true });
+    await userEvent.tab({ shift: true });
+    expect(headerClose()).toHaveFocus();
+    await userEvent.click(headerClose());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it("A2.7-6 opening still puts focus on the marked heading, not on the x", async () => {
+    render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    expect(screen.getByRole("heading", { name: "Price" })).toHaveFocus();
+    expect(headerClose()).not.toHaveFocus();
+  });
+
+  it("A2.7-6 a confirmation still opens on Cancel", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: "Acquire" }));
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("F3 a press that starts on the backdrop and is released inside the dialog does not close it", async () => {
+    render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    const backdrop = backdropOf();
+    fireEvent.mouseDown(backdrop);
+    fireEvent.mouseUp(screen.getByText("Weight 2"));
+    fireEvent.click(backdrop);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("A2.7-7 a press that starts inside the dialog and ends on the backdrop does not close it", async () => {
+    render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    const backdrop = backdropOf();
+    // What a browser sends for a text selection dragged out of the dialog: the click lands on the
+    // common ancestor, which is the backdrop.
+    fireEvent.mouseDown(screen.getByText("Weight 2"));
+    fireEvent.mouseUp(backdrop);
+    fireEvent.click(backdrop);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // A later clean press and release on the backdrop still closes it.
+    await userEvent.click(backdrop);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("A2.7-8 the page behind does not scroll while a dialog is open, and is restored exactly on close", async () => {
+    const html = document.documentElement;
+    html.style.overflow = "auto";
+    html.style.paddingRight = "3px";
+    const { unmount } = render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    expect(html.style.overflow).toBe("hidden");
+    await userEvent.keyboard("{Escape}");
+    expect(html.style.overflow).toBe("auto");
+    expect(html.style.paddingRight).toBe("3px");
+    // Unmounting an open dialog (a page change) restores it as well.
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    expect(html.style.overflow).toBe("hidden");
+    unmount();
+    expect(html.style.overflow).toBe("auto");
+    expect(html.style.paddingRight).toBe("3px");
+    html.style.overflow = "";
+    html.style.paddingRight = "";
+  });
+
+  it("A2.7-8 two open dialogs keep the lock until the last one closes", () => {
+    const html = document.documentElement;
+    const a = render(<Modal open title="A" onClose={() => {}}>a</Modal>);
+    const b = render(<Modal open title="B" onClose={() => {}}>b</Modal>);
+    expect(html.style.overflow).toBe("hidden");
+    a.unmount();
+    expect(html.style.overflow).toBe("hidden");
+    b.unmount();
+    expect(html.style.overflow).toBe("");
+  });
+
+  function FormDialog() {
+    const [open, setOpen] = useState(true);
+    const [text, setText] = useState("");
+    return (
+      <Modal open={open} title="Create service account" onClose={() => setOpen(false)} dismissOnBackdrop={false}>
+        <input aria-label="Name" value={text} onChange={(e) => setText(e.target.value)} />
+      </Modal>
+    );
+  }
+
+  it("A2.7-9 a form dialog ignores a backdrop click and keeps its text; Escape and the x close it", async () => {
+    const { unmount } = render(<FormDialog />);
+    await userEvent.type(screen.getByRole("textbox", { name: "Name" }), "billing");
+    await userEvent.click(backdropOf());
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("billing");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    unmount();
+    render(<FormDialog />);
+    await userEvent.click(headerClose());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("A2.7-11 a confirmation closes on a backdrop click like Cancel and focus returns to its opener", async () => {
+    render(<Harness />);
+    const opener = screen.getByRole("button", { name: "Acquire" });
+    await userEvent.click(opener);
+    await userEvent.click(backdropOf());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it("A2.7-11 B1.1 while busy, Escape, the x and the backdrop do nothing", async () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog open title="Acquire?" confirmLabel="Acquire now" busy onConfirm={() => {}} onCancel={onCancel}>
+        body
+      </ConfirmDialog>,
+    );
+    expect(headerClose()).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(headerClose());
+    await userEvent.click(backdropOf());
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("A2.7-11 a Modal with busy set behaves the same", async () => {
+    const onClose = vi.fn();
+    render(
+      <Modal open title="Saving" busy onClose={onClose}>
+        body
+      </Modal>,
+    );
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(backdropOf());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("A2.7-12 a confirmation that holds a field can opt out of the backdrop", async () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog open title="Force-release?" confirmLabel="Go" dismissOnBackdrop={false} onConfirm={() => {}} onCancel={onCancel}>
+        <input aria-label="Reason" defaultValue="why" />
+      </ConfirmDialog>,
+    );
+    await userEvent.click(backdropOf());
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Reason" })).toHaveValue("why");
+    await userEvent.click(headerClose());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape during an IME composition does not close the dialog", async () => {
+    const onClose = vi.fn();
+    render(<Modal open title="T" onClose={onClose}>x</Modal>);
+    fireEvent.keyDown(document, { key: "Escape", isComposing: true });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("renders nothing when closed", () => {

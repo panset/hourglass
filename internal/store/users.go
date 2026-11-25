@@ -80,11 +80,14 @@ func (q *queries) CreateOIDCUser(ctx context.Context, sub, email, name string, n
 }
 
 // UpsertOIDCLogin creates a pending user for sub if none exists, otherwise
-// refreshes email, name and last_login_at. created reports whether it was new.
+// refreshes email, name and last_login_at. A sign-in that yields no name keeps
+// the stored name (D100); a non-empty name replaces it. created reports
+// whether it was new.
 func (q *queries) UpsertOIDCLogin(ctx context.Context, sub, email, name string, now time.Time) (u User, created bool, err error) {
 	err = q.atomic(ctx, func(q *queries) error {
-		res, err := q.db.ExecContext(ctx, `UPDATE users SET email = ?, name = ?, last_login_at = ?
-			WHERE oidc_sub = ?`, email, name, FormatTime(now), sub)
+		res, err := q.db.ExecContext(ctx, `UPDATE users SET email = ?,
+			name = CASE WHEN ? = '' THEN name ELSE ? END, last_login_at = ?
+			WHERE oidc_sub = ?`, email, name, name, FormatTime(now), sub)
 		if err != nil {
 			return err
 		}

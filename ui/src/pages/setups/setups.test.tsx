@@ -125,7 +125,7 @@ const openPanel = async (name: string) => {
   return screen.findByRole("dialog", { name: `Details: ${name}` });
 };
 const closePanel = async () => {
-  await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+  await userEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "Close" }).at(-1)!);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 };
 /** The value of a named line of the panel: the `dd` after the `dt` with that text, or null when the line is absent. */
@@ -235,16 +235,41 @@ describe("Setups page", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByLabelText("Setup details JSON").textContent).toBe(JSON.stringify(setups[0]!.details, null, 2));
     expect(within(dialog).queryByRole("textbox")).toBeNull();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("HOLD-1 Acquire confirms with cost now and at the highest band, then posts with the CSRF header", async () => {
+  it("A2.7-3 A2.7-5 Details closes on a backdrop click and on the x, and focus returns to Details", async () => {
+    mockApi(routes());
+    mount();
+    const opener = await screen.findByRole("button", { name: "Details for setup-01" });
+    await userEvent.click(opener);
+    await userEvent.click((await screen.findByRole("dialog")).parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+    await userEvent.click(opener);
+    await userEvent.click(within(await screen.findByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
+  it("A2.7-11 Acquire closes on a backdrop click like Cancel and focus returns to the Acquire button", async () => {
+    const { calls } = mockApi(routes({ "POST /api/v1/setups/5/acquire": { id: 1 } }));
+    mount();
+    const opener = await screen.findByRole("button", { name: "Acquire setup-05" });
+    await userEvent.click(opener);
+    await userEvent.click((await screen.findByRole("dialog", { name: "Acquire setup-05?" })).parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("HOLD-1 Acquire confirms with cost now and at the highest multiplier, then posts with the CSRF header", async () => {
     const { calls } = mockApi(routes({ "POST /api/v1/setups/5/acquire": { id: 1 } }));
     mount();
     await userEvent.click(await screen.findByRole("button", { name: "Acquire setup-05" }));
     const dialog = await screen.findByRole("dialog", { name: "Acquire setup-05?" });
-    expect(dialog).toHaveTextContent("Costs 2.0 / h now (2×), up to 3.0 / h at the highest band.");
+    expect(dialog).toHaveTextContent("Cost now 2.0 tokens / h, up to 3.0 tokens / h at the highest multiplier (3×).");
     expect(dialog).toHaveTextContent("deployed or 2 h after acquire");
     expect(calls.some((c) => c.method === "POST")).toBe(false);
     await userEvent.click(within(dialog).getByRole("button", { name: "Acquire" }));
@@ -758,7 +783,7 @@ describe("UI-12 weight source, attributes and the acquire warning", () => {
       const dialog = await screen.findByRole("dialog", { name: "Acquire src-5?" });
       expect(dialog).toHaveTextContent("Weight 1.15");
       expect(dialog).toHaveTextContent("tier gold");
-      expect(dialog).toHaveTextContent("Costs 2.3 / h now (2×), up to 3.45 / h at the highest band.");
+      expect(dialog).toHaveTextContent("Cost now 2.3 tokens / h, up to 3.45 tokens / h at the highest multiplier (3×).");
       expect(within(dialog).getByText(SENTENCE)).toBeInTheDocument();
     },
   );
@@ -889,7 +914,7 @@ describe("UI-18 the details panel", () => {
         expect(within(dialog).getByRole("heading", { level: 3, name: "Price" })).toHaveFocus();
         expect(within(dialog).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Price", "Holder", "Labels", "Raw details"]);
         if (close === "Escape") await userEvent.keyboard("{Escape}");
-        else await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+        else await userEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
         expect(opener()).toHaveFocus();
       }
@@ -1037,7 +1062,7 @@ describe("UI-18 the details panel", () => {
     expect(line(dialog, "Up to")!.textContent).toBe("6.0 tokens / h at the highest multiplier");
     expect(line(dialog, "Lab pressure")).toBeNull();
     expect(line(dialog, "Multiplier now")).toBeNull();
-    expect(dialog).not.toHaveTextContent("×");
+    expect(dialog.children[1]).not.toHaveTextContent("×"); // the body; the header holds the close x
     expect(line(dialog, "Balance")!.textContent).toBe("−12 tokens, overdrawn");
   });
 
@@ -1107,7 +1132,7 @@ describe("UI-18 the details panel", () => {
     expect(within(dialog).queryByText(SENTENCE)).toBeNull(); // not mixed in from the newer response
 
     // The control that opened it is gone: focus goes to the page heading.
-    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Setups" })).toHaveFocus();
   });
@@ -1350,5 +1375,57 @@ describe("UI-22 exact-match tokens", () => {
     await refresh();
     await act(async () => {});
     expect(statusLine()).toHaveTextContent("2 suggestions.");
+  });
+});
+
+describe("A1 how a person is shown (names)", () => {
+  const holderOf = (name: string, over: Record<string, unknown> = {}) =>
+    setups.map((x) =>
+      x.name === "setup-01" ? { ...x, holder: { ...x.holder!, name, ...over } } : x,
+    ) as Setup[];
+
+  it("A1-1 P2 P3 a named holder shows the full name in the table and the panel, and no email anywhere", async () => {
+    mockApi(routes({ "GET /api/v1/setups": list({}, holderOf("Ada Lovelace")) }));
+    mount();
+    const cell = (await rowOf("setup-01")).querySelectorAll("td")[2]!;
+    expect(within(cell).getByText("Ada Lovelace")).toHaveAttribute("title", "Ada Lovelace");
+    const dialog = await openPanel("setup-01");
+    expect(line(dialog, "Held by")).toHaveTextContent("Ada Lovelace");
+    expect(document.body.innerHTML).not.toContain("@");
+  });
+
+  it("A1-2 P2 P3 a holder with no name shows what the API sent in its place (username or email), never blank", async () => {
+    mockApi(routes({ "GET /api/v1/setups": list({}, holderOf("sam")) }));
+    mount();
+    const cell = (await rowOf("setup-01")).querySelectorAll("td")[2]!;
+    expect(cell.textContent).toMatch(/^sam · /);
+    expect(line(await openPanel("setup-01"), "Held by")).toHaveTextContent("sam");
+  });
+
+  it("A1-6 P2 P3 a long name is cut at 24 characters in the table with the full name in title, and in full in the panel", async () => {
+    const long = "A very long full name that goes past forty characters";
+    mockApi(routes({ "GET /api/v1/setups": list({}, holderOf(long)) }));
+    mount();
+    const cell = (await rowOf("setup-01")).querySelectorAll("td")[2]!;
+    const clip = within(cell).getByText(long);
+    expect(clip).toHaveAttribute("title", long);
+    expect(clip).toHaveStyle({ maxWidth: "24ch" });
+    expect(line(await openPanel("setup-01"), "Held by")).toHaveTextContent(long);
+  });
+
+  it("A1-5 the viewer's own hold reads You in the table and in the panel", async () => {
+    mockApi(routes());
+    mount();
+    expect((await rowOf("setup-04")).querySelectorAll("td")[2]!.textContent).toMatch(/^You · /);
+    expect(line(await openPanel("setup-04"), "Held by")).toHaveTextContent("You");
+  });
+
+  it("B2.3 the Acquire dialog says tokens / h and the highest multiplier, never band", async () => {
+    mockApi(routes());
+    mount();
+    await userEvent.click(await screen.findByRole("button", { name: "Acquire setup-05" }));
+    const dialog = await screen.findByRole("dialog", { name: "Acquire setup-05?" });
+    expect(dialog).toHaveTextContent(/Cost now [\d.]+ tokens \/ h, up to [\d.]+ tokens \/ h at the highest multiplier \(3×\)\./);
+    expect(dialog.textContent).not.toMatch(/band/i);
   });
 });

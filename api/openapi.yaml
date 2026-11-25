@@ -2171,12 +2171,13 @@ components:
         setup_name: {type: string}
     AdminUser:
       type: object
-      required: [id, username, email, name, auth_source, status, roles, is_local_admin, balance_tokens, overdrawn, month_to_date_burn_tokens, burn_per_hour_tokens, active_holds, first_sign_in_at, last_login_at]
+      required: [id, username, email, name, display_name, auth_source, status, roles, is_local_admin, balance_tokens, overdrawn, month_to_date_burn_tokens, burn_per_hour_tokens, active_holds, first_sign_in_at, last_login_at]
       properties:
         id: {type: integer, format: int64}
         username: {type: string}
         email: {type: string}
         name: {type: string}
+        display_name: {type: string, description: 'The name to show for this person: name, else username, else email. Never blank.'}
         auth_source: {$ref: '#/components/schemas/AuthSource'}
         status: {$ref: '#/components/schemas/UserStatus'}
         roles:

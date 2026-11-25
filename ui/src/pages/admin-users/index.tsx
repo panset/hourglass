@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Users and grants (ADM-1, ADM-5, LED-4, LED-5). Every number shown is an API field (UI-1).
 import { useState } from "react";
-import { Alert, Badge, Button, ConfirmDialog, Field, Input, Table, Time } from "../../components";
+import { Alert, Badge, Button, Clip, ConfirmDialog, Field, Input, Table, Time } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { usePanelFocus } from "../../hooks/usePanelFocus";
-import { formatPerHour, formatTokens } from "../../lib/format";
+import { formatRate, formatTokens } from "../../lib/format";
+import { displayName } from "../../lib/person";
+import { useSession } from "../../shell/session";
 import { errorText, useAction } from "../admin-shared/useAction";
 import shared from "../admin-shared/admin.module.css";
 import { Preapprovals } from "./preapprovals";
@@ -44,20 +46,20 @@ function PendingRow({ user, onDone }: { user: AdminUser; onDone: () => void }) {
     <li className={shared.card}>
       <div className={shared.row}>
         <div className={shared.wide}>
-          <div className={shared.name}>{user.name}</div>
+          <div className={shared.name}>{displayName(user)}</div>
           <div className={shared.sub}>{user.email}</div>
         </div>
         <div className={shared.sub}>First sign-in <Time iso={user.first_sign_in_at} /></div>
-        <RoleBoxes id={user.name} value={roles} onChange={setPicked} />
+        <RoleBoxes id={displayName(user)} value={roles} onChange={setPicked} />
         <Button
           variant="primary"
           disabled={act.busy || roles.length === 0}
           onClick={approve}
-          aria-label={`Approve ${user.name}`}
+          aria-label={`Approve ${displayName(user)}`}
         >
           Approve
         </Button>
-        <Button disabled={act.busy} onClick={reject} aria-label={`Reject ${user.name}`}>
+        <Button disabled={act.busy} onClick={reject} aria-label={`Reject ${displayName(user)}`}>
           Reject
         </Button>
       </div>
@@ -75,10 +77,10 @@ function RoleCell({ user, onDone }: { user: AdminUser; onDone: () => void }) {
   };
   return (
     <div className={shared.region}>
-      <RoleBoxes id={user.name} value={roles} onChange={setPicked} />
+      <RoleBoxes id={displayName(user)} value={roles} onChange={setPicked} />
       {user.status === "rejected" ? <Badge tone="grey">Rejected</Badge> : null}
       {changed ? (
-        <Button disabled={act.busy} onClick={save} aria-label={`Save roles for ${user.name}`}>
+        <Button disabled={act.busy} onClick={save} aria-label={`Save roles for ${displayName(user)}`}>
           Save roles
         </Button>
       ) : null}
@@ -114,7 +116,7 @@ function GrantPanel({
     setLocal(errs);
     if (errs.amount || errs.reason) return;
     if (await grant.run(() => grantTokens(user.id, { amount_tokens: n, reason: reason.trim() })))
-      onDone(`Granted ${formatTokens(n, { signed: true })} tokens to ${user.name}.`);
+      onDone(`Granted ${formatTokens(n, { signed: true })} tokens to ${displayName(user)}.`);
   };
   const askReset = () => {
     if (reason.trim() === "") {
@@ -128,17 +130,17 @@ function GrantPanel({
   const doReset = async () => {
     if (await reset.run(() => resetBalance(user.id, reason.trim()))) {
       setConfirmReset(false);
-      onDone(`Reset ${user.name} to ${formatTokens(list.default_allowance_tokens)} tokens.`);
+      onDone(`Reset ${displayName(user)} to ${formatTokens(list.default_allowance_tokens)} tokens.`);
     }
   };
   const holds = user.active_holds.map((h) => h.setup_name).join(", ");
 
   return (
     <aside ref={panelRef} className={`${shared.panel} ${shared.side}`} aria-label="Grant tokens">
-      <h2>Grant tokens to {user.name}</h2>
+      <h2>Grant tokens to {displayName(user)}</h2>
       <p className={shared.sub}>
         Balance {formatTokens(user.balance_tokens)}
-        {holds ? ` · burning ${formatPerHour(user.burn_per_hour_tokens)} on ${holds}` : ""}
+        {holds ? ` · burning ${formatRate(user.burn_per_hour_tokens)} tokens / h on ${holds}` : ""}
       </p>
       <Field label="Amount" error={local.amount} hint="Negative amounts correct mistakes.">
         {(p) => <Input {...p} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />}
@@ -162,7 +164,7 @@ function GrantPanel({
       </div>
       <ConfirmDialog
         open={confirmReset}
-        title={`Reset ${user.name}'s balance?`}
+        title={`Reset ${displayName(user)}'s balance?`}
         confirmLabel="Reset balance"
         busy={reset.busy}
         error={reset.error ? errorText(reset.error) : undefined}
@@ -176,6 +178,7 @@ function GrantPanel({
 }
 
 export default function Page() {
+  const session = useSession();
   const users = useApi(listUsers, [], { pollMs: POLL_MS });
   const pending = useApi(listPending, [], { pollMs: POLL_MS });
   const [grantFor, setGrantFor] = useState<number>();
@@ -252,8 +255,13 @@ export default function Page() {
                 header: "User",
                 render: (u) => (
                   <>
-                    <div className={shared.name}>{u.name}</div>
-                    <div className={shared.sub}>{u.is_local_admin ? "Local account · first user" : u.email}</div>
+                    <div className={shared.name}>
+                      <Clip text={displayName(u)} max={32} />
+                      {u.id === session.user_id ? <span className={shared.sub}> (you)</span> : null}
+                    </div>
+                    <div className={shared.sub}>
+                      {u.is_local_admin ? "Built-in local account" : <Clip text={u.email} max={40} />}
+                    </div>
                   </>
                 ),
               },
@@ -280,7 +288,7 @@ export default function Page() {
                 key: "burn",
                 header: "Burned this month",
                 render: (u) =>
-                  u.is_local_admin ? "" : u.roles.length === 0 ? "—" : formatTokens(u.month_to_date_burn_tokens),
+                  u.is_local_admin ? "—" : u.roles.length === 0 ? "—" : formatTokens(u.month_to_date_burn_tokens),
               },
               {
                 key: "holding",
@@ -298,7 +306,7 @@ export default function Page() {
                         setNotice(undefined);
                         setGrantFor(u.id);
                       }}
-                      aria-label={`Grant to ${u.name}`}
+                      aria-label={`Grant to ${displayName(u)}`}
                     >
                       Grant
                     </Button>
@@ -306,7 +314,7 @@ export default function Page() {
               },
             ]}
           />
-          <p className={shared.note}>Overdrawn users sort first. An admin cannot remove their own admin role.</p>
+          <p className={shared.note}>The built-in local account is listed first, then overdrawn users, then everyone by name. An admin cannot remove their own admin role.</p>
         </section>
 
         {target ? (

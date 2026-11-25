@@ -173,7 +173,7 @@ func TestADM1_LED2_ResponsesMatchLedgerAndHolds(t *testing.T) {
 		t.Errorf("%d overdrawn users, want 2 (negative and exactly zero)", overdrawnN)
 	}
 	for i := 1; i < len(all.Users); i++ {
-		if a, b := all.Users[i-1], all.Users[i]; !a.Overdrawn && b.Overdrawn {
+		if a, b := all.Users[i-1], all.Users[i]; !a.Overdrawn && b.Overdrawn && a.Username != "admin" {
 			t.Errorf("order: %s before overdrawn %s", a.Username, b.Username)
 		}
 	}

@@ -66,6 +66,8 @@ function AccountDialog({ account, onClose, onDone }: { account?: ServiceAccount;
       open
       title={account ? `Edit ${account.name}` : "Create service account"}
       onClose={onClose}
+      dismissOnBackdrop={false}
+      busy={act.busy}
       footer={
         <>
           <Button variant="primary" disabled={act.busy || (!account && name.trim() === "")} onClick={() => void save()}>
@@ -147,6 +149,7 @@ function IssueDialog({ account, onClose, onDone }: { account: ServiceAccount; on
         open
         title={`Token for ${account.name}`}
         onClose={close}
+        dismissOnBackdrop={false}
         footer={
           <>
             <Button onClick={() => void copy()}>Copy token</Button>
@@ -175,6 +178,8 @@ function IssueDialog({ account, onClose, onDone }: { account: ServiceAccount; on
       open
       title={`Issue token for ${account.name}`}
       onClose={close}
+      dismissOnBackdrop={false}
+      busy={act.busy}
       footer={
         <>
           <Button variant="primary" disabled={act.busy} onClick={() => void issue()}>

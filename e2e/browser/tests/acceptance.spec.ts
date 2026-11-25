@@ -9,7 +9,7 @@
 //   A2p a pre-approved user's first sign-in (PRE-1), A8p ledger paging and views (UI-8), A8c compaction through the real stack (LED-7, LED-8).
 // Only two things are driven outside the UI, as they stand in for the outside world: the simulator control API
 // (pool and pressure) and the e2e clock control (month jump).
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -516,14 +516,14 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     const panel = p.getByRole("dialog", { name: `Details: ${SETUP_A}` });
     await expect(panel.getByRole("heading", { level: 3, name: "Labels", exact: true })).toBeVisible();
     await expect(panel.locator('xpath=.//dt[normalize-space(.)="size"]/following-sibling::dd[1]')).toHaveText("large");
-    await panel.getByRole("button", { name: "Close", exact: true }).click();
+    await panel.getByRole("button", { name: "Close", exact: true }).last().click(); // the x is also named Close; the footer button is last
     await expect(panel).toHaveCount(0);
     asserted(`the ${SETUP_A} row has five cells and no label; its details panel lists size large`);
     await p.getByRole("button", { name: `Acquire ${SETUP_A}` }).click();
     const dlg = p.getByRole("dialog");
     await expect(dlg).toContainText(new RegExp(`Acquire ${SETUP_A}\\?`));
     await expect(dlg).toContainText(/Weight 2\./);
-    await expect(dlg).toContainText(/Costs [\d.,]+ \/ h/);
+    await expect(dlg).toContainText(/Cost now [\d.,]+ tokens \/ h, up to [\d.,]+ tokens \/ h at the highest multiplier \([\d.,]+×\)\./);
     observe("acquire_dialog", (await dlg.innerText()).replace(/\s+/g, " "));
     asserted("acquire dialog shows weight 2 and a cost per hour");
     await dlg.getByRole("button", { name: "Acquire", exact: true }).click();
@@ -536,8 +536,181 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await expect(p.locator('section[aria-label="Burning now"]')).toContainText("Nothing is metering");
     // Held by alice, from the admin's view.
     await admin!.goto("/admin/users");
-    await expect(admin!.getByRole("table", { name: "Users" }).getByRole("row", { name: /alice@example\.com/ })).toContainText(SETUP_A);
+    await expect(admin!.getByRole("table", { name: "Users", exact: true }).getByRole("row", { name: /alice@example\.com/ })).toContainText(SETUP_A);
     asserted(`${SETUP_A} is held by "You" (alice; admin Users page lists it under Holding), state Acquired · deploying, nothing metering`);
+  });
+
+  // ---- names (AUTH-9, D100): a person is shown by name, with the fallback, wherever a person is named
+  await step("A3n", "Held by and Users show a person by name; an account with no name shows its fallback", D, async () => {
+    const a = admin!;
+    const heldCell = (pg: Page) => pg.getByRole("table", { name: "All setups" }).getByRole("row", { name: new RegExp(SETUP_A) });
+    // The admin looks at Setups: alice holds lab-03, so the Held by cell names her (the admin is not the holder, so no "You").
+    await nav(a, "Setups");
+    await expect(a.getByRole("heading", { name: "Setups" })).toBeVisible();
+    await expect(heldCell(a)).toContainText("Alice Example");
+    await expect(heldCell(a)).not.toContainText("alice@example.com");
+    await expect(heldCell(a)).not.toContainText("You");
+    asserted("admin, Setups: the Held by cell of lab-03 reads \"Alice Example\" (the name from the sign-in), not her email and not \"You\"");
+    // A second developer (dave signed in at A2p) sees the same name.
+    const ctx = await browser.newContext({ baseURL: BASE });
+    try {
+      const d = await ctx.newPage();
+      await signInSSO(d, DAVE);
+      await expect(d).toHaveURL(/\/usage$/);
+      await nav(d, "Setups");
+      await expect(heldCell(d)).toContainText("Alice Example");
+      expect(await d.locator("body").innerText()).not.toContain("alice@example.com");
+      asserted("dave, Setups: lab-03 is held by \"Alice Example\" and alice's email appears nowhere on the page");
+      await d.getByRole("button", { name: `Details for ${SETUP_A}`, exact: true }).click();
+      const panel = d.getByRole("dialog", { name: `Details: ${SETUP_A}` });
+      await expect(panel.locator('xpath=.//dt[normalize-space(.)="Held by"]/following-sibling::dd[1]')).toContainText("Alice Example");
+      expect(await panel.innerText()).not.toContain("alice@example.com");
+      asserted("dave, Details panel Holder section: Held by reads \"Alice Example\", no email");
+    } finally {
+      await ctx.close();
+    }
+    // Users: by name with the email as the admin-only second line; the local account has no name, so its fallback (the username).
+    await a.goto("/admin/users");
+    const users = a.getByRole("table", { name: "Users", exact: true });
+    await expect(users).toBeVisible();
+    const alice = users.getByRole("row", { name: /alice@example\.com/ });
+    await expect(alice).toContainText("Alice Example");
+    const local = users.getByRole("row", { name: /Built-in local account/ });
+    await expect(local).toHaveCount(1);
+    const localText = (await local.innerText()).replace(/\s+/g, " ").trim();
+    expect(localText).toMatch(/^admin\b/);
+    expect(localText).toContain("(you)");
+    asserted("admin, Users: alice's row leads with \"Alice Example\" and keeps her email; the local account (no name) shows its username \"admin\" and \"(you)\", not a blank");
+    observe("local_admin_row", localText);
+  });
+
+  // ---- the details dialog (D101, UX-REVIEW A2): x, backdrop, Escape, focus, layout, scroll lock, form dialogs
+  await step("A3m", "the Details dialog closes by x, backdrop click and Escape, returns focus, keeps header and footer in view, locks the page scroll", A, async () => {
+    const p = alice!;
+    await p.setViewportSize({ width: 1280, height: 720 });
+    try {
+      await nav(p, "Setups");
+      await expect(p.getByRole("heading", { name: "Setups" })).toBeVisible();
+      const opener = p.getByRole("button", { name: `Details for ${SETUP_A}`, exact: true });
+      const dlg = p.getByRole("dialog", { name: `Details: ${SETUP_A}` });
+      const closes = dlg.getByRole("button", { name: "Close", exact: true });
+      const open = async () => {
+        await opener.click();
+        await expect(dlg).toBeVisible();
+        await expect(dlg.getByRole("heading", { level: 3, name: "Price", exact: true })).toBeFocused();
+      };
+      const closed = async (how: string) => {
+        await expect(dlg).toHaveCount(0);
+        await expect(opener, `focus returns to Details after ${how}`).toBeFocused();
+      };
+      const inView = async (loc: Locator, what: string) => {
+        const b = (await loc.boundingBox())!;
+        const vp = p.viewportSize()!;
+        expect(b, `${what} has a box`).toBeTruthy();
+        expect(b.x, `${what} left`).toBeGreaterThanOrEqual(0);
+        expect(b.y, `${what} top`).toBeGreaterThanOrEqual(0);
+        expect(b.x + b.width, `${what} right`).toBeLessThanOrEqual(vp.width + 0.5);
+        expect(b.y + b.height, `${what} bottom`).toBeLessThanOrEqual(vp.height + 0.5);
+        return b;
+      };
+      const html = () => p.evaluate(() => ({ overflow: getComputedStyle(document.documentElement).overflow, top: document.scrollingElement!.scrollTop, left: document.scrollingElement!.scrollLeft }));
+
+      // x, backdrop, Escape, each from a fresh open.
+      await open();
+      await expect(closes).toHaveCount(2);
+      await closes.first().click();
+      await closed("the x");
+      await open();
+      await p.mouse.click(5, 5);
+      await closed("a click on the backdrop");
+      await open();
+      await p.keyboard.press("Escape");
+      await closed("Escape");
+      asserted("Details closes by the x, by a click on the backdrop and by Escape; each time focus is back on the Details control; two buttons are named Close (the x and the footer one)");
+
+      // The keyboard loop includes the x: Tab from the footer Close wraps to the x, Shift+Tab from the x wraps back.
+      await open();
+      await closes.last().focus();
+      await p.keyboard.press("Tab");
+      await expect(closes.first()).toBeFocused();
+      await p.keyboard.press("Shift+Tab");
+      await expect(closes.last()).toBeFocused();
+      await p.keyboard.press("Escape");
+      await closed("the Tab loop");
+      asserted("real focus: the x is in the Tab loop (Tab from the footer Close reaches it, Shift+Tab from it returns)");
+
+      // A press that starts or ends inside the dialog never closes it (a text drag-select released on the backdrop, or the reverse).
+      await open();
+      const title = await dlg.getByRole("heading", { level: 2 }).boundingBox();
+      await p.mouse.move(title!.x + 4, title!.y + title!.height / 2);
+      await p.mouse.down();
+      await p.mouse.move(5, 5, { steps: 6 });
+      await p.mouse.up();
+      await expect(dlg).toBeVisible();
+      await p.mouse.move(5, 5);
+      await p.mouse.down();
+      await p.mouse.move(title!.x + 4, title!.y + title!.height / 2, { steps: 6 });
+      await p.mouse.up();
+      await expect(dlg).toBeVisible();
+      asserted("a drag that starts inside the dialog and ends on the backdrop, and one that starts on the backdrop and ends inside, leave the dialog open");
+
+      // Layout at 1280 x 720 with the dialog open: header, x and footer Close are in view; the page is locked.
+      const locked = await html();
+      expect(locked.overflow, "page scroll is locked while the dialog is open").toBe("hidden");
+      await inView(closes.first(), "x at 1280x720");
+      await inView(closes.last(), "footer Close at 1280x720");
+      await inView(dlg, "dialog at 1280x720");
+      await p.mouse.move(5, 5);
+      await p.mouse.wheel(0, 600);
+      expect((await html()).top, "the wheel over the backdrop does not scroll the page").toBe(locked.top);
+      await p.keyboard.press("Escape");
+      await closed("the layout checks");
+      const after = await html();
+      expect(after.overflow, "overflow restored after closing").not.toBe("hidden");
+      expect(after.top).toBe(locked.top);
+      expect(after.left).toBe(locked.left);
+      asserted("at 1280x720: title, x and footer Close are inside the viewport; html overflow is hidden while open (and restored, scroll position unchanged, after); the wheel over the backdrop does not scroll the page");
+      await shot(p, "A3m-closed");
+
+      // Narrow phone: the dialog fits the width, no sideways page scroll.
+      await p.setViewportSize({ width: 390, height: 844 });
+      await open();
+      const narrow = await inView(dlg, "dialog at 390x844");
+      expect(narrow.width, "dialog width at 390 (viewport less the 16px padding each side)").toBeGreaterThan(340);
+      expect(narrow.width).toBeLessThanOrEqual(358.5);
+      await inView(closes.first(), "x at 390x844");
+      await inView(closes.last(), "footer Close at 390x844");
+      expect(await p.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), "no sideways page scroll").toBeTruthy();
+      await shot(p, "A3m-390");
+      await p.keyboard.press("Escape");
+      await closed("390 wide");
+      asserted(`at 390x844: the dialog is ${Math.round(narrow.width)} px wide, x and footer Close are in view, no sideways scroll of the page`);
+
+      // A short window: only the body scrolls, header and footer stay in view, and the wheel scrolls the body, not the page.
+      await p.setViewportSize({ width: 1280, height: 360 });
+      await open();
+      const body = dlg.locator(":scope > div").nth(1);
+      const m = await body.evaluate((e) => ({ sh: e.scrollHeight, ch: e.clientHeight, oy: getComputedStyle(e).overflowY }));
+      expect(m.oy).toBe("auto");
+      expect(m.sh, "the body is taller than the room it has, so it scrolls").toBeGreaterThan(m.ch);
+      await inView(dlg, "dialog at 1280x360");
+      await inView(closes.first(), "x at 1280x360");
+      await inView(closes.last(), "footer Close at 1280x360");
+      const pageTop = (await html()).top;
+      const bb = (await body.boundingBox())!;
+      await p.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+      await p.mouse.wheel(0, 300);
+      await expect.poll(() => body.evaluate((e) => e.scrollTop)).toBeGreaterThan(0);
+      expect((await html()).top).toBe(pageTop);
+      await inView(closes.last(), "footer Close after scrolling the body");
+      await p.keyboard.press("PageDown");
+      await expect(dlg).toBeVisible();
+      await p.mouse.click(5, 5);
+      await closed("a backdrop click with the body scrolled");
+      asserted(`at 1280x360 (body ${m.sh} px in ${m.ch} px): the dialog fits the window, the wheel scrolls only the body, and the x and footer Close stay in view with the body scrolled; the user need not scroll to close`);
+    } finally {
+      await p.setViewportSize({ width: 1280, height: 720 });
+    }
   });
 
   // ---- 4
@@ -709,6 +882,19 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     expect(debt).toBeGreaterThan(-110);
     asserted(`admin grant of ${amount} with a reason leaves alice overdrawn (balance ${debt})`);
     observe("balance_overdrawn", debt);
+    // The local account is the first row of Users although alice is now overdrawn (overdrawn users come next).
+    await a.goto("/admin/users");
+    const usersTable = a.getByRole("table", { name: "Users", exact: true });
+    await expect(usersTable).toBeVisible();
+    const dataRows = usersTable.getByRole("row").filter({ hasNot: a.getByRole("columnheader") });
+    await expect(dataRows.first()).toContainText("Built-in local account");
+    const texts = (await dataRows.allInnerTexts()).map((t) => t.replace(/\s+/g, " "));
+    expect(texts.findIndex((t) => t.includes("alice@example.com")), "alice is not first").toBeGreaterThan(0);
+    const api = (await (await a.request.get("/api/v1/admin/users")).json()) as { users: { is_local_admin: boolean; email: string; overdrawn: boolean }[] };
+    expect(api.users[0]!.is_local_admin, "the API lists the local account first").toBeTruthy();
+    expect(api.users.find((u) => u.email === "alice@example.com")!.overdrawn, "alice is overdrawn, so the order is not just by name").toBeTruthy();
+    asserted("with alice overdrawn, the first row of the admin Users table (and the first user of GET /api/v1/admin/users) is the built-in local account");
+    observe("users_rows", texts.map((t) => t.slice(0, 60)));
     const grantLedger = await readLedger(p);
     expect(grantLedger.some((r) => r.type === "Grant" && r.amount === amount)).toBeTruthy();
 

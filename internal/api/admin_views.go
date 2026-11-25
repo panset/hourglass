@@ -177,6 +177,7 @@ type adminUserView struct {
 	Username        string          `json:"username"`
 	Email           string          `json:"email"`
 	Name            string          `json:"name"`
+	DisplayName     string          `json:"display_name"`
 	AuthSource      string          `json:"auth_source"`
 	Status          string          `json:"status"`
 	Roles           []string        `json:"roles"`
@@ -204,7 +205,7 @@ func (s *adminState) userView(u store.User) adminUserView {
 		roles = []string{}
 	}
 	v := adminUserView{
-		ID: u.ID, Username: u.Username, Email: u.Email, Name: u.Name, AuthSource: u.AuthSource,
+		ID: u.ID, Username: u.Username, Email: u.Email, Name: u.Name, DisplayName: userDisplayName(u), AuthSource: u.AuthSource,
 		Status: u.Status, Roles: roles, IsLocalAdmin: u.AuthSource == store.AuthLocal,
 		ActiveHolds: []activeHoldRef{}, FirstSignInAt: ts(u.CreatedAt), LastLoginAt: tsPtr(u.LastLoginAt),
 	}
@@ -234,12 +235,13 @@ func (s *adminState) userView(u store.User) adminUserView {
 	}
 	v.BurnPerHour = tokens(burn)
 	v.createdAt = u.CreatedAt
-	v.sortName = strings.ToLower(u.Name)
+	v.sortName = strings.ToLower(v.DisplayName)
 	return v
 }
 
 // sortUsers orders a user list: pending requests oldest first; otherwise
-// overdrawn users first, then by name, then id.
+// the local account first, always; then overdrawn users, then by display name
+// ignoring case, then id.
 func sortUsers(list []adminUserView, pendingOnly bool) {
 	sort.SliceStable(list, func(i, j int) bool {
 		x, y := list[i], list[j]
@@ -248,6 +250,9 @@ func sortUsers(list []adminUserView, pendingOnly bool) {
 				return x.createdAt.Before(y.createdAt)
 			}
 			return x.ID < y.ID
+		}
+		if x.IsLocalAdmin != y.IsLocalAdmin {
+			return x.IsLocalAdmin
 		}
 		if x.Overdrawn != y.Overdrawn {
 			return x.Overdrawn

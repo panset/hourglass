@@ -208,6 +208,31 @@ describe("SET-5 disable, delete, force-release", () => {
     expect(post.headers.get("X-CSRF-Token")).toBe("csrf-admin");
   });
 
+  it("A2.7-12 a backdrop click leaves the force-release dialog and its reason as they were; the x closes it", async () => {
+    const { calls } = mockApi(routes());
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Edit setup-04" }));
+    await userEvent.click(screen.getByRole("button", { name: "Force-release" }));
+    const dialog = screen.getByRole("dialog", { name: "Force-release setup-04?" });
+    await userEvent.type(within(dialog).getByLabelText("Reason (required)"), "owner left");
+    await userEvent.click(dialog.parentElement!);
+    expect(screen.getByRole("dialog", { name: "Force-release setup-04?" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Reason (required)")).toHaveValue("owner left");
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("A2.3 a delete confirmation (no field) closes on a backdrop click and deletes nothing", async () => {
+    const { calls } = mockApi(routes());
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Edit setup-07" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("dialog").parentElement!);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+
   it("offers no force-release for a free setup", async () => {
     mockApi(routes());
     render(<Page />);
@@ -290,5 +315,35 @@ describe("UI-14 setup inventory: weight, source, reported weight and override", 
     render(<Page />);
     await userEvent.click(await screen.findByRole("button", { name: "Disable setup-04" }));
     expect(calls.find((c) => c.method === "PUT")!.body).not.toHaveProperty("weight_override");
+  });
+});
+
+describe("A1 P4 Held by in the setup inventory", () => {
+  const held = (holder: Partial<NonNullable<Setup["holder"]>>): Setup => ({ ...setup04, holder: { ...setup04.holder!, ...holder } });
+  const heldCell = async () => (await within(await screen.findByRole("table", { name: "Setups" })).findAllByRole("row"))[1]!;
+
+  it("shows the viewer's own hold as You", async () => {
+    mockApi(routes({ "GET /api/v1/setups": setupList([held({ is_you: true, name: "Riley Admin" })]) }));
+    render(<Page />);
+    const row = await heldCell();
+    expect(within(row).getByText("You")).toBeInTheDocument();
+    expect(row).not.toHaveTextContent("Riley Admin");
+  });
+
+  it("shows another person by the display value, cut at 32 characters with the full name in title", async () => {
+    const long = "Ada Lovelace-Byron of the Analytical Engine";
+    mockApi(routes({ "GET /api/v1/setups": setupList([held({ name: long })]) }));
+    render(<Page />);
+    const clip = within(await heldCell()).getByText(long);
+    expect(clip).toHaveAttribute("title", long);
+    expect(clip).toHaveStyle({ maxWidth: "32ch" });
+  });
+
+  it("shows the value the API gives for an unnamed holder, and nothing at all for a free setup", async () => {
+    mockApi(routes({ "GET /api/v1/setups": setupList([held({ name: "sam" }), setup07]) }));
+    render(<Page />);
+    const rows = within(await screen.findByRole("table", { name: "Setups" })).getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("sam");
+    expect(rows[2]).not.toHaveTextContent("sam");
   });
 });

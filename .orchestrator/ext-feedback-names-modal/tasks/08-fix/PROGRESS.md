@@ -1,0 +1,1 @@
+- 2026-11-25 Read brief, verifier RESULT, intent. Fixed F1, F3, F4, F6, F8, F9, F10 with tests/docs. Removed the now-unused pressure fetch from the Setups page (tsc error). ci.sh, go, vitest green. Next: report.

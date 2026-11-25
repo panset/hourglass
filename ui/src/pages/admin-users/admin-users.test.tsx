@@ -8,7 +8,27 @@ import { adminSession, barRoutes, developerSession, errorResponse, mockApi } fro
 import { dana, localAdmin, morgan, priya, sam, userList } from "../admin-shared/fixtures";
 import Page from "./index";
 
-const everyone = userList([priya, sam, localAdmin, morgan]);
+
+// These tests render the page without the session provider; the signed-in admin is the module-level `viewer`.
+const viewer = vi.hoisted(() => ({ session: undefined as unknown }));
+vi.mock("../../shell/session", async (orig) => {
+  const actual = await orig<typeof import("../../shell/session")>();
+  return {
+    ...actual,
+    useSession: () => {
+      try {
+        return actual.useSession();
+      } catch {
+        return viewer.session as ReturnType<typeof actual.useSession>;
+      }
+    },
+  };
+});
+beforeEach(() => {
+  viewer.session = adminSession;
+});
+
+const everyone = userList([localAdmin, priya, sam, morgan]); // server order: the local account first
 const pendingOnly = userList([morgan]);
 
 function routes(extra: Record<string, unknown> = {}) {
@@ -29,12 +49,13 @@ describe("ADM-1 users page states", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Loading users");
     expect(await screen.findByRole("table", { name: "Users" })).toBeInTheDocument();
     const rows = within(screen.getByRole("table", { name: "Users" })).getAllByRole("row");
-    // header + Priya (overdrawn first, API order) + Sam + local admin; pending users are not in the table
+    // header + local admin (first) + Priya (overdrawn) + Sam, in API order; pending users are not in the table
     expect(rows).toHaveLength(4);
-    expect(rows[1]).toHaveTextContent("Priya N.");
-    expect(rows[1]).toHaveTextContent("−12");
-    expect(rows[1]).toHaveTextContent("312");
-    expect(rows[1]).toHaveTextContent("setup-02");
+    expect(rows[1]).toHaveTextContent("admin");
+    expect(rows[2]).toHaveTextContent("Priya N.");
+    expect(rows[2]).toHaveTextContent("−12");
+    expect(rows[2]).toHaveTextContent("312");
+    expect(rows[2]).toHaveTextContent("setup-02");
   });
 
   it("shows an empty state when there are no users and no pending requests", async () => {

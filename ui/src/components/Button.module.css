@@ -26,6 +26,12 @@
   cursor: not-allowed;
 }
 
+.button[aria-pressed="true"] {
+  background: var(--color-panel);
+  border-color: var(--color-text);
+  font-weight: 600;
+}
+
 .primary {
   background: var(--color-accent);
   border-color: var(--color-accent);

@@ -6,6 +6,7 @@
 import { Fragment } from "react";
 import { Time } from "../../components";
 import { formatMultiplier, formatPercent, formatRate, formatTokens, formatWeight } from "../../lib/format";
+import { displayNameOf } from "../../lib/person";
 import { elapsedSince, type Setup, type SetupList } from "../usage/holdApi";
 import { attributesLine, PRICE_CHANGE_SENTENCE, sourceWords } from "../usage/weight";
 import styles from "./setups.module.css";
@@ -113,7 +114,7 @@ export function SetupPanel({ snapshot, listed }: { snapshot: SetupSnapshot; list
           <h3>Holder</h3>
           <dl className={styles.panelList}>
             <dt>Held by</dt>
-            <dd>{holder.is_you ? "You" : holder.name}</dd>
+            <dd>{holder.is_you ? "You" : displayNameOf(holder.name)}</dd>
             {s.held_since ? (
               <>
                 <dt>Held since</dt>

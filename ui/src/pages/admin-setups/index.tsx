@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Setup inventory (SET-1..SET-6, SET-5). Every value shown is an API field (UI-1).
 import { useState } from "react";
+import { displayNameOf } from "../../lib/person";
 import { Alert, Badge, Button, Chip, Clip, Table, Time, zoneLabel } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { errorText, useAction } from "../admin-shared/useAction";
@@ -132,7 +133,7 @@ export default function Page() {
                 nowrap: true,
                 render: (s) => (s.admin?.last_seen_at ? <Time iso={s.admin.last_seen_at} /> : "Not deployed"),
               },
-              { key: "held", header: "Held by", render: (s) => s.holder?.name ?? "" },
+              { key: "held", header: "Held by", render: (s) => (s.holder ? s.holder.is_you ? <strong>You</strong> : <Clip text={displayNameOf(s.holder.name)} max={32} /> : "") },
               {
                 key: "status",
                 header: "Status",

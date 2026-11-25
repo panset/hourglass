@@ -12,7 +12,7 @@ import {
   formatMultiplier,
   formatPercent,
   formatPeriod,
-  formatPerHour,
+  formatRate,
   formatTokens,
 } from "../../lib/format";
 import { useSession } from "../../shell/session";
@@ -168,7 +168,7 @@ export default function UsagePage() {
               </section>
               <section className={styles.card} aria-label="Burning now">
                 <div className={styles.caption}>Burning now</div>
-                <div className={styles.value}>{formatPerHour(m.burn_per_hour_tokens)}</div>
+                <div className={styles.value}>{formatRate(m.burn_per_hour_tokens)} tokens / h</div>
                 <div className={styles.sub}>
                   {(m.burning ?? []).length === 0
                     ? "Nothing is metering"
@@ -255,7 +255,7 @@ export default function UsagePage() {
                     {
                       key: "cost",
                       header: "Cost now",
-                      render: (h) => (h.cost_per_hour_tokens ? `${formatTokens(h.cost_per_hour_tokens.now, { fixed: 1 })} tokens / hour` : "—"),
+                      render: (h) => (h.cost_per_hour_tokens ? `${formatTokens(h.cost_per_hour_tokens.now, { fixed: 1 })} tokens / h` : "—"),
                     },
                     { key: "held", header: "Held for", render: (h) => elapsedSince(h.acquired_at) },
                     {

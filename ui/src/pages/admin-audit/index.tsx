@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Alert, Button, Field, Input, Select, Table, Time, zoneLabel } from "../../components";
 import { useApi } from "../../hooks/useApi";
+import { displayNameOf, personOptions } from "../../lib/person";
 import shared from "../admin-shared/admin.module.css";
 import { listActors, listAudit, type AuditEntry } from "./api";
 
@@ -63,9 +64,9 @@ export default function Page() {
         {(p) => (
           <Select {...p} value={actor} onChange={(e) => setActor(e.target.value)}>
             <option value="">All actors</option>
-            {(actors.data?.users ?? []).map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name || u.username || u.email}
+            {personOptions(actors.data?.users ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
               </option>
             ))}
           </Select>
@@ -103,7 +104,7 @@ export default function Page() {
           emptyMessage="No audit entries match."
           columns={[
             { key: "time", header: `Time (${zoneLabel()})`, nowrap: true, render: (e) => <Time iso={e.created_at} /> },
-            { key: "actor", header: "Actor", render: (e) => e.actor.name },
+            { key: "actor", header: "Actor", render: (e) => displayNameOf(e.actor.name) },
             { key: "action", header: "Action", render: (e) => <code>{e.action}</code> },
             { key: "target", header: "Target", render: (e) => <code>{e.target}</code> },
             { key: "detail", header: "Before / after", render: (e) => <Details entry={e} /> },

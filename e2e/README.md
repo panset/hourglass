@@ -4,7 +4,7 @@
 
 ## What the test does
 
-One Playwright test (`e2e/browser/tests/acceptance.spec.ts`, Chromium, one worker) with steps A0 to A9 and the steps A2g, A2f, A2p, A7g, A8p and A8c added by the ledger, labels and onboarding change. It drives the UI as three users: alice (Keycloak sign-in), dave (pre-approved, signs in once) and the local admin. In order:
+One Playwright test (`e2e/browser/tests/acceptance.spec.ts`, Chromium, one worker) with steps A0 to A9 and the steps A2g, A2f, A2p, A3n, A3m, A7g, A8p and A8c added by the ledger, labels and onboarding change. It drives the UI as three users: alice (Keycloak sign-in), dave (pre-approved, signs in once) and the local admin. In order:
 
 - A0 first run of the admin: forced password change, settings. The Settings page has no display label keys field, and a save sends the stored `display_label_keys` back unchanged (UI-23).
 - A1 alice signs in and sees the not-authorized page.
@@ -12,6 +12,8 @@ One Playwright test (`e2e/browser/tests/acceptance.spec.ts`, Chromium, one worke
 - A2g the top bar greets alice ("Hello, Alice Example") and the local admin ("Hello, admin").
 - A2f alice filters the setups through the Label selector box (UI-21): no "Available labels" block or chip; a click in the empty box lists the key `size` with its values; she types `si`, picks `size` (the box reads `size=`) and then `large` (the page asks the API with `size=large` and lists lab-03 and lab-04); with the caret after `size=` she picks `medium` (`size=medium`, lab-01 and lab-02); an empty box and Enter list all six.
 - A2p the admin pre-approves dave@example.com on Users; dave, who has never signed in, lands on My usage with 300 tokens and never sees the not-authorized page. Dave exists in `deploy/keycloak/realm-hourglass.json` for this step only.
+- A3n (AUTH-9, D100) names: the admin and dave, who are not the holder, see lab-03 held by "Alice Example" on Setups and in the Details panel, with no email anywhere; admin Users leads alice's row with her name and shows the local account (no name) by its username with "(you)".
+- A3m (D101) the Details dialog: closes by the x, by a click on the backdrop and by Escape, each time returning focus to the Details control; Tab and Shift+Tab loop through the x; a drag between the dialog and the backdrop (either direction) does not close it; at 1280 x 720, 390 x 844 and 1280 x 360 the dialog fits, the x and footer Close stay in view, only the body scrolls, the page scroll is locked (overflow hidden, restored, same position) and the wheel over the backdrop does not move the page.
 - A3 alice reads the label `size` of lab-03 in its details panel (labels are not in the table) and acquires it.
 - A4 the pool appears in the simulator and metering starts.
 - A5 the pressure moves across a band and the debit rate doubles.
@@ -21,6 +23,7 @@ One Playwright test (`e2e/browser/tests/acceptance.spec.ts`, Chromium, one worke
 - A8 the month rolls over with a negative balance and the debt carries into the new month.
 - A8p alice pages the old month's ledger with Older and Newer (20 rows a page), switches the view and the month from page two and lands on a first page.
 - A8c the test clock moves 9 more days; after a collector poll compacts them, the old month's debits of lab-03 are one row per day with "N polls", and the polls, the total charged and the closing balance are the same as before.
+- (inside A8) after the grant that makes alice overdrawn, the first row of the admin Users table and the first user of `GET /api/v1/admin/users` is the built-in local account.
 - A9 the mode check: one origin, with page and API from the same container (bundled) or from the two containers (split).
 
 A failing step is recorded with a screenshot and the run goes on. The only things driven outside the UI are the simulator's control API (pool and pressure) and the clock control (the month jump); the clock control exists only in the test build images.
@@ -32,7 +35,7 @@ Each mode takes about 12 to 25 minutes, because the collector polls once a minut
 `e2e/browser/tests/integration.spec.ts` runs the bundled stack with `provider.type: reported` and `pressure.type: reported` (`e2e/config.integration.yaml`, layered on by `e2e/compose.integration.yaml`) and a webhook subscribed to `hold.acquired`, `hold.releasing`, `hold.released` and `poll.failed`. The customer's service is scripted in `e2e/browser/reporter/reporter.ts`, running inside the test process: a receiver on host port 9100 that verifies `X-Hourglass-Signature` and records the events (the container reaches it as `host.docker.internal`), and a reporter that sends weights (from W2 on), deployments and pressure with a service token on command and every 20 s as a heartbeat. Steps:
 
 - I0 set-up: admin first run, poll interval 1m, alice approved.
-- I1 the admin creates a service account with the four original scopes and issues a token in the UI (W1 adds the fifth).
+- I1 the admin creates a service account with the four original scopes and issues a token in the UI (W1 adds the fifth). A click on the backdrop leaves the Create dialog open with the typed values, and leaves the token-shown-once dialog open.
 - I2 the reporter sends pressure and an empty set; a poll succeeds.
 - I3 alice acquires lab-03; the receiver gets `hold.acquired`.
 - I4 the reporter reports lab-03 deployed; after the next poll the hold is deployed, metering started and the balance falls.

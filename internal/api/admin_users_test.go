@@ -116,15 +116,15 @@ func TestADM1_ListUsersShapeOrderAndSummary(t *testing.T) {
 	for _, u := range users {
 		names = append(names, adObjOf(t, u)["name"].(string))
 	}
-	// Overdrawn first, then by name (case-insensitive).
-	want := []string{"User bob", "admin", "User amy", "User boss", "User p1", "User p2", "User rej", "User zed"}
+	// The local account first, then overdrawn, then by name (case-insensitive).
+	want := []string{"admin", "User bob", "User amy", "User boss", "User p1", "User p2", "User rej", "User zed"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Errorf("order = %v, want %v", names, want)
 	}
 	byName := map[string]ujobj{}
 	for _, u := range users {
 		m := adObjOf(t, u)
-		uWantKeys(t, "user", m, "id", "username", "email", "name", "auth_source", "status", "roles", "is_local_admin", "balance_tokens",
+		uWantKeys(t, "user", m, "id", "username", "email", "name", "display_name", "auth_source", "status", "roles", "is_local_admin", "balance_tokens",
 			"overdrawn", "month_to_date_burn_tokens", "burn_per_hour_tokens", "active_holds", "first_sign_in_at", "last_login_at")
 		byName[m["name"].(string)] = m
 	}

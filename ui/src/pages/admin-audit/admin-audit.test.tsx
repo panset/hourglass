@@ -69,7 +69,7 @@ describe("ADM-3 audit log page", () => {
     // An SSO user whose provider sends no name claim has an empty name.
     mockApi({
       ...routes(list([entry(1)])),
-      "GET /api/v1/admin/users": userList([priya, { ...sam, name: "", username: "", email: "noname@example.com" }]),
+      "GET /api/v1/admin/users": userList([priya, { ...sam, name: "", display_name: "", username: "", email: "noname@example.com" }]),
     });
     render(<Page />);
     const select = await screen.findByLabelText("Actor");
@@ -101,5 +101,40 @@ describe("ADM-3 audit log page", () => {
     await vi.waitFor(() => expect(calls.filter((c) => c.url.includes("/admin/audit")).at(-1)!.url).toContain("limit=50&offset=50"));
     expect(await screen.findByText(/51 to 51 of 51/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+});
+
+describe("A1 P12 Actor filter and column use the shared display rule", () => {
+  const optionsOf = async () => within(await screen.findByLabelText("Actor")).getAllByRole("option").map((o) => o.textContent);
+
+  it("A1-7 lists people by display name, case-insensitive, with the local account not pinned (A3-4)", async () => {
+    mockApi({
+      ...routes(list([entry(1)])),
+      "GET /api/v1/admin/users": userList([
+        { ...sam, id: 5, display_name: "zed", name: "" },
+        { ...priya, id: 1, display_name: "admin", is_local_admin: true },
+        { ...sam, id: 6, display_name: "Aaron" },
+        { ...priya, id: 7, display_name: "mia", name: "" },
+      ]),
+    });
+    render(<Page />);
+    await screen.findByRole("table", { name: "Audit log" });
+    await vi.waitFor(async () => expect(await optionsOf()).toEqual(["All actors", "Aaron", "admin", "mia", "zed"]));
+  });
+
+  it("A1-7 two people named Sam Lee read name · email, and a person with no name falls back", async () => {
+    mockApi({
+      ...routes(list([entry(1)])),
+      "GET /api/v1/admin/users": userList([
+        { ...sam, id: 5, display_name: "Sam Lee", email: "sam.one@example.com" },
+        { ...sam, id: 6, display_name: "Sam Lee", email: "sam.two@example.com" },
+        { ...priya, id: 7, display_name: "", name: "", username: "", email: "noname@example.com" },
+      ]),
+    });
+    render(<Page />);
+    await screen.findByRole("table", { name: "Audit log" });
+    await vi.waitFor(async () =>
+      expect(await optionsOf()).toEqual(["All actors", "noname@example.com", "Sam Lee · sam.one@example.com", "Sam Lee · sam.two@example.com"]),
+    );
   });
 });

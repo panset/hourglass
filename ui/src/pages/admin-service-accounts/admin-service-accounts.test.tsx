@@ -128,6 +128,58 @@ describe("SVC-6 create, edit, delete", () => {
   });
 });
 
+describe("A2.7 dialogs ignore a backdrop click", () => {
+  it("A2.7-9 Create service account keeps the typed name; Escape closes it", async () => {
+    mockApi(routes());
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Create service account" }));
+    const dialog = screen.getByRole("dialog", { name: "Create service account" });
+    await userEvent.type(within(dialog).getByLabelText(/^Name/), "billing");
+    await userEvent.click(dialog.parentElement!);
+    expect(screen.getByRole("dialog", { name: "Create service account" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^Name/)).toHaveValue("billing");
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("Edit service account and Issue token ignore a backdrop click", async () => {
+    mockApi(routes());
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Edit lab-agent" }));
+    await userEvent.click(screen.getByRole("dialog", { name: "Edit lab-agent" }).parentElement!);
+    expect(screen.getByRole("dialog", { name: "Edit lab-agent" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Issue token for lab-agent" }));
+    await userEvent.click(screen.getByRole("dialog", { name: "Issue token for lab-agent" }).parentElement!);
+    expect(screen.getByRole("dialog", { name: "Issue token for lab-agent" })).toBeInTheDocument();
+  });
+
+  it("A2.7-10 the Token shown once dialog does not close on a backdrop click and keeps the token", async () => {
+    mockApi(
+      routes({
+        "POST /api/v1/admin/service-accounts/1/tokens": () =>
+          json({ id: 3, created_at: "2026-11-20T10:00:00Z", expires_at: null, last_used_at: null, token: TOKEN }, 201),
+      }),
+    );
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Issue token for lab-agent" }));
+    await userEvent.click(screen.getByRole("button", { name: "Issue token" }));
+    const dialog = await screen.findByRole("dialog", { name: "Token for lab-agent" });
+    await userEvent.click(dialog.parentElement!);
+    expect(screen.getByRole("dialog", { name: "Token for lab-agent" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Token")).toHaveValue(TOKEN);
+  });
+
+  it("a delete confirmation (no field) closes on a backdrop click and deletes nothing", async () => {
+    const { calls } = mockApi(routes());
+    render(<Page />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete idle-svc" }));
+    await userEvent.click(screen.getByRole("dialog", { name: "Delete idle-svc?" }).parentElement!);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+});
+
 describe("SVC-4 SVC-6 tokens", () => {
   const issueRoute = () => ({
     "POST /api/v1/admin/service-accounts/1/tokens": () =>
@@ -151,7 +203,7 @@ describe("SVC-4 SVC-6 tokens", () => {
     expect(writeText).toHaveBeenCalledWith(TOKEN);
     expect(await within(dialog).findByText("Copied.")).toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.body.textContent).not.toContain(TOKEN);
     expect(document.body.innerHTML).not.toContain(TOKEN);

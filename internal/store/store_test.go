@@ -149,6 +149,29 @@ func TestSchemaColumnsMatchSpec(t *testing.T) {
 	}
 }
 
+// TestAUTH2_SignInWithoutNameKeepsStoredName (D100): a sign-in that yields no
+// name does not erase the stored one; a non-empty name replaces it; a first
+// sign-in with no name stores "".
+func TestAUTH2_SignInWithoutNameKeepsStoredName(t *testing.T) {
+	s := openTemp(t)
+	first, created, err := s.UpsertOIDCLogin(ctx, "sub-n", "n@example.test", "", t0)
+	if err != nil || !created || first.Name != "" {
+		t.Fatalf("first sign-in with no name: %+v %v %v", first, created, err)
+	}
+	u, _, err := s.UpsertOIDCLogin(ctx, "sub-n", "n@example.test", "Full Name", t0.Add(time.Hour))
+	if err != nil || u.Name != "Full Name" {
+		t.Fatalf("name given: %+v %v", u, err)
+	}
+	u, created, err = s.UpsertOIDCLogin(ctx, "sub-n", "n2@example.test", "", t0.Add(2*time.Hour))
+	if err != nil || created || u.Name != "Full Name" || u.Email != "n2@example.test" || !u.LastLoginAt.Equal(t0.Add(2*time.Hour)) {
+		t.Fatalf("sign-in with no name must keep the name and still refresh email and time: %+v %v", u, err)
+	}
+	u, _, err = s.UpsertOIDCLogin(ctx, "sub-n", "n2@example.test", "New Name", t0.Add(3*time.Hour))
+	if err != nil || u.Name != "New Name" {
+		t.Fatalf("a non-empty name replaces: %+v %v", u, err)
+	}
+}
+
 func TestUsersRoundTrip(t *testing.T) {
 	s := openTemp(t)
 	u, created, err := s.UpsertOIDCLogin(ctx, "sub-1", "a@example.test", "A", t0)

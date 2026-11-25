@@ -6,12 +6,13 @@
 // exact-match tokens of label values that have no selector term (UI-22) are applied in the browser over the fetched list.
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { ApiError, api } from "../../api/client";
-import { getMe, getPressure } from "../../api/endpoints";
+import { getMe } from "../../api/endpoints";
 import type { Me } from "../../api/types";
 import { Alert, Badge, Button, Clip, ConfirmDialog, Field, Modal, Select, Table, useToast, type Column } from "../../components";
 import { useApi } from "../../hooks/useApi";
 import { POLL_INTERVAL_MS } from "../../hooks/usePolling";
-import { formatMultiplier, formatPerHour, formatRate, formatTokens } from "../../lib/format";
+import { formatMultiplier, formatRate, formatTokens } from "../../lib/format";
+import { displayNameOf } from "../../lib/person";
 import { isAdmin, useSession } from "../../shell/session";
 import { elapsedSince, isPendingRelease, releaseHold, type Hold, type Setup, type SetupList } from "../usage/holdApi";
 import { attributesLine, PRICE_CHANGE_SENTENCE, PriceSourceTag } from "../usage/weight";
@@ -85,7 +86,6 @@ export default function SetupsPage() {
   const poll = { pollMs: POLL_INTERVAL_MS };
   const setups = useApi(() => getSetups(selector), [selector], poll);
   const me = useApi(getMe, [], { ...poll, enabled: !localAdmin });
-  const pressure = useApi(getPressure, [], poll);
 
   const data = setups.data;
   const block = localAdmin ? undefined : acquireBlock(me.data);
@@ -248,7 +248,7 @@ export default function SetupsPage() {
     s.holder ? (
       <>
         <span className={styles.holderLine} data-held="">
-          {s.holder.is_you ? <span className={styles.you}>You</span> : <Clip text={s.holder.name} max={24} />} · {elapsedSince(s.held_since)}
+          {s.holder.is_you ? <span className={styles.you}>You</span> : <Clip text={displayNameOf(s.holder.name)} max={24} />} · {elapsedSince(s.held_since)}
         </span>
         {s.holder.overdrawn ? <span className={`${styles.overdrawn} ${styles.overdrawnNote}`}>overdrawn</span> : null}
       </>
@@ -449,9 +449,8 @@ export default function SetupsPage() {
               <p>
                 Weight {formatTokens(acquiring.weight)}
                 {acquiring.weight_source === "reported" || acquiring.weight_source === "override" ? ` (${acquiring.weight_source})` : ""}
-                . Costs {formatPerHour(cost.now)}
-                {pressure.data ? ` now (${formatMultiplier(pressure.data.multiplier)})` : " now"}, up to{" "}
-                {formatPerHour(cost.at_peak)} at the highest band.
+                . Cost now {formatRate(cost.now)} tokens / h, up to {formatRate(cost.at_peak)} tokens / h at the highest multiplier
+                {data?.pricing ? ` (${formatMultiplier(data.pricing.peak_multiplier)})` : ""}.
               </p>
               {attributesLine(acquiring.weight_attributes) ? <p>{attributesLine(acquiring.weight_attributes)}</p> : null}
               {data?.reported_weights_enabled ? (

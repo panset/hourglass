@@ -87,7 +87,7 @@ func TestAUTH3_CSRFRequiredOnPostNotGet(t *testing.T) {
 		t.Fatalf("GET without CSRF: %d", r.Code)
 	}
 	wantErr(t, e.do(req{method: "POST", path: "/api/v1/setups/1/acquire", cookie: c}), http.StatusForbidden, apierr.CSRF)
-	wantErr(t, e.do(req{method: "POST", path: "/api/v1/setups/1/acquire", cookie: c, csrf: "00" + csrf[2:]}), http.StatusForbidden, apierr.CSRF)
+	wantErr(t, e.do(req{method: "POST", path: "/api/v1/setups/1/acquire", cookie: c, csrf: flipFirst(csrf)}), http.StatusForbidden, apierr.CSRF)
 	wantErr(t, e.do(req{method: "POST", path: "/api/v1/setups/1/acquire", cookie: c, csrf: otherCSRF}), http.StatusForbidden, apierr.CSRF)
 	if r := e.do(req{method: "POST", path: "/api/v1/setups/1/acquire", cookie: c, csrf: csrf}); r.Code != http.StatusOK {
 		t.Fatalf("POST with CSRF: %d", r.Code)
@@ -274,4 +274,12 @@ func TestAUTH3_SessionKeyRules(t *testing.T) {
 	if _, err := New(Config{OIDC: OIDCConfig{IssuerURL: "https://idp.example"}}, st, nil, nil); err == nil {
 		t.Fatal("incomplete OIDC config accepted")
 	}
+}
+
+// flipFirst returns s with its first hex digit changed, so it never equals s.
+func flipFirst(s string) string {
+	if s[0] == '0' {
+		return "1" + s[1:]
+	}
+	return "0" + s[1:]
 }

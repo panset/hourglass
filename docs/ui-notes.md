@@ -37,11 +37,11 @@ Top bar (see Shared), "My usage" active. Content: max width 1216 px, 32 px paddi
 1. Title row: h1 "My usage" (26 px) left; right side a label "Month" and a select with options "November 2026" (selected) and "October 2026".
 2. Four stat cards in an auto-fit grid (min 220 px, 16 px gap). Each card has a 12 px muted caption, a 28 px/600 value, and a 13 px muted sub-line.
    - "Tokens left": `142`, "of 300 allowance + 40 granted".
-   - "Burning now": `2.0 / hour`, "setup-04 · weight 1 × 2×".
+   - "Burning now": `2.0 tokens / h`, "setup-04 · weight 1 × 2×".
    - "Projected run-out": `Nov 21`, "at the last 24 hours' rate".
    - "Lab pressure": `82% · 2×`, then a segmented bar (12 px high, grey border, 6 px radius) with widths 50% white (free), 25% `#E5E7EB` (1x), 15% `#9CA3AF` (2x), 10% `#4B5563` (3x), and a 3 px amber marker (`#B45309`) at 82%. The bar has an accessible label: "Pressure bands: free below 50 percent, 1x to 75, 2x to 90, 3x above; currently 82 percent". Sub-line "9 of 11 setups deployed".
 3. Section "Current holds · 1 of 2 allowed" (h2, 16 px). Table "Current holds", columns: Setup, Labels, State, Weight, Cost now, Held for, (blank action column).
-   - Sample row: **setup-04**; label chips `size=medium` `site=sjc`; state badge "Deployed"; weight 1; "2.0 tokens / hour"; "2 d 4 h"; button "Release".
+   - Sample row: **setup-04**; label chips `size=medium` `site=sjc`; state badge "Deployed"; weight 1; "2.0 tokens / h"; "2 d 4 h"; button "Release".
    - Note (13 px, muted): "Charging continues until you release. If the setup is still deployed, release is accepted but pending: the hold shows Releasing, keeps charging, and ends at the first poll where the setup is no longer reported. Holding setup-04 overnight (15 h) at the current multiplier costs 30 tokens."
 4. Two columns (auto-fit, min 360 px, 24 px gap):
    - "Tokens per day": bordered card with a placeholder bar chart (18 grey `#9CA3AF` bars, 150 px tall, baseline rule; the last bar, today, is blue `#1D4ED8`; zero days are 2 px stubs). Axis labels "Nov 1" and "Nov 18". Accessible label: bar chart of tokens debited per day this month, today highlighted.
@@ -93,15 +93,15 @@ This section describes the page as changed by D93 (owner-directed, `docs/design/
    - **Cost (tokens / h)** (UI-16): the unit is in the header. The cell is a button in the text colour with a dotted underline (blue with a solid underline on hover): `cost_per_hour_tokens.now` and `.at_peak` as `2.0 now · up to 6.0`, the cost now in bold and "· up to 6.0" muted, or one value (the `now` value) when `now` is not below `at_peak` (one band, a weight of 0, or a band edit before the next poll), so it never reads "4.0 now · up to 3.0". With the lab at 0× it reads `0.0 now · up to 6.0`. Free rows carry no "if acquired". The button's accessible name is in words, for example "2.0 tokens per hour now, up to 6.0. Price details for setup-01". On the same line, after the button: the source tag, `reported` (blue) or `override` (grey), with the hidden sentence "The price comes from a reported weight." or "The price comes from a weight pinned by an admin." (nothing for `rule` and `default`). A second line appears only for a held setup that is not metering: the policy's reason text as before (for example "Free for 1 h 20 m more"), muted, wrapping.
    - **Action:** a "Details" link on every row (accessible name "Details for setup-01"), the only blue link on the row; then Release on your own hold, the "Releasing" badge on your own hold with a pending release (the time of the request is in the panel), or Acquire on a free setup.
    - Activating the cost button or "Details" opens the details panel (item 8). With filters that leave nothing the table says "No setups match the filters."
-8. Details panel (UI-18, D94(k) to (m), D99(c), (d)). A dialog titled "Details: setup-01" with a Close button. Both openers open it at its top with focus on the "Price" heading; Escape or Close returns focus to the control that opened it, or to the page heading when that control is no longer on the page (for example when a filter has hidden the row). It follows the 60-second refresh. If its setup leaves the list (deleted, disabled for a developer, dropped by a filter), it stays open with the values of the last response that held the setup and shows "This setup is no longer listed. These are the last values loaded." Sections, each an h3:
+8. Details panel (UI-18, D94(k) to (m), D99(c), (d)). A dialog titled "Details: setup-01" with a × at the top right and a Close button in the footer (D101). Both openers open it at its top with focus on the "Price" heading; Escape, a click on the backdrop, the × or Close returns focus to the control that opened it, or to the page heading when that control is no longer on the page (for example when a filter has hidden the row). It follows the 60-second refresh. If its setup leaves the list (deleted, disabled for a developer, dropped by a filter), it stays open with the values of the last response that held the setup and shows "This setup is no longer listed. These are the last values loaded." Sections, each an h3:
    - **Price.** First the answer: Cost now, `4.0 tokens / h`; Up to, `6.0 tokens / h` and, muted, "at the highest multiplier (3×)" ("at the highest multiplier" against an older API without `pricing`). When the cost now is above the cost at the highest band, the Up to value is "The multipliers were changed. This value shows after the next poll." Charging: "Since " and a time for a metering hold ("Yes" with no start time), "Not yet: " and the reason (or "Not yet") for a hold that is not metering, "Starts: " and `metering_description` for a free setup, with no line when that is null, which it always is today (D94(e)). Then, when `reported_weights_enabled` is true, "Weights are reported by automation, so the price can change while the setup is held." Then, muted: "Cost per hour is the setup's weight times the lab's multiplier, rounded to a thousandth of a token. The multiplier follows lab pressure." Then the working: Weight, for example `1.15`, with its source in words: `rule (set by a rate rule)`, `default (the default weight)`, `reported (sent by automation)`, `override (pinned by an admin)`, or the word as sent for any other value; Attributes, `memory-gb 512 · storage-gb 4000`, only when there are any; Lab pressure, `82%`, or "not measured yet" before the first poll; Multiplier now, `2×`. The pressure and both multipliers come from the setups response's `pricing` object, not from `GET /api/v1/pressure`, so they are the values the costs were computed with; against an older API without `pricing` the pressure and multiplier lines are left out and both costs still show. There is no equation with an equals sign (D94(a)), and the word "band" is not in the panel.
    - **Holder**, only when the setup is held: Held by ("You" or the full name); Held since, a time then `(5 d 2 h)`; Balance, `61 tokens` or `−12 tokens, overdrawn` (the server marks a balance of 0 or less as overdrawn); and, when set, Release, "Release requested " and a time, then ". It completes when the setup is torn down." for any holder. The Price and Holder lists share one first-column width, so their values line up.
    - **Labels.** The only place a setup's labels are shown (D96(b)): every label, key and value in monospace, sorted by key; an empty value reads "(empty)"; "No labels." when there are none. Under the list: "Use a label in the Label selector box to filter the list." Long keys and values wrap; below 480 px the list is one column.
    - **Raw details.** The details JSON, read only, in a block labelled "Setup details JSON" that wraps long lines and does not scroll on its own; "None." when there are no details. The `admin` block is not shown; Setup inventory has it.
 9. Note: labels are shown in the details panel only (D96(b)). They are found through the selector box's suggestions and filtered with the selector and exact-match tokens.
-10. Acquire confirmation (unchanged by D93 and D96), drawn as an inline panel (grey `#F4F4F4`, bordered, 8 px radius, max 520 px) with the note "Shown as a dialog after clicking Acquire." Contents:
+10. Acquire confirmation (wording by D101; the wireframe strings below are samples), drawn as an inline panel (grey `#F4F4F4`, bordered, 8 px radius, max 520 px) with the note "Shown as a dialog after clicking Acquire." Contents:
    - h2 "Acquire setup-05?"
-   - Body: "size=medium · weight 1 (default rule). Costs 2.0 tokens / hour now (2×), up to 3.0 at peak, free when the lab is below 50%. Charging starts when the setup is deployed or after 2 hours, whichever is first. This will be your 2nd of 2 allowed setups."
+   - Body: "size=medium · weight 1 (default rule). Cost now 2.0 tokens / h, up to 3.0 tokens / h at the highest multiplier (3×), free when the lab is below 50%. Charging starts when the setup is deployed or after 2 hours, whichever is first. This will be your 2nd of 2 allowed setups."
    - Buttons: primary "Acquire", secondary "Cancel".
 
 ## Users and grants (`/admin/users`)
@@ -126,9 +126,11 @@ Top bar (admin), "Users · 2 pending" active, showing "300 tokens" and "Riley Ad
      - Dana Dev (dana@example.com) | Developer | 142 | 198 | setup-04
      - Tom K. (tom@example.com) | Developer | 230 | 70 | setup-03
      - Riley Admin (riley@example.com) | Admin | 300 | 0 | (blank)
-     - admin, second line "Local account · first user" | badge "Admin · fixed" instead of a select | "No balance" | (blank) | "Cannot hold setups" | no Grant button
-   - Note: "Overdrawn users sort first. An admin cannot remove their own admin role."
-   - Grant panel (aside "Grant tokens", grey, bordered; opens when Grant is clicked): h2 "Grant tokens to Priya N."; sub-line "Balance −12 · burning 4.0 / hour on setup-02"; label "Amount" (text, `100`); label "Reason (required)" (text, "Release week, needs a large setup for soak test"); live line "New balance: 88. Unused tokens expire Nov 30; debt carries into December."; buttons primary "Grant 100 tokens", secondary "Reset to 300", secondary "Cancel".
+     - admin (the built-in local account), second line "Built-in local account" | badge "Admin · fixed" instead of a select | "No balance" | "—" | "Cannot hold setups" | no Grant button
+   - Order (built, not in the wireframe): the API sends the local account first, then overdrawn users, then everyone by display name ignoring case; the page keeps that order and does not sort. The local account is not marked beyond its sub-line and its "Admin · fixed" badge.
+   - Names: the User cell shows the person's display name (cut at 32 characters, full name in the tooltip) with the email under it (cut at 40); the signed-in admin's own row adds a muted "(you)". Pending rows, row actions, the grant panel heading, toasts, confirmations and accessible names use the same display name.
+   - Note: "The built-in local account is listed first, then overdrawn users, then everyone by name. An admin cannot remove their own admin role."
+   - Grant panel (aside "Grant tokens", grey, bordered; opens when Grant is clicked): h2 "Grant tokens to Priya N."; sub-line "Balance −12 · burning 4.0 tokens / h on setup-02"; label "Amount" (text, `100`); label "Reason (required)" (text, "Release week, needs a large setup for soak test"); live line "New balance: 88. Unused tokens expire Nov 30; debt carries into December."; buttons primary "Grant 100 tokens", secondary "Reset to 300", secondary "Cancel".
    - Panel note: "Opens when Grant is clicked. Negative amounts correct mistakes. Reset sets the balance to the full allowance and clears carried debt; it needs a reason too. Both are written to the audit log."
 
 ### Pre-approved users (UI-11, design D5)
@@ -217,6 +219,14 @@ Spacing: page max width 1216 px with 32 px padding; vertical rhythm 28 px betwee
 
 Radii: 6 px controls and buttons; 8 px cards and panels; 4 px chips; 999 px pills.
 
+### Showing a person (people-display rule)
+- One rule everywhere: the full name, else the username, else the email; never blank. The shared helper is `ui/src/lib/person.ts` (`displayName`, `displayNameOf`, `personOptions`). A value of only spaces counts as no value.
+- The UI shows the API's display value (`display_name` on session and admin users; `holder.name`, `actor.name` and similar elsewhere) and does not build a name of its own. The helper only guards against an empty value.
+- Where one person is named in a sentence-like cell (Held by, the panel's holder), the viewer reads "You". In an admin list of people the viewer's row shows the display name and a muted "(you)".
+- An email is shown only on admin pages that already list it (Users, pre-approvals) and never as a tooltip or sub-line on a page a developer sees.
+- Table cells cut a name to one line (24 characters on Setups, 32 on admin tables) with the full name in the tooltip; the panel shows it in full.
+- Lists of people (the Audit actor filter) sort by display name ignoring case; two people with the same display name read "{name} · {email}" there.
+
 ### Reusable components
 
 - Stat card: bordered 8 px card, caption, large value, sub-line.
@@ -265,3 +275,11 @@ Spec asks for, wireframe does not show:
 5. Setup inventory: a distinct "disable" action (only an Enabled checkbox in the Edit panel); Add setup form (the panel is shown as edit only).
 6. Role-change confirmations and a "forced password change" screen after first local sign-in (mentioned only in the Sign in footnote).
 7. The 60-second live refresh has no visible indicator.
+
+## Dialogs (D101)
+
+Every dialog is one `Modal`: a header with the title and a × (accessible name "Close", 32 px, 44 px on a coarse pointer), a body that scrolls, and a footer, so the title and the buttons are always in view. The page behind does not scroll while a dialog is open and does not shift sideways.
+- Close with the ×, with Escape, or, by kind, with a click on the backdrop. A read-only dialog (Details) and a confirmation (Acquire, Release) close on the backdrop like Cancel. A dialog with a form or a shown-once secret (Create or edit service account, Force release with its reason, Issue token) ignores the backdrop, so typed text and a token are never lost; the × and Escape still close it.
+- A click closes only when the press and the release are both on the backdrop. A text selection dragged out of the dialog, or a press on the backdrop released inside it, does not close it.
+- While a request runs (busy), Escape, the backdrop and the × do nothing.
+- Focus goes to the first field, else to the safe button, and returns to the control that opened the dialog.

@@ -132,7 +132,7 @@ describe("My usage page", () => {
     mount();
     expect(await screen.findByText("142.2")).toBeInTheDocument();
     expect(screen.getByText("of 300 allowance + 40 granted")).toBeInTheDocument();
-    expect(screen.getByText("2.0 / h")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Burning now" })).getByText("2.0 tokens / h")).toBeInTheDocument();
     expect(screen.getByText("setup-04 · weight 1 × 2×")).toBeInTheDocument();
     expect(screen.getByText("Nov 21")).toBeInTheDocument();
     expect(screen.getByText("82% · 2×")).toBeInTheDocument();
@@ -142,7 +142,7 @@ describe("My usage page", () => {
     const holds = await screen.findByRole("table", { name: "Current holds" });
     expect(within(holds).getByText("size=medium")).toBeInTheDocument();
     expect(within(holds).getByText("Deployed")).toBeInTheDocument();
-    expect(within(holds).getByText("2.0 tokens / hour")).toBeInTheDocument();
+    expect(within(holds).getByText("2.0 tokens / h")).toBeInTheDocument();
     const bars = await screen.findAllByTestId("usage-bar");
     expect(bars).toHaveLength(3);
     expect(bars[2]).toHaveAttribute("data-today", "true");

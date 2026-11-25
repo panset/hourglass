@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/panset/hourglass/internal/store"
@@ -156,14 +157,14 @@ func (s *Service) loadUser(ctx context.Context, id int64) (*User, error) {
 // the rest of the API shows (AUTH-9), so the two cannot drift. It lives here
 // because internal/api already imports this package and not the reverse.
 func DisplayName(u store.User) string {
-	switch {
-	case u.Name != "":
-		return u.Name
-	case u.Username != "":
-		return u.Username
-	default:
-		return u.Email
+	// A value of only spaces counts as no value, so the result is never blank
+	// while any of the three has text.
+	for _, v := range []string{u.Name, u.Username, u.Email} {
+		if t := strings.TrimSpace(v); t != "" {
+			return t
+		}
 	}
+	return ""
 }
 
 // SessionView is the Session schema of api/openapi.yaml: for a user with no

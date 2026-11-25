@@ -104,6 +104,9 @@ func TestAUTH9_DisplayNameRule(t *testing.T) {
 		{store.User{Username: "u", Email: "e@x"}, "u"},
 		{store.User{Email: "e@x"}, "e@x"},
 		{store.User{}, ""},
+		{store.User{Name: "   ", Username: "u", Email: "e@x"}, "u"},
+		{store.User{Name: " \t", Username: "  ", Email: "e@x"}, "e@x"},
+		{store.User{Name: "  N  "}, "N"},
 	} {
 		if got := DisplayName(c.u); got != c.want {
 			t.Errorf("DisplayName(%+v) = %q, want %q", c.u, got, c.want)

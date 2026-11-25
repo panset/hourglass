@@ -385,6 +385,7 @@ Every requirement gets at least one test named after its id that fails when the 
 ### Sign-in
 
 - **AUTH-9** The stored name of an SSO user is the first non-empty of `name`, `given_name` with `family_name`, and `preferred_username`. `GET /api/v1/session` returns `display_name` as name, else username, else email, by the same function the rest of the API uses, and a no-role user's session holds that field and nothing else new.
+- **AUTH-9 (amended by D100)** A sign-in that yields no name keeps the stored name; only a non-empty name replaces it. This amends AUTH-2's "refreshed on every sign-in": email and last sign-in time are refreshed every time, the name only when the provider gives one. `GET /api/v1/admin/users` adds `display_name` to each user (the same function; never blank) beside the unchanged `name`, and lists the local account first, always, then overdrawn users, then everyone by display name ignoring case, then id.
 
 ### Pre-approval
 

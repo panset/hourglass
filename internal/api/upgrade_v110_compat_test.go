@@ -294,6 +294,8 @@ type v110Change struct {
 }
 
 var (
+	// ext-feedback D100: display_name on each AdminUser.
+	addedAdminUsers = []string{"users[].display_name"}
 	// design C2: the fields of the Setups list; setups-declutter D94(b): pricing.
 	addedSetupsList = []string{"reported_weights_enabled", "setups[].weight_source", "setups[].weight_attributes", "pricing"}
 	// and the admin block of a setup (design C2).
@@ -355,8 +357,8 @@ var v110Routes = map[string]v110Allowed{
 	"me_usage_dev2":               {},
 	"pressure_dev":                {},
 	"me_norole":                   {},
-	"admin_users":                 {},
-	"admin_users_ops":             {},
+	"admin_users":                 {added: addedAdminUsers},
+	"admin_users_ops":             {added: addedAdminUsers},
 	"admin_users_dev":             {},
 	"admin_rules":                 {},
 	"admin_settings":              {added: addedSettings},
@@ -374,7 +376,7 @@ var v110Routes = map[string]v110Allowed{
 	"admin_setup_put_held":        {added: addedAdminSetup},
 	"admin_setup_post_dev":        {},
 	"setups_admin_after_writes":   {added: addedSetupsAdmin},
-	"admin_users_after_writes":    {},
+	"admin_users_after_writes":    {added: addedAdminUsers},
 	"admin_audit_after_writes":    {},
 }
 
@@ -391,7 +393,7 @@ var v110RoutesAfterPolls = map[string]v110Allowed{
 	"me_holds_dev2_after_polls":  {added: addedHolds},
 	"me_usage_dev_after_polls":   {},
 	"me_ledger_dev2_after_polls": {added: addedLedger},
-	"admin_users_after_polls": {changed: []v110Change{
+	"admin_users_after_polls": {added: addedAdminUsers, changed: []v110Change{
 		{nameA3AdminUsersBurn, "users[].burn_per_hour_tokens", 2.5, 6.5, 1},
 	}},
 	"admin_collector_after_polls": {added: []string{"last_weights_report", "last_weights_refusal"}},

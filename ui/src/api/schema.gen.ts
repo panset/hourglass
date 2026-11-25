@@ -1462,6 +1462,8 @@ export interface components {
             username: string;
             email: string;
             name: string;
+            /** @description The name to show for this person: name, else username, else email. Never blank. */
+            display_name: string;
             auth_source: components["schemas"]["AuthSource"];
             status: components["schemas"]["UserStatus"];
             roles: components["schemas"]["Role"][];

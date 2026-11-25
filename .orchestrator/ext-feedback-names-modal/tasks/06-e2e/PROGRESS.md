@@ -1,0 +1,4 @@
+- 2026-11-25 specs edited (F2 Close .last(), Acquire regex; new steps A3n, A3m, A8 Users order, I1 backdrop checks); README updated; tsc ok. Next: ./ci.sh, then e2e/run.sh both, then integration.
+- both run 1: bundled 18/18 pass, split A3n failed (Users table name matched 2 tables); fixed with exact:true. Next: rerun both, then integration
+- stopped partial rerun (spec not yet fixed then), leftover bundled stack removed; reran with exact fix
+- both run 2 green: bundled 18/18, split 18/18. Next: integration

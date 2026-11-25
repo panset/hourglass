@@ -230,6 +230,7 @@ export function SetupForm({ setup, onSaved, onClose }: Props) {
         confirmLabel="Force-release"
         destructive
         busy={force.busy}
+        dismissOnBackdrop={false}
         error={force.error ? errorText(force.error) : undefined}
         onConfirm={doForce}
         onCancel={() => setForcing(false)}

@@ -298,7 +298,7 @@ async function checkPanel(p: Page, list: J, name: string, via: "cost" | "details
   else await expect(dlg.getByLabel("Setup details JSON")).toBeVisible();
   if (shotLabel) await shot(p, shotLabel, { viewport: true });
   if (via === "cost") await p.keyboard.press("Escape");
-  else await dlg.getByRole("button", { name: "Close", exact: true }).click();
+  else await dlg.getByRole("button", { name: "Close", exact: true }).last().click();
   await expect(dlg).toHaveCount(0);
   await expect(opener).toBeFocused();
   return lines;
@@ -454,6 +454,12 @@ test("integration: service account, reported deployments and pressure, webhooks,
       const dlg = admin.getByRole("dialog", { name: "Create service account" });
       await dlg.getByRole("textbox", { name: "Name" }).fill(ACCOUNT);
       await dlg.getByRole("textbox", { name: "Description" }).fill("scripted reporter of the integration scenario");
+      // A form dialog does not close on a click on the backdrop (the typed values stay); the x and Cancel are the ways out.
+      await admin.mouse.click(5, 5);
+      await expect(dlg).toBeVisible();
+      await expect(dlg.getByRole("textbox", { name: "Name" })).toHaveValue(ACCOUNT);
+      await expect(dlg.getByRole("textbox", { name: "Description" })).toHaveValue("scripted reporter of the integration scenario");
+      asserted("a click on the backdrop leaves the Create service account dialog open with what was typed");
       for (const s of ["state:read", "pressure:write", "deployments:write", "holds:release"]) {
         await dlg.getByRole("checkbox", { name: new RegExp(`^${s}`) }).check();
       }
@@ -467,7 +473,10 @@ test("integration: service account, reported deployments and pressure, webhooks,
       await expect(shown.getByText(/only time the token is shown/)).toBeVisible();
       token = await shown.getByRole("textbox", { name: "Token" }).inputValue();
       expect(token).toMatch(/^hgsa_\d+_[0-9a-f]{64}$/);
-      await shown.getByRole("button", { name: "Close" }).click();
+      await admin.mouse.click(5, 5);
+      await expect(shown, "the token is shown once, so a backdrop click does not close it").toBeVisible();
+      asserted("a click on the backdrop does not close the dialog that shows the token once");
+      await shown.getByRole("button", { name: "Close", exact: true }).last().click();
       await expect(shown).toHaveCount(0);
       const acct = ((await json(await admin.request.get("/api/v1/admin/service-accounts"), 200)).service_accounts as J[]).find((a) => a.name === ACCOUNT)!;
       expect([...acct.scopes].sort()).toEqual(["deployments:write", "holds:release", "pressure:write", "state:read"]);
@@ -775,7 +784,7 @@ test("integration: service account, reported deployments and pressure, webhooks,
       const panel = alice.getByRole("dialog", { name: `Details: ${SETUP_A}` });
       await expect(ddOf(panel, "Weight")).toHaveText("1.15 · reported (sent by automation)");
       await expect(ddOf(panel, "Attributes")).toHaveText("memory-gb 512 · storage-gb 4000 · tier gold");
-      await panel.getByRole("button", { name: "Close", exact: true }).click();
+      await panel.getByRole("button", { name: "Close", exact: true }).last().click();
       await expect(panel).toHaveCount(0);
       asserted("before any acquire the Setups row shows lab-03's reported tag; its details panel shows the weight 1.15 with its source and the attributes line");
 
@@ -984,7 +993,7 @@ test("integration: service account, reported deployments and pressure, webhooks,
       await admin.getByRole("dialog", { name: `Issue token for ${NAME}` }).getByRole("button", { name: "Issue token" }).click();
       const shown = admin.getByRole("dialog", { name: `Token for ${NAME}` });
       const t = await shown.getByRole("textbox", { name: "Token" }).inputValue();
-      await shown.getByRole("button", { name: "Close" }).click();
+      await shown.getByRole("button", { name: "Close", exact: true }).last().click();
       const state = () => svc(t, "GET", "/api/v1/integration/state");
       expect((await state()).status).toBe(200);
 

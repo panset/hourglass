@@ -2,11 +2,31 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setCsrfToken } from "../../api/client";
-import { errorResponse, mockApi } from "../../test/mockApi";
+import { adminSession, errorResponse, mockApi } from "../../test/mockApi";
 import { localAdmin, userList } from "../admin-shared/fixtures";
 import type { Preapproval } from "./api";
 import Page from "./index";
 import { splitEmails } from "./preapprovals";
+
+
+// These tests render the page without the session provider; the signed-in admin is the module-level `viewer`.
+const viewer = vi.hoisted(() => ({ session: undefined as unknown }));
+vi.mock("../../shell/session", async (orig) => {
+  const actual = await orig<typeof import("../../shell/session")>();
+  return {
+    ...actual,
+    useSession: () => {
+      try {
+        return actual.useSession();
+      } catch {
+        return viewer.session as ReturnType<typeof actual.useSession>;
+      }
+    },
+  };
+});
+beforeEach(() => {
+  viewer.session = adminSession;
+});
 
 const riley = { id: 1, name: "Riley Admin" };
 const dbRow: Preapproval = {
