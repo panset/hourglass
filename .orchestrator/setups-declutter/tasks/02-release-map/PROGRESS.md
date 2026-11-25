@@ -1,0 +1,4 @@
+- 2026-11-24 started: read BRIEF, INTENT
+- 2026-11-24 read remote/PR/protection/runs, release.yml, push-images.sh, tags, past job decisions and reported-weights REPORT
+- 2026-11-24 read e2e README/run.sh, timings from .secs/logs, fixtures README, CONTRIBUTING; checked credentials presence (no values), ports (8080/8081 held by hourglass-demo), toolchain
+- 2026-11-24 decided: expected next version v1.3.0 (inferred, owner confirms); no new upgrade fixture required (design has no compat requirement). Wrote RESULT.md. Done.

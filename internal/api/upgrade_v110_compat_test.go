@@ -294,8 +294,8 @@ type v110Change struct {
 }
 
 var (
-	// design C2: the fields of the Setups list.
-	addedSetupsList = []string{"reported_weights_enabled", "setups[].weight_source", "setups[].weight_attributes"}
+	// design C2: the fields of the Setups list; setups-declutter D94(b): pricing.
+	addedSetupsList = []string{"reported_weights_enabled", "setups[].weight_source", "setups[].weight_attributes", "pricing"}
 	// and the admin block of a setup (design C2).
 	addedSetupsAdmin = append(append([]string{}, addedSetupsList...),
 		"setups[].admin.reported_weight", "setups[].admin.reported_weight_not_applied", "setups[].admin.weight_override")

@@ -407,9 +407,6 @@ export default function Page() {
               <Field label="Default weight" hint="Used when no rule matches." error={fieldError("default_weight")}>
                 {(p) => <Input {...p} className={shared.num} inputMode="decimal" value={form.defaultWeight} onChange={(e) => editForm({ defaultWeight: e.target.value })} />}
               </Field>
-              <Field label="Display label keys" hint="Comma separated; shown as columns and filters on Setups." error={fieldError("display_label_keys")}>
-                {(p) => <Input {...p} value={form.labelKeys} onChange={(e) => editForm({ labelKeys: e.target.value })} />}
-              </Field>
             </div>
             {ruleRows.length === 0 ? (
               <p className={shared.note}>No rules: every setup uses the default weight.</p>

@@ -165,6 +165,7 @@ export function setupList(setups: Setup[]): SetupList {
     summary: { enabled: 1, deployed: 1, free: 0 },
     metering_description: "deployed or 2 h after acquire",
     reported_weights_enabled: false,
+    pricing: { multiplier: 2, peak_multiplier: 3, pressure: 0.8 },
   };
 }
 

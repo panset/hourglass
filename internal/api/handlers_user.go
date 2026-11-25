@@ -886,7 +886,26 @@ func (a *API) listSetups(w http.ResponseWriter, r *http.Request) {
 		"summary":                  map[string]int{"enabled": summary.Enabled, "deployed": summary.Deployed, "free": summary.Free},
 		// The policy interface has no describe method, so there is no text to show.
 		"metering_description": nil,
+		"pricing":              l.pricing(),
 	})
+}
+
+// pricingJSON is what every cost_per_hour_tokens of one GET /api/v1/setups
+// response was computed with, so the page can explain a price without a second
+// request (UI-18, D94).
+type pricingJSON struct {
+	Multiplier     float64  `json:"multiplier"`
+	PeakMultiplier float64  `json:"peak_multiplier"`
+	Pressure       *float64 `json:"pressure"` // nil before the first successful poll
+}
+
+func (l *lab) pricing() pricingJSON {
+	p := pricingJSON{Multiplier: l.mult, PeakMultiplier: l.peakMult}
+	if l.sample != nil {
+		smoothed := l.sample.Smoothed
+		p.Pressure = &smoothed
+	}
+	return p
 }
 
 // ---- POST /api/v1/setups/{id}/acquire, POST /api/v1/holds/{id}/release ----

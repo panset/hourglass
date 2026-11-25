@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Alert } from "./Alert";
 import { Button } from "./Button";
@@ -14,19 +14,27 @@ export interface ModalProps {
   children: ReactNode;
   /** Buttons row. */
   footer?: ReactNode;
+  /**
+   * Where focus goes on close when the element that opened the dialog is no longer in the page
+   * (its row was filtered out or removed). Give it `tabIndex={-1}` if it is not focusable.
+   * Without it focus returns to the opener only, as before.
+   */
+  fallbackFocus?: RefObject<HTMLElement>;
 }
 
 /**
  * Accessible modal dialog: role="dialog" + aria-modal, labelled by the title,
  * focus moves in on open, Tab stays inside, Escape closes, focus returns to the
- * element that opened it.
+ * element that opened it, or to `fallbackFocus` when that element is gone.
  */
-export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, fallbackFocus }: ModalProps) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const fallbackRef = useRef(fallbackFocus);
+  fallbackRef.current = fallbackFocus;
 
   useEffect(() => {
     if (!open) return;
@@ -54,8 +62,10 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
       }
       const firstEl = items[0]!;
       const lastEl = items[items.length - 1]!;
-      const active = document.activeElement;
-      if (e.shiftKey && (active === firstEl || active === node)) {
+      const active = document.activeElement as HTMLElement | null;
+      // Shift+Tab from the first item, the dialog itself, or an element outside the Tab order
+      // (a heading with tabIndex -1 that took focus on open) wraps to the last item.
+      if (e.shiftKey && (active === firstEl || active === node || !items.includes(active as HTMLElement))) {
         e.preventDefault();
         lastEl.focus();
       } else if (!e.shiftKey && active === lastEl) {
@@ -66,7 +76,8 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      opener?.focus?.();
+      if (opener?.isConnected) opener.focus?.();
+      else fallbackRef.current?.current?.focus();
     };
   }, [open]);
 

@@ -176,6 +176,82 @@ describe("unsaved changes, nothing saved implicitly", () => {
   });
 });
 
+describe("UI-23 display label keys are not edited on the page", () => {
+  const withKeys = (keys: string[]): SettingsResponse => ({ ...settings, settings: { ...settings.settings, display_label_keys: keys } });
+  /** The raw JSON text of the one settings PUT, as it went on the wire. */
+  const rawPut = (fetchMock: ReturnType<typeof mockApi>["fetchMock"]): string => {
+    const put = fetchMock.mock.calls.find(([url, init]) => String(url) === "/api/v1/admin/settings" && init?.method === "PUT");
+    return String(put![1]!.body);
+  };
+
+  it("UI-23 Settings has no display label keys field and saves the stored keys unchanged", async () => {
+    const { calls } = mockApi(routes({ "GET /api/v1/admin/settings": withKeys(["size", "team"]), "PUT /api/v1/admin/settings": withKeys(["size", "team"]) }));
+    render(<Page />);
+    await userEvent.clear(await screen.findByLabelText("Default weight"));
+    await userEvent.type(screen.getByLabelText("Default weight"), "2");
+    expect(screen.queryByLabelText(/display label/i)).toBeNull();
+    expect(screen.queryByText(/display label|columns on Setups/i)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const body = calls.find((c) => c.method === "PUT")!.body as Record<string, unknown>;
+    expect(body.display_label_keys).toEqual(["size", "team"]);
+    expect(body.default_weight).toBe(2);
+  });
+
+  it.each([
+    ["no keys", [] as string[]],
+    ["some keys", ["size", "team", "rack"]],
+    ["32 keys", Array.from({ length: 32 }, (_, i) => `key-${String(i).padStart(2, "0")}`)],
+  ])("UI-23 sends %s back byte-identical when another field is saved", async (_name, keys) => {
+    const { fetchMock } = mockApi(routes({ "GET /api/v1/admin/settings": withKeys(keys), "PUT /api/v1/admin/settings": withKeys(keys) }));
+    render(<Page />);
+    await userEvent.clear(await screen.findByLabelText("Max setups per developer"));
+    await userEvent.type(screen.getByLabelText("Max setups per developer"), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText(/Settings saved/)).toBeInTheDocument();
+    expect(rawPut(fetchMock)).toContain(`"display_label_keys":${JSON.stringify(keys)}`);
+  });
+
+  it("UI-23 every other setting saves as before, with the stored keys alongside", async () => {
+    const { calls } = mockApi(routes({ "PUT /api/v1/admin/settings": settings }));
+    render(<Page />);
+    const set = async (label: string, value: string) => {
+      await userEvent.clear(screen.getByLabelText(label));
+      await userEvent.type(screen.getByLabelText(label), value);
+    };
+    await screen.findByLabelText("Default weight");
+    await set("Default weight", "1.5");
+    await set("Monthly allowance (tokens)", "400");
+    await set("Max setups per developer", "4");
+    await set("Poll interval", "10m");
+    await set("Base multiplier", "0.5");
+    await set("Multiplier 2", "3");
+    await userEvent.click(screen.getByLabelText("Block acquiring at zero tokens"));
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(calls.find((c) => c.method === "PUT")!.body).toEqual({
+      ...settings.settings,
+      default_weight: 1.5,
+      default_allowance: 400,
+      max_holds_per_user: 4,
+      poll_interval: "10m",
+      bands: { base: 0.5, steps: [{ from: 0.5, multiplier: 1 }, { from: 0.75, multiplier: 3 }] },
+      enforcement: true,
+    });
+  });
+
+  it("UI-23 a server error for display_label_keys, which has no field now, shows in the page's save error", async () => {
+    const msg = "display label keys must be distinct";
+    mockApi(routes({ "PUT /api/v1/admin/settings": () => errorResponse(400, "validation", msg, "display_label_keys") }));
+    render(<Page />);
+    await userEvent.clear(await screen.findByLabelText("Max setups per developer"));
+    await userEvent.type(screen.getByLabelText("Max setups per developer"), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(msg);
+    expect(screen.queryByText(/Settings saved/)).toBeNull();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+});
+
 describe("RULE-3 rate rules", () => {
   it("adds, edits, reorders and deletes, then saves the ordered list through PUT /admin/rules", async () => {
     const { calls } = mockApi(routes({ "PUT /api/v1/admin/rules": rules }));

@@ -67,6 +67,7 @@ go_test(
         "service_testenv_test.go",
         "settings_reported_weights_test.go",
         "setups_label_index_test.go",
+        "setups_pricing_test.go",
         "testenv_test.go",
         "upgrade_compat_test.go",
         "upgrade_v110_compat_test.go",

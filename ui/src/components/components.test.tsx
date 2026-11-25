@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Badge, BrandMark, Button, Chip, ConfirmDialog, Field, Input, LinkButton, Modal, Select, Table, ToastProvider, TOAST_MS, useToast } from ".";
 
 describe("Button", () => {
@@ -146,6 +146,73 @@ describe("Modal and ConfirmDialog", () => {
       </ConfirmDialog>,
     );
     expect(screen.getByRole("button", { name: "Do it" })).toBeDisabled();
+  });
+
+  function Panel({ withFallback = true }: { withFallback?: boolean }) {
+    const [open, setOpen] = useState(false);
+    const [rowShown, setRowShown] = useState(true);
+    const heading = useRef<HTMLHeadingElement>(null);
+    return (
+      <>
+        <h1 ref={heading} tabIndex={-1}>
+          Setups
+        </h1>
+        {rowShown ? <button onClick={() => setOpen(true)}>Details for setup-01</button> : null}
+        <Modal
+          open={open}
+          title="Details: setup-01"
+          onClose={() => setOpen(false)}
+          fallbackFocus={withFallback ? heading : undefined}
+          footer={
+            <>
+              <button onClick={() => setRowShown(false)}>Hide the row</button>
+              <button onClick={() => setOpen(false)}>Close</button>
+            </>
+          }
+        >
+          {/* No control in the body, so the marked heading takes focus on open. */}
+          <h3 tabIndex={-1} data-autofocus="">
+            Price
+          </h3>
+          <p>Weight 2</p>
+        </Modal>
+      </>
+    );
+  }
+
+  it("Modal keeps Shift+Tab inside when a heading has focus", async () => {
+    render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    expect(screen.getByRole("heading", { name: "Price" })).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it("Modal returns focus to the fallback when the opener is gone", async () => {
+    render(<Panel />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    await userEvent.click(screen.getByRole("button", { name: "Hide the row" }));
+    expect(screen.queryByRole("button", { name: "Details for setup-01" })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Setups" })).toHaveFocus();
+  });
+
+  it("Modal returns focus to the opener, not the fallback, when the opener is still there", async () => {
+    render(<Panel />);
+    const opener = screen.getByRole("button", { name: "Details for setup-01" });
+    await userEvent.click(opener);
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(opener).toHaveFocus();
+  });
+
+  it("Modal without a fallback leaves focus alone when the opener is gone, as before", async () => {
+    render(<Panel withFallback={false} />);
+    await userEvent.click(screen.getByRole("button", { name: "Details for setup-01" }));
+    await userEvent.click(screen.getByRole("button", { name: "Hide the row" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("heading", { name: "Setups" })).not.toHaveFocus();
   });
 
   it("renders nothing when closed", () => {

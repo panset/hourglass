@@ -182,7 +182,7 @@ An admin edits these in the UI (Admin, Settings), or with `GET` and `PUT /api/v1
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `default_weight` | `1` | Weight of a setup that no rate rule matches |
-| `display_label_keys` | `[]` | Label keys shown as columns and filters on the Setups page |
+| `display_label_keys` | `[]` | Stored, validated and returned by the API for compatibility. Not used by any page since v1.3.0 and not editable on the Settings page; change it only with `PUT /api/v1/admin/settings`, which still requires the key. Every label of a setup is in its details panel on the Setups page |
 | `bands` | base `0`; from 0.50 give 1, from 0.75 give 2, from 0.90 give 3 | Pressure bands and multipliers. Lower bounds are inclusive |
 | `default_allowance` | `300` | Tokens credited at the start of each month and when a user is first given a role |
 | `max_holds_per_user` | `2` | Lowering it never releases existing holds |
@@ -536,8 +536,6 @@ rate_rules:
 
 A `.json` file is read as JSON, anything else as YAML. Unknown keys are rejected; a seed written for an earlier version that still has a per-setup `resource_name_override` fails with a message saying the key is no longer supported. The seed is validated like the admin API: unique non-empty names, labels within the limits (at most 32 per setup, 63-character values), `details` valid JSON of at most 256 KB, a valid selector, finite non-negative weights. An invalid seed stops startup and writes nothing. `deploy/seed.sample.yaml` is the reference scenario's seed.
 
-One setting is not seedable and an admin sets it on first run: the display label keys.
-
 ## Roll out in shadow mode
 
 A fresh Hourglass has `enforcement` off. Metering is on, debits are written and balances fall, but the balance check never blocks an acquire. Run like this for 2 to 4 weeks:
@@ -631,6 +629,16 @@ This release adds one migration, `0008`, and the optional weights report. `0008`
 - **Body keys.** The top-level keys of a weights report (`observed_at`, `weights`) are matched without regard to case, as in the other two reports. The keys inside an entry are strict.
 - **Extensions.** No interface, type or contract changes. `SetupState.Weight` is the base weight, so the `inventory` pressure source and every custom extension compute what they computed before. See [Extending Hourglass](extending.md#snapshot-holdstate-and-decision).
 - **Turning it on** is a separate, audited step (Admin, Settings, "Reported weights"; a maximum is required). See [Reported weights](#reported-weights).
+
+### Upgrading to v1.3.0 (the Setups page leads with cost)
+
+No migration and no configuration change. The Setups page changes (see [UI notes](ui-notes.md)); the API gains one field, and one setting leaves the Settings page.
+
+- **One added response field. Nothing is removed or renamed.** `GET /api/v1/setups` gains a top-level `pricing` object: `multiplier` and `peak_multiplier`, the multipliers that every `cost_per_hour_tokens.now` and `.at_peak` in the same response were computed with, and `pressure`, the smoothed pressure of the sample the multiplier comes from (null before the first successful poll). It is read in the same request as the costs, so it always matches them; `GET /api/v1/pressure` can be one poll apart. A client that ignores unknown fields needs no change.
+- **Split mode, either image first.** The new UI reads `pricing` as optional: against an API without it, the Setups page's details panel leaves out the pressure and multiplier lines and still shows both costs. An older UI ignores the field.
+- **No label columns, no "Available labels" block, no display label keys field.** The Setups table's columns are Setup, State, Held by, Cost (tokens / h) and actions; a setup's labels are in its details panel only. The "Available labels" chips are gone: the Label selector box suggests label keys and values as you type, and a value the selector cannot express is suggested after `key=` and, when picked, becomes an exact-match filter applied in the browser (see [UI notes](ui-notes.md#setups-setups)). The "Display label keys" field has left Admin, Settings.
+- **A stored `display_label_keys` value stays, unread.** No migration clears it. It is kept in the database, still validated, audited and returned by `GET /api/v1/setups` and the settings routes, and no page reads it. It can be changed only through `PUT /api/v1/admin/settings`, which still requires the key; the Settings page sends the stored value back unchanged when it saves another setting. A script that sets it keeps working and has no visible effect.
+- **Split mode and the setting.** An older UI against the new API still shows the label columns and the field and works, because the API is unchanged. The new UI against an older API works too: it keeps sending the key.
 
 ## Data retention
 

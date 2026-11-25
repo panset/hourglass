@@ -9,7 +9,8 @@ export interface BandRow {
 
 export interface SettingsForm {
   defaultWeight: string;
-  labelKeys: string;
+  /** The stored `display_label_keys`, kept as loaded and sent back unchanged: the page does not edit it (D97 i), but PUT requires the key. */
+  displayLabelKeys: string[];
   baseMultiplier: string;
   bands: BandRow[];
   allowance: string;
@@ -43,7 +44,7 @@ export function toForm(s: Settings): SettingsForm {
     rwMax: rw.max === null ? "" : String(rw.max),
     rwMaxAge: rw.max_age,
     defaultWeight: String(s.default_weight),
-    labelKeys: s.display_label_keys.join(", "),
+    displayLabelKeys: s.display_label_keys,
     baseMultiplier: String(s.bands.base),
     bands: s.bands.steps.map((b) => ({ from: String(b.from), multiplier: String(b.multiplier) })),
     allowance: String(s.default_allowance),
@@ -90,10 +91,7 @@ export function toSettings(
         ? { reported_weights: { enabled: f.rwEnabled, min: rwMin, max: rwMax, max_age: f.rwMaxAge.trim() } }
         : {}),
       default_weight,
-      display_label_keys: f.labelKeys
-        .split(",")
-        .map((k) => k.trim())
-        .filter((k) => k !== ""),
+      display_label_keys: f.displayLabelKeys,
       bands: { base, steps },
       default_allowance,
       max_holds_per_user,

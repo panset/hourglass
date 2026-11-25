@@ -9,8 +9,10 @@ import {
   formatMultiplier,
   formatPercent,
   formatPerHour,
+  formatRate,
   formatPeriod,
   formatTokens,
+  formatWeight,
 } from "./format";
 
 describe("formatTokens", () => {
@@ -64,6 +66,32 @@ describe("pressure and rate", () => {
     expect(formatMultiplier(1.5)).toBe("1.5×");
     expect(formatPerHour(2)).toBe("2.0 / h");
     expect(formatPerHour(0.125)).toBe("0.125 / h");
+  });
+});
+
+describe("formatRate", () => {
+  it("formats a cost per hour with 1 to 3 decimals and no unit", () => {
+    expect(formatRate(2)).toBe("2.0");
+    expect(formatRate(0)).toBe("0.0");
+    expect(formatRate(12.5)).toBe("12.5");
+    expect(formatRate(0.125)).toBe("0.125");
+    expect(formatRate(1.2346)).toBe("1.235");
+    expect(formatRate(1234)).toBe("1,234.0");
+  });
+  it("is what formatPerHour shows before its unit", () => {
+    for (const v of [0, 2, 0.125, 37.5]) expect(formatPerHour(v)).toBe(`${formatRate(v)} / h`);
+  });
+});
+
+describe("formatWeight", () => {
+  it("is formatTokens for a weight that three decimals can show", () => {
+    for (const v of [0, 1, 1.15, 0.8, 0.0005, 0.001, 1234.5678, null, undefined]) expect(formatWeight(v)).toBe(formatTokens(v));
+  });
+  it("shows a weight below 0.0005 as the API sent it, never as 0", () => {
+    expect(formatWeight(0.0004)).toBe("0.0004");
+    expect(formatWeight(0.00012345)).toBe("0.00012345");
+    expect(formatWeight(0.0000004)).toBe("0.0000004");
+    expect(formatWeight(-0.0004)).toBe("−0.0004");
   });
 });
 

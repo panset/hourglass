@@ -383,7 +383,7 @@ Every requirement gets at least one test named after its id that fails when the 
 ### Reading back and display
 
 - **WGT-13** `GET /api/v1/integration/state` returns, for every setup, the applied weight, its source, the reported weight and why it is not applied (the first of `expired`, `out_of_bounds`, `override`), and at the top level the switch, the limits and the report's times. With the feature off, `reported` and `not_applied` are null for every setup and the report's times are null. No rate rule text is returned.
-- **WGT-14** For one database state and one time, the weight and source in the Setups list, the admin setup views, an active hold, the burn figures of My usage and Admin Users, and the state route are equal to each other and to the weight a poll at that time records, for setups priced by each of `override`, `reported`, `rule` and `default`. For a hold whose latest sample has the source `policy`, the hold and the burn figures show that sample's weight and `policy`, while the setup views show the resolver's.
+- **WGT-14** For one database state and one time, the weight and source in the Setups list, the admin setup views, an active hold, the burn figures of My usage and Admin Users, and the state route are equal to each other and to the weight a poll at that time records, for setups priced by each of `override`, `reported`, `rule` and `default`. For a hold whose latest sample has the source `policy`, the hold and the burn figures show that sample's weight and `policy`, while the setup views show the resolver's. (Since D93, 2026-11-24, the Setups page shows the weight and source in a setup's details panel rather than on the row; WGT-14 is about the values, which are unchanged, and a test that read them from the table reads them from the panel.)
 - **WGT-15** A debit's ledger entry shows the lowest and highest weight and the sources of the polls it stands for, in the every-poll view, the day view and after storage compaction. The weights are null unless a sample is found for every poll of the entry, and the sources are null if any of those samples has none.
 - **WGT-16** Attributes are stored and returned unchanged, are shown only for a usable entry, and no selector, rate rule or filter matches them.
 - **WGT-22** `GET /api/v1/admin/collector` returns the last accepted weights report with its entry count and the number of stored weights the limits exclude, and the last refused report with its time, account and message; both are null with the feature off.
@@ -396,7 +396,7 @@ Every requirement gets at least one test named after its id that fails when the 
 
 ### Frontend
 
-- **UI-12** The Setups page shows each weight with its source tag and its attributes, and the acquire dialog shows the change warning whenever `reported_weights_enabled` is true.
+- **UI-12** (amended 2026-11-24 by `docs/design/setups-declutter.md`, D93) The Setups page shows the source tag on the cost cell and the weight, source and attributes in the details panel; the acquire dialog shows the change warning whenever `reported_weights_enabled` is true. (Until then: "The Setups page shows each weight with its source tag and its attributes, and …".)
 - **UI-13** My usage shows a hold's weight with its source, and a ledger debit's weight as one value, a range, or nothing when unknown.
 - **UI-14** Admin pages: Setup inventory shows the reported weight and why it is not applied, and edits and clears the override; Settings edits the four fields and shows the last report, the excluded count and the last refusal; Service accounts offers `weights:write`.
 
@@ -428,7 +428,7 @@ Also:
 - Compatibility fixtures recorded from the code at `v1.1.0`, in the way D78 did for `d96a950`: a database with holds and ledger data, and the responses of the routes this work touches. Keep the existing `d96a950` fixtures and their tests passing unchanged.
 - End-to-end, in the integration scenario (`e2e/run.sh integration`):
   - An admin turns reported weights on with a maximum and gives the account the scope through the UI.
-  - The scripted reporter sends weights for every setup; the Setups page shows the reported weight and attributes before acquire, and the acquire dialog shows the warning.
+  - The scripted reporter sends weights for every setup; the Setups page shows the reported weight and attributes before acquire (in the details panel since D93; the row shows the `reported` tag on the cost cell), and the acquire dialog shows the warning.
   - A hold is charged at the reported weight; the reporter changes the weight and the next debit follows.
   - The user releases; the reporter keeps reporting the weight through teardown, and the last debit is at the reported weight.
   - The reporter stops sending weights while still sending deployments and pressure; after `max_age` the price returns to the rate rule with polls still succeeding.

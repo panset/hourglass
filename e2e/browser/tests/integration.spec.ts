@@ -13,13 +13,22 @@
 // maximum, W2 weights for every setup show on the Setups page and in the acquire dialog, W3 a hold is charged at the
 // reported weight and the next debit follows a change, W4 the reporter keeps the weight through teardown and the last
 // debit is at it, W5 a report over the maximum is refused and shown on Settings, W6 weights stop and the price returns
-// to the rate rule after max_age while polls succeed.
+// to the rate rule after max_age while polls succeed. The Setups page that leads with cost (docs/design/setups-declutter.md):
+// U20 the table has the five columns Setup, State, Held by, Cost and actions while display_label_keys holds five keys
+// (UI-15) and does not scroll sideways at 1280 px with a 32-character name (UI-20, the only real-browser check of it),
+// for a developer and an admin, and the details panel, the only place labels are shown, equals the response (UI-18);
+// U22 the Label selector box's suggestions come from label_index, a pick of a key then a value filters through the
+// API, a value no selector can express becomes an exact-match token applied in the browser, an invalid selector shows
+// the API's message, all also by keyboard (UI-21, UI-22); S1 the lab at 0x and S2 a higher band, with the owner's
+// screenshots of the page and the open panel (a Settings save keeps the stored display keys, UI-23); S3 the owner's
+// screenshots of the open suggestion list and of an exact-match token.
 //
 // Driven outside the UI, as the outside world: the reporter and receiver (the customer's service), the e2e clock
 // control (to move past max_age without waiting), one Keycloak admin call (token lifetimes, as in the acceptance
-// run, D34), and the admin API for two things the UI does not need to prove again: reading the collector and audit
-// log, and creating a second, scope-limited account for the negative checks (D63).
-import { expect, test, type APIResponse, type BrowserContext, type Page } from "@playwright/test";
+// run, D34), and the admin API for three things the UI does not need to prove again or no longer offers: reading the
+// collector, audit log and settings, creating a second, scope-limited account for the negative checks (D63), and
+// storing display label keys, which no page edits since D96 (U20).
+import { expect, test, type APIResponse, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { Receiver, Reporter, type ReportedWeight } from "../reporter/reporter";
@@ -59,11 +68,12 @@ const observe = (k: string, v: unknown) => {
   if (current) current.observed[k] = v;
 };
 
-async function shot(page: Page | undefined, label: string) {
+/** A screenshot of the whole page, or with `viewport` of the window only (an open dialog's backdrop covers the window). */
+async function shot(page: Page | undefined, label: string, o: { viewport?: boolean } = {}) {
   if (!page || page.isClosed()) return;
   const file = path.join(OUT, "screenshots", `${String(++shots.n).padStart(2, "0")}-${label}.png`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  await page.screenshot({ path: file, fullPage: true }).catch(() => undefined);
+  await page.screenshot({ path: file, fullPage: !o.viewport }).catch(() => undefined);
 }
 
 /** Runs one step; a failure is recorded (with a screenshot) and the run goes on. */
@@ -204,6 +214,169 @@ async function debitAfter(p: Page, afterId: number): Promise<J> {
 const newestDebitId = async (p: Page) => (await debitsNewestFirst(p))[0]?.id ?? 0;
 const stateOf = async (token: string): Promise<J> => (await svc(token, "GET", "/api/v1/integration/state")).body;
 const setupIn = (st: J, name: string): J => (st.setups as J[]).find((x) => x.name === name)!;
+
+// ---------------------------------------------------------------- Setups page (docs/design/setups-declutter.md)
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const num = (s: string) => parseFloat(s.replace(/,/g, ""));
+/** A shown number against its API value: the page prints at most 3 decimals. */
+const near = (shown: number, api: number, what: string, tol = 0.0006) =>
+  expect(Math.abs(shown - api), `${what}: shown ${shown}, API ${api}`).toBeLessThanOrEqual(tol);
+
+/** The `dd` that follows the `dt` with exactly this text. */
+const ddOf = (scope: Locator, dt: string) => scope.locator(`xpath=.//dt[normalize-space(.)="${dt}"]/following-sibling::dd[1]`);
+
+/** Loads /setups and returns the setups response the page itself received, so what is shown and what is compared are one response. */
+async function loadSetups(p: Page): Promise<J> {
+  const [resp] = await Promise.all([
+    p.waitForResponse((r) => new URL(r.url()).pathname === "/api/v1/setups" && r.request().method() === "GET" && r.ok()),
+    p.goto("/setups"),
+  ]);
+  const list = (await resp.json()) as J;
+  await expect(p.getByRole("table", { name: "All setups" }).locator("tbody tr")).toHaveCount((list.setups as J[]).length);
+  return list;
+}
+
+const SOURCE_WORDS: Record<string, string> = {
+  rule: "rule (set by a rate rule)",
+  default: "default (the default weight)",
+  reported: "reported (sent by automation)",
+  override: "override (pinned by an admin)",
+};
+
+/**
+ * Opens the details panel of `name` from the cost cell or from Details and compares its Price, Holder and Labels
+ * sections with the setups response `list` the page shows (UI-18; labels are shown here only, R3-3). Optionally takes
+ * a screenshot of the viewport with it open, so the backdrop covers the page. Closes it (Escape for the cost cell,
+ * Close for Details) and checks that focus is back on the opener.
+ */
+async function checkPanel(p: Page, list: J, name: string, via: "cost" | "details", shotLabel?: string): Promise<Record<string, string>> {
+  const opener =
+    via === "cost"
+      ? p.getByRole("button", { name: new RegExp(`Price details for ${esc(name)}$`) })
+      : p.getByRole("button", { name: `Details for ${name}`, exact: true });
+  await opener.click();
+  const dlg = p.getByRole("dialog", { name: `Details: ${name}` });
+  await expect(dlg).toBeVisible();
+  await expect(dlg.getByRole("heading", { level: 3, name: "Price", exact: true })).toBeFocused();
+  const s = (list.setups as J[]).find((x) => x.name === name)!;
+  const where = `${name} panel (${via})`;
+  const texts = (l: Locator) => l.evaluateAll((els) => els.map((e) => (e.textContent ?? "").trim()));
+  expect(await texts(dlg.locator("h3")), `${where} sections`).toEqual(s.holder ? ["Price", "Holder", "Labels", "Raw details"] : ["Price", "Labels", "Raw details"]);
+  const lines: Record<string, string> = await dlg.evaluate((d) =>
+    Object.fromEntries(
+      [...d.querySelectorAll("dt")].map((dt) => [dt.textContent!.trim(), (dt.nextElementSibling?.textContent ?? "").replace(/\s+/g, " ").trim()]),
+    ),
+  );
+  const pricing = list.pricing as J;
+  const cost = s.cost_per_hour_tokens as J;
+  near(num(lines["Weight"]!), s.weight, `${where} weight`);
+  expect(lines["Weight"], where).toContain(SOURCE_WORDS[s.weight_source] ?? s.weight_source);
+  near(num(lines["Multiplier now"]!), pricing.multiplier, `${where} multiplier`, 0.006);
+  if (pricing.pressure === null) expect(lines["Lab pressure"]).toBe("not measured yet");
+  else expect(lines["Lab pressure"], `${where} pressure`).toBe(`${Math.round(pricing.pressure * 100)}%`);
+  expect(lines["Cost now"], where).toMatch(/^[\d.,]+ tokens \/ h$/);
+  near(num(lines["Cost now"]!), cost.now, `${where} cost now`);
+  if (cost.now > cost.at_peak) {
+    expect(lines["Up to"], where).toMatch(/^The multipliers were changed\./);
+  } else {
+    const m = /^([\d.,]+) tokens \/ h at the highest multiplier \(([\d.,]+)×\)$/.exec(lines["Up to"] ?? "");
+    expect(m, `${where} Up to line: ${lines["Up to"]}`).not.toBeNull();
+    near(num(m![1]!), cost.at_peak, `${where} cost at peak`);
+    near(num(m![2]!), pricing.peak_multiplier, `${where} peak multiplier`, 0.006);
+  }
+  // Every label of the setup, and nothing else, in the Labels list, sorted by key.
+  const labels = s.labels as Record<string, string>;
+  const labelKeys = await texts(dlg.locator('xpath=.//h3[normalize-space(.)="Labels"]/following-sibling::dl[1]/dt'));
+  expect(labelKeys, `${where} label keys`).toEqual(Object.keys(labels).sort());
+  expect(labelKeys.length, `${where} has labels`).toBeGreaterThan(0);
+  for (const [k, v] of Object.entries(labels)) expect(lines[k], `${where} label ${k}`).toBe(v === "" ? "(empty)" : v);
+  if (list.reported_weights_enabled) await expect(dlg).toContainText("Weights are reported by automation, so the price can change while the setup is held.");
+  if (s.holder) expect(lines["Held by"], where).toBe(s.holder.is_you ? "You" : s.holder.name);
+  const noDetails = s.details === null || s.details === undefined || (typeof s.details === "object" && Object.keys(s.details).length === 0);
+  if (noDetails) await expect(dlg.getByLabel("Setup details JSON")).toHaveCount(0);
+  else await expect(dlg.getByLabel("Setup details JSON")).toBeVisible();
+  if (shotLabel) await shot(p, shotLabel, { viewport: true });
+  if (via === "cost") await p.keyboard.press("Escape");
+  else await dlg.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dlg).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  return lines;
+}
+
+/** The five columns of the Setups table (UI-15): no label column, whatever `display_label_keys` holds. */
+const SETUP_HEADERS = ["Setup", "State", "Held by", "Cost (tokens / h)", "Actions"];
+
+/**
+ * Measures the Setups table as the page lays it out and checks every row's cost text against `list` (UI-16).
+ * Returns the measurements for the caller's UI-15 and UI-20 assertions.
+ */
+async function measureSetups(p: Page, list: J) {
+  const table = p.getByRole("table", { name: "All setups" });
+  const m = await table.evaluate((t: HTMLTableElement) => {
+    const lines = (el: Element | null) => {
+      if (!el) return -1;
+      const cs = getComputedStyle(el);
+      const lh = cs.lineHeight === "normal" ? parseFloat(cs.fontSize) * 1.2 : parseFloat(cs.lineHeight);
+      return Math.round(el.getBoundingClientRect().height / lh);
+    };
+    // The most lines any one text node inside an element takes, by the distinct tops of its line boxes.
+    const textLines = (el: Element | null) => {
+      if (!el) return -1;
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let most = 0;
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        if (!(n.textContent ?? "").trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        most = Math.max(most, new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size);
+      }
+      return most;
+    };
+    const scroller = t.parentElement!;
+    return {
+      headers: [...t.tHead!.rows[0]!.cells].map((c) => (c.textContent ?? "").trim()),
+      scroller: { scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth },
+      page: { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth },
+      tableWidth: Math.round(t.getBoundingClientRect().width),
+      rows: [...t.tBodies[0]!.rows].map((r) => {
+        const cells = [...r.cells];
+        const costBtn = r.querySelector("[data-cost]");
+        const costText = costBtn?.querySelector('[aria-hidden="true"]') ?? null;
+        const held = r.querySelector("[data-held]");
+        const nameSpan = cells[0]?.querySelector("span[title]") ?? null;
+        return {
+          name: (cells[0]?.textContent ?? "").trim(),
+          nameTitle: nameSpan?.getAttribute("title") ?? null,
+          nameLines: textLines(nameSpan),
+          stateLines: textLines(cells[1] ?? null),
+          cellCount: cells.length,
+          cost: (costText?.textContent ?? "").trim(),
+          costTextLines: textLines(costText), // the cost text's nested spans give several client rects on one line
+          costLines: lines(costBtn),
+          heldLines: held ? lines(held) : 0,
+          tagged: (cells[cells.length - 2]?.textContent ?? "").includes("The price comes from"),
+        };
+      }),
+    };
+  });
+  for (const r of m.rows) {
+    const s = (list.setups as J[]).find((x) => x.name === r.name);
+    expect(s, `row ${r.name} is in the response`).toBeDefined();
+    const { now, at_peak: peak } = s!.cost_per_hour_tokens as J;
+    if (now < peak) {
+      const g = /^([\d.,]+) now · up to ([\d.,]+)$/.exec(r.cost);
+      expect(g, `${r.name} cost cell: "${r.cost}"`).not.toBeNull();
+      near(num(g![1]!), now, `${r.name} cost now`);
+      near(num(g![2]!), peak, `${r.name} cost at peak`);
+    } else {
+      expect(r.cost, `${r.name} cost cell (now ${now} >= at_peak ${peak})`).toMatch(/^[\d.,]+$/);
+      near(num(r.cost), now, `${r.name} cost now`);
+    }
+    expect(r.tagged, `${r.name} source tag (weight_source ${s!.weight_source})`).toBe(s!.weight_source === "reported" || s!.weight_source === "override");
+  }
+  return m;
+}
 
 async function acquire(p: Page, setup: string) {
   await nav(p, "Setups");
@@ -582,7 +755,7 @@ test("integration: service account, reported deployments and pressure, webhooks,
       observe("reported_weights", rw);
     });
 
-    await step("W2", "the reporter sends weights for every setup; Setups shows weight, tag and attributes before acquire; the dialog warns", A, async () => {
+    await step("W2", "the reporter sends weights for every setup; Setups shows the tag on the row and weight and attributes in the details panel before acquire; the dialog warns", A, async () => {
       await rep.setWeights(allWeights(1.15, 0.9));
       expect(rep.last.weights).toBe(200);
       const st = await stateOf(token);
@@ -595,11 +768,16 @@ test("integration: service account, reported deployments and pressure, webhooks,
       await nav(alice, "Setups");
       await alice.reload(); // the page was loaded before the report; a screen shows what it fetched
       const row = alice.getByRole("table", { name: "All setups" }).getByRole("row", { name: new RegExp(SETUP_A) });
-      await expect(row).toContainText("1.15");
       await expect(row.getByText("reported", { exact: true })).toBeVisible();
-      await expect(row).toContainText("memory-gb 512 · storage-gb 4000 · tier gold");
       await expect(row).toContainText("Free");
-      asserted("before any acquire the Setups page shows lab-03's weight 1.15, the reported tag and the attributes line");
+      // The weight and the attributes are in the details panel, opened from the cost cell (UI-12 as amended, WGT-14).
+      await row.getByRole("button", { name: new RegExp(`Price details for ${SETUP_A}$`) }).click();
+      const panel = alice.getByRole("dialog", { name: `Details: ${SETUP_A}` });
+      await expect(ddOf(panel, "Weight")).toHaveText("1.15 · reported (sent by automation)");
+      await expect(ddOf(panel, "Attributes")).toHaveText("memory-gb 512 · storage-gb 4000 · tier gold");
+      await panel.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(panel).toHaveCount(0);
+      asserted("before any acquire the Setups row shows lab-03's reported tag; its details panel shows the weight 1.15 with its source and the attributes line");
 
       await alice.getByRole("button", { name: `Acquire ${SETUP_A}` }).click();
       const dlg = alice.getByRole("dialog");
@@ -709,6 +887,8 @@ test("integration: service account, reported deployments and pressure, webhooks,
       expect(c.last_weights_refusal).toMatchObject({ service_account: ACCOUNT });
       expect(c.last_weights_refusal.message).toMatch(/above the maximum 3/);
       await nav(admin, "Settings");
+      // W1 left the admin on Settings, so the link alone does not fetch the collector again: reload for the refusal.
+      await admin.reload();
       await expect(admin.getByText("A weights report was refused after the last accepted one")).toBeVisible();
       await expect(admin.getByText(/above the maximum 3/).first()).toBeVisible();
       await expect(admin.getByText(`received from ${ACCOUNT}; observed`).first()).toBeVisible();
@@ -843,6 +1023,429 @@ test("integration: service account, reported deployments and pressure, webhooks,
       asserted("the UI deletes the throwaway account; it is gone from the list and the main account remains");
       assertNoIntegrationRequests();
       asserted("through the whole scenario the admin browser made no request to /api/v1/integration/");
+    });
+
+    // ---- setups-declutter (docs/design/setups-declutter.md and its amendment; D93, D96, D97). Last, so no earlier
+    // step sees the extra labels. Neutral keys (one of 28 characters) and values of exactly 24 characters, one set wide capitals.
+    const KEYS = ["key-one", "key-two-longer", "k3", "fourth-key", "a-rather-long-label-key-name"];
+    const BASES = ["abcdefghijklmnopqrstuv", "10.200.130.0/24-vlan-1", "host.lab.example.test-", "WWWWWWWWWWMMMMMMMMMMWW", "rack-17-row-c-slot-42-"];
+    const LONG_NAME = "setup-name-of-32-characters-long"; // the Setup cell is cut at 32 ch, so the longest name it shows whole
+    const HELD = "lab-02";
+    const labelsFor = (i: number): Record<string, string> =>
+      Object.fromEntries(KEYS.map((k, j) => [k, `${BASES[(i + j) % BASES.length]}${String(i).padStart(2, "0")}`]));
+    // UI-22: a value no selector can express (a space and parentheses), on a free setup and on the held one.
+    const EXACT_KEY = "group-name";
+    const EXACT_VALUE = "Unit B (west)";
+    const EXACT_ON = ["lab-01", HELD];
+
+    const fillLabels = async (form: Locator, labels: Record<string, string>) => {
+      let i = await form.getByRole("textbox", { name: /^Label key \d+$/ }).count();
+      for (const [k, v] of Object.entries(labels)) {
+        await form.getByRole("button", { name: "Add label", exact: true }).click();
+        i++;
+        await form.getByRole("textbox", { name: `Label key ${i}`, exact: true }).fill(k);
+        await form.getByRole("textbox", { name: `Label value ${i}`, exact: true }).fill(v);
+      }
+    };
+    /** The stored settings, as the admin API returns them. */
+    const storedSettings = async (): Promise<J> => (await json(await admin.request.get("/api/v1/admin/settings"), 200)).settings;
+
+    await step("U20", "five columns whatever display_label_keys holds: at 1280 px the Setups table does not scroll sideways, for a developer and an admin; the panel equals the response", A, async () => {
+      expect(LONG_NAME).toHaveLength(32);
+      for (let i = 1; i <= 7; i++) for (const v of Object.values(labelsFor(i))) expect(v).toHaveLength(24);
+      // The stored display label keys can be set only through the API now (D97 (j)); five of them must not add a column.
+      const before = await storedSettings();
+      expect((await api(admin, "PUT", "/api/v1/admin/settings", { ...before, display_label_keys: KEYS })).status(), "PUT settings with five display keys").toBe(200);
+      expect((await storedSettings()).display_label_keys).toEqual(KEYS);
+      await nav(admin, "Settings");
+      await expect(admin.getByRole("heading", { name: "Settings" })).toBeVisible();
+      await expect(admin.getByLabel("Display label keys")).toHaveCount(0);
+      await expect(admin.getByText(/display label keys/i)).toHaveCount(0);
+      asserted(`display_label_keys set to ${KEYS.join(", ")} through the admin API; the Settings page has no Display label keys control or text`);
+      // The labels, a weight override, a long name and a disabled setup, in Setup inventory.
+      await admin.goto("/admin/setups");
+      await expect(admin.getByRole("heading", { name: "Setup inventory" })).toBeVisible();
+      for (let i = 1; i <= 6; i++) {
+        const name = `lab-0${i}`;
+        await admin.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+        const form = admin.getByRole("complementary", { name: "Edit setup" });
+        await fillLabels(form, labelsFor(i));
+        if (name === "lab-05") await form.getByLabel("Weight override").fill("3"); // an `override` tag on one row
+        await form.getByRole("button", { name: "Save", exact: true }).click();
+        await expect(admin.getByText(`Saved ${name}.`, { exact: true })).toBeVisible();
+      }
+      await admin.getByRole("button", { name: "Add setup", exact: true }).click();
+      const add = admin.getByRole("complementary", { name: "Add setup" });
+      await add.getByLabel("Name", { exact: true }).fill(LONG_NAME);
+      await fillLabels(add, labelsFor(7));
+      await add.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(admin.getByText(`Added ${LONG_NAME}.`, { exact: true })).toBeVisible();
+      await admin.getByRole("button", { name: "Disable lab-06", exact: true }).click();
+      await expect(admin.getByRole("button", { name: "Enable lab-06", exact: true })).toBeVisible();
+      asserted(`in Setup inventory the admin gave lab-01 to lab-06 five 24-character label values each and lab-05 a weight override of 3, added ${LONG_NAME} (32 characters) with five values, and disabled lab-06`);
+
+      // Weights for every setup again (W6 stopped them); alice holds one setup, so there is a held row.
+      await rep.setWeights(allWeights(1.4, 0.9));
+      expect(rep.last.weights).toBe(200);
+      await acquire(alice, HELD);
+
+      for (const [who, p, rowsWanted] of [
+        ["developer", alice, 6],
+        ["admin", admin, 7],
+      ] as const) {
+        await p.setViewportSize({ width: 1280, height: 900 });
+        const list = await loadSetups(p);
+        expect(list.display_label_keys, `${who}: the API still returns the stored keys`).toEqual(KEYS);
+        expect(list.reported_weights_enabled, who).toBe(true);
+        const m = await measureSetups(p, list);
+        // Not vacuous: the whole table is there, with its five columns and the rows of every kind.
+        expect(m.headers, `${who} headers`).toEqual(SETUP_HEADERS);
+        expect(m.rows.length, `${who} rows`).toBe(rowsWanted);
+        expect(m.rows.length, `${who} rows equal the response`).toBe((list.setups as J[]).length);
+        expect(m.rows.every((r) => r.cellCount === SETUP_HEADERS.length), `${who}: five cells in every row`).toBeTruthy();
+        const long = m.rows.find((r) => r.name === LONG_NAME);
+        expect(long, `${who}: the ${LONG_NAME.length}-character setup is listed`).toBeDefined();
+        expect(long!.nameTitle, `${who}: its full name`).toBe(LONG_NAME);
+        expect(m.rows.filter((r) => r.heldLines > 0).length, `${who}: a held row`).toBeGreaterThanOrEqual(1);
+        expect(m.rows.some((r) => r.tagged), `${who}: a row with a source tag`).toBeTruthy();
+        if (who === "admin") expect(m.rows.map((r) => r.name)).toContain("lab-06");
+        else expect(m.rows.map((r) => r.name)).not.toContain("lab-06");
+        // No label value is in any row (R3-3).
+        const rowText = await p.getByRole("table", { name: "All setups" }).locator("tbody").innerText();
+        for (const s of list.setups as J[]) for (const v of Object.values(s.labels as Record<string, string>)) if (v.length > 3) expect(rowText, `${who}: label value ${v} in the table`).not.toContain(v);
+        // UI-20: no sideways scroll at 1280 px, neither the table's scroller nor the page.
+        expect(m.tableWidth, `${who} table width`).toBeGreaterThan(1000);
+        expect(m.scroller.scrollWidth, `${who} table scroller ${JSON.stringify(m.scroller)}`).toBeLessThanOrEqual(m.scroller.clientWidth);
+        expect(m.page.scrollWidth, `${who} page ${JSON.stringify(m.page)}`).toBeLessThanOrEqual(m.page.clientWidth);
+        for (const r of m.rows) {
+          expect(r.nameLines, `${who} ${r.name} name is one line`).toBe(1);
+          expect(r.stateLines, `${who} ${r.name} state is one line`).toBe(1);
+          expect(r.costTextLines, `${who} ${r.name} cost text is one line`).toBe(1);
+          expect(r.costLines, `${who} ${r.name} cost button is one line box`).toBe(1);
+          if (r.heldLines > 0) expect(r.heldLines, `${who} ${r.name} Held by first line`).toBe(1);
+        }
+        asserted(`${who}: exactly the headers ${SETUP_HEADERS.join(", ")} while display_label_keys holds five keys; ${m.rows.length} rows of five cells, among them ${LONG_NAME}, a held row and a tagged row; no label value in the table; at 1280 px the table (${m.tableWidth} px) and the page do not scroll sideways`);
+        asserted(`${who}: every name, state, cost button and Held by first line is one line box; each cost cell matches now and at_peak of the response and carries a tag exactly for reported and override`);
+        observe(`${who}_widths`, { table: m.tableWidth, ...m.scroller, page: m.page });
+        await shot(p, `U20-setups-${who}`);
+        // The panel from either opener, compared with the response the page shows (UI-18): every label is there.
+        await checkPanel(p, list, HELD, "cost");
+        await checkPanel(p, list, "lab-05", "details");
+        asserted(`${who}: the panel opens from the cost cell (${HELD}) and from Details (lab-05) with focus on Price; sections Price, Holder (held only), Labels, Raw details; weight, source, pressure, multiplier, both costs and every label equal GET /api/v1/setups as the page received it; focus returns to the opener`);
+      }
+    });
+
+    await step("U22", "the Label selector box suggests from label_index; a value no selector can express becomes an exact-match token; keyboard only; an invalid selector shows the API's error", A, async () => {
+      // The value with a space and parentheses, in Setup inventory.
+      await admin.goto("/admin/setups");
+      await expect(admin.getByRole("heading", { name: "Setup inventory" })).toBeVisible();
+      for (const name of EXACT_ON) {
+        await admin.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+        const form = admin.getByRole("complementary", { name: "Edit setup" });
+        await fillLabels(form, { [EXACT_KEY]: EXACT_VALUE });
+        await form.getByRole("button", { name: "Save", exact: true }).click();
+        await expect(admin.getByText(`Saved ${name}.`, { exact: true })).toBeVisible();
+      }
+      const p = alice;
+      await p.setViewportSize({ width: 1280, height: 900 });
+      const list = await loadSetups(p);
+      const index = list.label_index as { key: string; values: { value: string; selector: string | null }[] }[];
+      const exactEntry = index.find((k) => k.key === EXACT_KEY)?.values.find((v) => v.value === EXACT_VALUE);
+      expect(exactEntry, `label_index holds ${EXACT_KEY}=${EXACT_VALUE}`).toBeDefined();
+      expect(exactEntry!.selector, "the value has no selector term").toBeNull();
+      const all = (list.setups as J[]).length;
+      // Every request for the setups list from here on: none may carry the exact value.
+      const sent: string[] = [];
+      const onRequest = (r: { url(): string }) => {
+        const u = new URL(r.url());
+        if (u.pathname === "/api/v1/setups") sent.push(u.search);
+      };
+      p.on("request", onRequest);
+      const answered = (sel: string) =>
+        p.waitForResponse((r) => {
+          const u = new URL(r.url());
+          return u.pathname === "/api/v1/setups" && (u.searchParams.get("selector") ?? "") === sel;
+        });
+      try {
+        const rows = p.getByRole("table", { name: "All setups" }).locator("tbody tr");
+        const box = p.getByRole("combobox", { name: "Label selector" });
+        const lb = p.getByRole("listbox", { name: "Label suggestions" });
+        const tokens = p.getByRole("list", { name: "Exact match:" });
+        /** What the open list shows: per group, each option's left text and accessible name. */
+        const listed = () =>
+          lb.evaluate((el) =>
+            [...el.querySelectorAll('[role="group"]')].map((g) => ({
+              caption: document.getElementById(g.getAttribute("aria-labelledby") ?? "")?.textContent ?? "",
+              options: [...g.querySelectorAll('[role="option"]')].map((o) => ({ text: o.firstElementChild?.textContent ?? "", name: o.getAttribute("aria-label") ?? o.textContent ?? "" })),
+            })),
+          );
+
+        // Suggestions on click: every key of label_index, in its order, with the first three values as the note.
+        await box.click();
+        await expect(box).toHaveAttribute("aria-expanded", "true");
+        await expect(lb.getByRole("group", { name: "Label keys" })).toBeVisible();
+        const keysShown = await listed();
+        expect(keysShown.map((g) => g.caption)).toEqual(["Label keys"]);
+        expect(keysShown[0]!.options.map((o) => o.text), "the keys listed are label_index's").toEqual(index.map((k) => k.key));
+        for (const [i, k] of index.entries()) {
+          const sample = k.values.slice(0, 3).map((v) => (v.value === "" ? "(empty)" : v.value)).join(", ") + (k.values.length > 3 ? ", …" : "");
+          expect(keysShown[0]!.options[i]!.name, `key option ${k.key}`).toBe(`${k.key}, values: ${sample}`);
+        }
+        await shot(p, "U22-keys-on-click", { viewport: true });
+        await box.press("Escape");
+        await expect(lb).toHaveCount(0);
+        asserted(`a click in the empty box lists the ${index.length} keys of label_index in its order, each with its first three values`);
+
+        // Suggestions on typing; pick of a key, then of a value: the API filters.
+        await box.pressSequentially("key-o");
+        await expect(lb.getByRole("group", { name: "Label keys" }).getByRole("option")).toHaveCount(1);
+        await lb.getByRole("option", { name: /^key-one, values: / }).click();
+        await expect(box).toHaveValue("key-one=");
+        await expect(lb.getByRole("group", { name: "Values of key-one" })).toBeVisible();
+        const k1 = index.find((k) => k.key === "key-one")!;
+        const valuesShown = await listed();
+        expect(valuesShown.map((g) => g.caption)).toEqual(["Values of key-one"]);
+        expect(valuesShown[0]!.options.map((o) => o.text), "the values listed are label_index's for key-one").toEqual(k1.values.map((v) => v.value));
+        const target = (list.setups as J[]).find((s) => s.name === "lab-03")!;
+        const v3 = (target.labels as Record<string, string>)["key-one"]!;
+        expect(k1.values.find((v) => v.value === v3)?.selector, "lab-03's key-one value has a term").toBe(`key-one=${v3}`);
+        let got = answered(`key-one=${v3}`);
+        await lb.getByRole("option", { name: v3, exact: true }).click();
+        expect((await got).ok()).toBeTruthy();
+        await expect(box).toHaveValue(`key-one=${v3}`);
+        await expect(rows).toHaveCount(1);
+        await expect(rows.first()).toContainText("lab-03");
+        await expect(p.getByText("1 setup shown", { exact: true })).toBeVisible();
+        asserted(`typing key-o lists key-one alone; picking it gives key-one= and the list Values of key-one with exactly label_index's values; picking ${v3} asks the API with key-one=${v3} and lists lab-03 only`);
+        await p.getByRole("button", { name: "Clear filters" }).click();
+        await expect(rows).toHaveCount(all);
+        await expect(box).toHaveValue("");
+        await expect(box).toBeFocused();
+        asserted("Clear filters empties the box, lists every setup again and leaves focus in the box");
+
+        // The exact-match token.
+        const before = sent.length;
+        await box.pressSequentially(`${EXACT_KEY}=`);
+        const exactOption = lb.getByRole("group", { name: `Values of ${EXACT_KEY}` }).getByRole("option", { name: `${EXACT_VALUE}, exact match`, exact: true });
+        await expect(exactOption).toBeVisible();
+        await exactOption.click();
+        const token = tokens.getByRole("listitem");
+        await expect(token).toHaveCount(1);
+        await expect(token).toContainText(`${EXACT_KEY}=${EXACT_VALUE}`);
+        await expect(box).toHaveValue("");
+        await expect(box).toBeFocused();
+        await expect(rows).toHaveCount(EXACT_ON.length);
+        expect((await rows.allInnerTexts()).map((t) => t.split(/\s/)[0]).sort()).toEqual([...EXACT_ON].sort());
+        await expect(p.getByText(`${EXACT_ON.length} setups shown`, { exact: true })).toBeVisible();
+        await expect(p.getByRole("button", { name: "Clear filters" })).toBeVisible();
+        asserted(`picking "${EXACT_VALUE}, exact match" after ${EXACT_KEY}= adds the token ${EXACT_KEY}=${EXACT_VALUE} after "Exact match:", empties the box (no term for that key) and lists ${EXACT_ON.join(" and ")} only`);
+        // With State set to Free the row count follows: only the free one of the two.
+        await p.getByLabel("State").selectOption("free");
+        await expect(rows).toHaveCount(1);
+        await expect(rows.first()).toContainText("lab-01");
+        await expect(p.getByText("1 setup shown", { exact: true })).toBeVisible();
+        await p.getByLabel("State").selectOption("");
+        await expect(rows).toHaveCount(EXACT_ON.length);
+        asserted("with the token and State Free only lab-01 is listed (1 setup shown); State back to All states lists both again");
+        // With a contradicting selector nothing is left; the token is still there to remove.
+        got = answered("size=large");
+        await box.fill("size=large");
+        await box.press("Enter");
+        expect((await got).ok()).toBeTruthy();
+        await expect(rows).toHaveCount(1);
+        await expect(rows.first()).toHaveText("No setups match the filters.");
+        await expect(token).toHaveCount(1);
+        got = answered("");
+        await box.fill("");
+        await box.press("Enter");
+        expect((await got).ok()).toBeTruthy();
+        await expect(rows).toHaveCount(EXACT_ON.length);
+        asserted("the token with the selector size=large leaves no row: \"No setups match the filters.\", the token still shown; an empty selector brings both rows back");
+        const leaked = sent.slice(before).filter((q) => /unit|west/i.test(decodeURIComponent(q.replace(/\+/g, " "))));
+        expect(leaked, `requests after the pick: ${JSON.stringify(sent.slice(before))}`).toEqual([]);
+        asserted(`no request for the setups list carried the exact value (${sent.length - before} requests checked)`);
+        // Removing the token brings every row back; focus goes to the box.
+        await p.getByRole("button", { name: `Remove exact-match filter ${EXACT_KEY}=${EXACT_VALUE}`, exact: true }).click();
+        await expect(tokens).toHaveCount(0);
+        await expect(rows).toHaveCount(all);
+        await expect(box).toBeFocused();
+        await expect(p.getByRole("button", { name: "Clear filters" })).toHaveCount(0);
+        asserted("the token's remove button takes it away: every setup is listed, focus is in the box, no filter is in force");
+
+        // An invalid selector shows the API's own message under the box and keeps the last rows.
+        const bad = "key-one in ()";
+        const apiSays = await alice.request.get(`/api/v1/setups?selector=${encodeURIComponent(bad)}`);
+        expect(apiSays.status()).toBe(400);
+        const err = (await apiSays.json()).error;
+        expect(err.code).toBe("invalid_selector");
+        got = answered(bad);
+        await box.fill(bad);
+        await box.press("Enter");
+        expect((await got).status()).toBe(400);
+        await expect(p.getByText(err.message, { exact: true })).toBeVisible();
+        await expect(p.getByText(/^Forms: key=value, key!=value, key in \(a,b\), key notin \(a,b\), key, !key\./)).toBeVisible();
+        await expect(box).toHaveAttribute("aria-invalid", "true");
+        await expect(rows).toHaveCount(all);
+        observe("invalid_selector_message", err.message);
+        got = answered("");
+        await box.fill("");
+        await box.press("Enter");
+        expect((await got).ok()).toBeTruthy();
+        await expect(p.getByText(err.message, { exact: true })).toHaveCount(0);
+        await expect(box).not.toHaveAttribute("aria-invalid", "true");
+        asserted(`"${bad}" with Enter: the API's message "${err.message}" and the forms line under the box, the box marked invalid, every row still listed; an empty selector clears the error`);
+
+        // Keyboard only: Tab into the box (no list), Arrow Down and Enter pick a key and the exact value; Tab reaches
+        // the token's button; Escape closes the list and keeps the text; Enter with no active option submits.
+        await p.getByLabel("State").focus();
+        await p.keyboard.press("Tab");
+        await expect(box).toBeFocused();
+        await expect(box).toHaveAttribute("aria-expanded", "false");
+        await expect(lb).toHaveCount(0);
+        await p.keyboard.press("ArrowDown");
+        await expect(lb).toBeVisible();
+        const firstId = await lb.getByRole("option").first().getAttribute("id");
+        await expect(box).toHaveAttribute("aria-activedescendant", firstId!);
+        await p.keyboard.type(EXACT_KEY.slice(0, 7));
+        await expect(box).not.toHaveAttribute("aria-activedescendant", /.+/);
+        await p.keyboard.press("ArrowDown");
+        await p.keyboard.press("Enter");
+        await expect(box).toHaveValue(`${EXACT_KEY}=`);
+        await expect(lb.getByRole("group", { name: `Values of ${EXACT_KEY}` })).toBeVisible();
+        await p.keyboard.press("ArrowDown");
+        await expect(box).toHaveAttribute("aria-activedescendant", (await lb.getByRole("option", { name: `${EXACT_VALUE}, exact match`, exact: true }).getAttribute("id"))!);
+        await p.keyboard.press("Enter");
+        await expect(tokens.getByRole("listitem")).toHaveCount(1);
+        await expect(box).toHaveValue("");
+        await expect(rows).toHaveCount(EXACT_ON.length);
+        await p.keyboard.press("Tab");
+        await expect(p.getByRole("button", { name: "Filter", exact: true })).toBeFocused();
+        await p.keyboard.press("Tab");
+        const remove = p.getByRole("button", { name: `Remove exact-match filter ${EXACT_KEY}=${EXACT_VALUE}`, exact: true });
+        await expect(remove).toBeFocused();
+        await p.keyboard.press("Enter");
+        await expect(tokens).toHaveCount(0);
+        await expect(box).toBeFocused();
+        await expect(rows).toHaveCount(all);
+        await p.keyboard.type("size=medium");
+        await expect(lb).toBeVisible();
+        await p.keyboard.press("Escape");
+        await expect(lb).toHaveCount(0);
+        await expect(box).toHaveValue("size=medium");
+        got = answered("size=medium");
+        await p.keyboard.press("Enter");
+        expect((await got).ok()).toBeTruthy();
+        await expect(rows).toHaveCount(2);
+        await p.getByRole("button", { name: "Clear filters" }).click();
+        await expect(rows).toHaveCount(all);
+        asserted("keyboard only: Tab into the box opens nothing; Arrow Down opens the keys with the first active; typing clears the active option; Arrow Down and Enter pick the key, then the exact value (token added); Tab reaches Filter, then the token's button, whose Enter removes it and returns focus to the box; Escape closes the list and keeps size=medium; Enter submits it (2 rows)");
+      } finally {
+        p.off("request", onRequest);
+      }
+    });
+
+    await step("S1", "the lab at 0x: base multiplier 0 and a third band; after the next poll the rows read 0.0 now and the panel 0x", A, async () => {
+      const keysBefore = (await storedSettings()).display_label_keys;
+      await nav(admin, "Settings");
+      await admin.getByLabel("Base multiplier", { exact: true }).fill("0");
+      await admin.getByRole("button", { name: "Add band", exact: true }).click();
+      await admin.getByLabel("From pressure 2 (0 to 1)", { exact: true }).fill("0.5");
+      await admin.getByLabel("Multiplier 2", { exact: true }).fill("3");
+      await admin.getByRole("button", { name: "Save changes" }).click();
+      await expect(admin.getByText("Settings saved. They apply from the next poll.")).toBeVisible();
+      expect(keysBefore).toEqual(KEYS);
+      expect((await storedSettings()).display_label_keys, "display_label_keys after a save on the Settings page").toEqual(KEYS);
+      asserted(`a save on the Settings page kept the stored display_label_keys (${KEYS.join(", ")}) unchanged (UI-23)`);
+      await rep.report([HELD]); // the held setup is deployed and metering, for the screenshots
+      await expect
+        .poll(
+          async () => {
+            const l = await json(await alice.request.get("/api/v1/setups"), 200);
+            return l.pricing.multiplier === 0 && (l.setups as J[]).find((s) => s.name === HELD)?.deployed === true;
+          },
+          { message: "a poll at 0x with the held setup deployed", timeout: POLL_WAIT, intervals: [5_000] },
+        )
+        .toBeTruthy();
+      // 1280 wide and tall enough for the whole panel (UX acceptance P5).
+      await alice.setViewportSize({ width: 1280, height: 1100 });
+      const list = await loadSetups(alice);
+      expect(list.pricing).toMatchObject({ multiplier: 0, peak_multiplier: 3 });
+      expect((list.setups as J[]).every((s) => s.cost_per_hour_tokens.now === 0 && s.cost_per_hour_tokens.at_peak > 0)).toBeTruthy();
+      const m = await measureSetups(alice, list);
+      expect(m.headers).toEqual(SETUP_HEADERS);
+      expect(m.rows.length).toBe((list.setups as J[]).length);
+      expect(m.rows.every((r) => /^0\.0 now · up to [\d.,]+$/.test(r.cost)), JSON.stringify(m.rows.map((r) => r.cost))).toBeTruthy();
+      expect(m.scroller.scrollWidth).toBeLessThanOrEqual(m.scroller.clientWidth);
+      asserted("at 0x every cost cell reads `0.0 now · up to X`, X the response's at_peak at the 3x band; five headers; the table still does not scroll sideways");
+      observe("costs_0x", m.rows.map((r) => `${r.name}: ${r.cost}`));
+      observe("pricing_0x", list.pricing);
+      await shot(alice, "S1-setups-0x");
+      const lines = await checkPanel(alice, list, HELD, "cost", "S1-panel-0x");
+      expect(lines["Multiplier now"]).toBe("0×");
+      expect(lines["Cost now"]).toBe("0.0 tokens / h");
+      expect(lines["Up to"]).toMatch(/\(3×\)$/);
+      expect(lines["Charging"]).toMatch(/^Since /);
+      asserted(`the panel of ${HELD} shows Multiplier now 0×, Cost now 0.0 tokens / h, Up to at the highest multiplier (3×), Charging Since, and every label`);
+      observe("panel_0x", lines);
+    });
+
+    await step("S2", "a higher band: the reporter sends 0.95; after a poll the smoothed pressure is in the 2x band and the panel shows 2x", A, async () => {
+      await rep.report([HELD], 0.95);
+      let pricing: J = {};
+      await expect
+        .poll(
+          async () => ((pricing = (await json(await alice.request.get("/api/v1/setups"), 200)).pricing), pricing.multiplier),
+          { message: "a poll in the 2x band", timeout: 6 * 60_000, intervals: [5_000] },
+        )
+        .toBe(2);
+      await alice.setViewportSize({ width: 1280, height: 1100 });
+      const list = await loadSetups(alice);
+      expect(list.pricing.multiplier, "still 2x when the page loaded").toBe(2);
+      expect(list.pricing.pressure).toBeGreaterThanOrEqual(0.05);
+      expect(list.pricing.pressure).toBeLessThan(0.5);
+      const m = await measureSetups(alice, list);
+      expect(m.headers).toEqual(SETUP_HEADERS);
+      expect(m.rows.every((r) => / now · up to /.test(r.cost) && !r.cost.startsWith("0.0 ")), JSON.stringify(m.rows.map((r) => r.cost))).toBeTruthy();
+      expect(m.scroller.scrollWidth).toBeLessThanOrEqual(m.scroller.clientWidth);
+      asserted(`in the 2x band (smoothed pressure ${list.pricing.pressure}) every cost cell reads "N now · up to M" with the response's values; no sideways scroll`);
+      observe("costs_2x", m.rows.map((r) => `${r.name}: ${r.cost}`));
+      observe("pricing_2x", list.pricing);
+      await shot(alice, "S2-setups-2x");
+      const lines = await checkPanel(alice, list, HELD, "cost", "S2-panel-2x");
+      expect(lines["Multiplier now"]).toBe("2×");
+      asserted(`the panel of ${HELD} shows Multiplier now 2×, the lab pressure, both costs and the 3x highest multiplier of the same response`);
+      observe("panel_2x", lines);
+    });
+
+    await step("S3", "the owner's shots of the selector box: the list open on Label keys, and an exact-match token with a selector, the count and Clear filters", A, async () => {
+      const p = alice;
+      await p.setViewportSize({ width: 1280, height: 900 });
+      const list = await loadSetups(p);
+      const box = p.getByRole("combobox", { name: "Label selector" });
+      const lb = p.getByRole("listbox", { name: "Label suggestions" });
+      await box.click();
+      await expect(lb.getByRole("group", { name: "Label keys" })).toBeVisible();
+      await shot(p, "S3-list-open", { viewport: true });
+      await box.press("Escape");
+      await box.pressSequentially(`${EXACT_KEY}=`);
+      await lb.getByRole("option", { name: `${EXACT_VALUE}, exact match`, exact: true }).click();
+      await expect(p.getByRole("list", { name: "Exact match:" }).getByRole("listitem")).toHaveCount(1);
+      const rows = p.getByRole("table", { name: "All setups" }).locator("tbody tr");
+      const answered = p.waitForResponse((r) => {
+        const u = new URL(r.url());
+        return u.pathname === "/api/v1/setups" && u.searchParams.get("selector") === "size=medium";
+      });
+      await box.pressSequentially("size=medium");
+      await box.press("Escape");
+      await box.press("Enter");
+      expect((await answered).ok()).toBeTruthy();
+      await expect(rows).toHaveCount(EXACT_ON.length);
+      await expect(p.getByText(`${EXACT_ON.length} setups shown`, { exact: true })).toBeVisible();
+      await expect(p.getByRole("button", { name: "Clear filters" })).toBeVisible();
+      await p.getByRole("heading", { name: "Setups", level: 1 }).click(); // blur, so no list or focus ring covers the line
+      await shot(p, "S4-token-and-selector", { viewport: true });
+      asserted(`shots of the list open on Label keys in an empty box, and of the token ${EXACT_KEY}=${EXACT_VALUE} with size=medium in the box, ${EXACT_ON.length} setups shown and Clear filters (pricing multiplier ${list.pricing.multiplier}×)`);
+      await p.getByRole("button", { name: "Clear filters" }).click();
     });
   } finally {
     reporter?.stop();

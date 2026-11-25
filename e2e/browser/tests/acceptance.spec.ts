@@ -4,7 +4,8 @@
 //   A1 not-authorized (AUTH-5), A2 admin approves (ADM-1), A3 acquire (HOLD-1), A4 pool + metering (MET-1, MET-4),
 //   A5 pressure band (MET-2, MET-3), A6 hold limit (HOLD-3), A7 release of a deployed setup is pending until teardown (HOLD-2, HOLD-6, HOLD-7),
 //   A8 month rollover with debt (LED-3).
-// Added with the ledger, labels and onboarding change (design "Tests"): A2g the greeting (UI-10), A2f the label chips (UI-9),
+// Added with the ledger, labels and onboarding change (design "Tests"): A2g the greeting (UI-10), A2f filtering by label
+//   through the Label selector box's suggestions (UI-21, which replaced the chips of UI-9),
 //   A2p a pre-approved user's first sign-in (PRE-1), A8p ledger paging and views (UI-8), A8c compaction through the real stack (LED-7, LED-8).
 // Only two things are driven outside the UI, as they stand in for the outside world: the simulator control API
 // (pool and pressure) and the e2e clock control (month jump).
@@ -318,7 +319,11 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await nav(admin!, "Settings");
     await expect(admin!.getByRole("heading", { name: "Settings" })).toBeVisible();
     const p = admin!;
-    await p.getByLabel("Display label keys").fill("size");
+    // The display label keys are not on the page any more (UI-23); the page sends the stored value back unchanged.
+    await expect(p.getByLabel("Display label keys")).toHaveCount(0);
+    await expect(p.getByText(/display label keys/i)).toHaveCount(0);
+    const storedKeys = (await (await p.request.get("/api/v1/admin/settings")).json()).settings.display_label_keys;
+    expect(Array.isArray(storedKeys), `display_label_keys is still returned: ${JSON.stringify(storedKeys)}`).toBeTruthy();
     await p.getByLabel("Poll interval").fill("1m");
     const enforce = p.getByRole("checkbox", { name: "Block acquiring at zero tokens" });
     if (!(await enforce.isChecked())) await enforce.check();
@@ -334,11 +339,13 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await p.getByRole("button", { name: "Save changes" }).click();
     await expect(p.getByText("Settings saved. They apply from the next poll.")).toBeVisible();
     await p.reload();
-    await expect(p.getByLabel("Display label keys")).toHaveValue("size");
     await expect(p.getByLabel("Poll interval")).toHaveValue("1m");
     await expect(p.getByLabel("From pressure 1 (0 to 1)", { exact: true })).toHaveValue("0.05");
     await expect(p.getByRole("checkbox", { name: "Block acquiring at zero tokens" })).toBeChecked();
-    asserted("label key size, poll 1m, enforcement ON, bands 1x / 2x from 0.05 saved and reloaded");
+    expect((await (await p.request.get("/api/v1/admin/settings")).json()).settings.display_label_keys, "display_label_keys after the save").toEqual(storedKeys);
+    asserted("poll 1m, enforcement ON, bands 1x / 2x from 0.05 saved and reloaded");
+    asserted("Settings has no Display label keys control or text; the save sent the stored display_label_keys back unchanged");
+    observe("display_label_keys", storedKeys);
     observe("bands", "base 1, from 0.05 -> 2");
     await stretchKeycloakTokenLifetime();
     observe("keycloak", "realm token and SSO session lifetimes set to 40 days (see A8)");
@@ -394,43 +401,68 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     observe("alice_greeting", (await q.locator("header").innerText()).replace(/\s+/g, " "));
   });
 
-  // ---- 2f: UI-9, SET-8
-  await step("A2f", "a developer filters the setups with a label chip", A, async () => {
+  // ---- 2f: UI-21, SET-8
+  await step("A2f", "a developer filters the setups through the Label selector box's suggestions", A, async () => {
     const p = alice!;
     await nav(p, "Setups");
     await expect(p.getByRole("heading", { name: "Setups" })).toBeVisible();
     const rows = p.getByRole("table", { name: "All setups" }).locator("tbody tr");
     await expect(rows).toHaveCount(6);
-    await expect(p.getByRole("group", { name: "Label size" })).toBeVisible();
-    const box = p.getByLabel("Label selector");
-    await expect(box).toHaveAttribute("placeholder", /^e\.g\. size=\w+$/);
-    const chip = (term: string) => p.getByRole("button", { name: `Filter by ${term}`, exact: true });
-    const click = async (term: string, sent: string) => {
-      const answered = p.waitForResponse((r) => {
+    await expect(p.getByText("Available labels")).toHaveCount(0);
+    await expect(p.getByRole("button", { name: /^Filter by / })).toHaveCount(0);
+    asserted("no Available labels block and no label chip");
+    const box = p.getByRole("combobox", { name: "Label selector" });
+    await expect(box).toHaveAttribute("placeholder", /^Type or pick a label, e\.g\. size=\w+$/);
+    const list = p.getByRole("listbox", { name: "Label suggestions" });
+    const answered = (sent: string) =>
+      p.waitForResponse((r) => {
         const u = new URL(r.url());
         return u.pathname === "/api/v1/setups" && (u.searchParams.get("selector") ?? "") === sent;
       });
-      await chip(term).click();
-      expect((await answered).ok()).toBeTruthy();
-    };
-    await click("size=large", "size=large");
+    // Discovery: a click in the empty box lists the keys with a sample of their values.
+    await box.click();
+    await expect(list.getByRole("group", { name: "Label keys" }).getByRole("option", { name: "size, values: extralarge, large, medium", exact: true })).toBeVisible();
+    await box.press("Escape");
+    await expect(list).toHaveCount(0);
+    await expect(box).toHaveValue("");
+    asserted("a click in the empty box opens Label keys with size and its values; Escape closes the list and the box stays empty");
+    // Type part of the key, pick it, then pick a value: the pick applies the filter.
+    await box.pressSequentially("si");
+    await list.getByRole("option", { name: /^size, values: / }).click();
+    await expect(box).toHaveValue("size=");
+    await expect(box).toBeFocused();
+    const values = list.getByRole("group", { name: "Values of size" });
+    await expect(values.getByRole("option")).toHaveText(["extralarge", "large", "medium"]);
+    let got = answered("size=large");
+    await values.getByRole("option", { name: "large", exact: true }).click();
+    expect((await got).ok()).toBeTruthy();
     await expect(box).toHaveValue("size=large");
-    await expect(chip("size=large")).toHaveAttribute("aria-pressed", "true");
     await expect(rows).toHaveCount(2);
     await expect(rows.nth(0)).toContainText("lab-03");
     await expect(rows.nth(1)).toContainText("lab-04");
-    asserted("the chip size=large puts its term in the selector box, the page asks the API with it and lists only lab-03 and lab-04");
-    await click("size=medium", "size=medium");
+    asserted("typing si lists the key size; picking it gives size= and the list Values of size; picking large asks the API with size=large and lists only lab-03 and lab-04");
+    // The caret in the value: a pick replaces the whole value token.
+    await box.click();
+    await box.press("Home");
+    for (let i = 0; i < "size=".length; i++) await box.press("ArrowRight");
+    await expect(list.getByRole("group", { name: "Values of size" })).toBeVisible();
+    got = answered("size=medium");
+    await list.getByRole("option", { name: "medium", exact: true }).click();
+    expect((await got).ok()).toBeTruthy();
     await expect(box).toHaveValue("size=medium");
-    await expect(chip("size=large")).toHaveAttribute("aria-pressed", "false");
     await expect(rows).toHaveCount(2);
     await expect(rows.nth(0)).toContainText("lab-01");
     await expect(rows.nth(1)).toContainText("lab-02");
-    asserted("a chip of the same key replaces the term: size=medium, lab-01 and lab-02 only");
-    await click("size=medium", "");
+    asserted("with the caret just after size= a pick of medium replaces the value: size=medium, lab-01 and lab-02 only");
+    // Clearing the box and pressing Enter submits the empty selector, as before.
+    got = answered("");
+    await box.fill("");
+    await box.press("Enter");
+    expect((await got).ok()).toBeTruthy();
     await expect(box).toHaveValue("");
     await expect(rows).toHaveCount(6);
-    asserted("activating the applied chip again removes the term: the box is empty and all six setups are listed");
+    await expect(p.getByRole("button", { name: "Clear filters" })).toHaveCount(0);
+    asserted("an empty box and Enter: no selector is sent and all six setups are listed; no filter is shown in force");
     observe("placeholder", await box.getAttribute("placeholder"));
   });
 
@@ -478,7 +510,15 @@ test("acceptance path: sign in, approve, acquire, meter, pressure, hold limit, r
     await nav(p, "Setups");
     await expect(p.getByRole("heading", { name: "Setups" })).toBeVisible();
     const row = p.getByRole("table", { name: "All setups" }).getByRole("row", { name: new RegExp(SETUP_A) });
-    await expect(row).toContainText("large");
+    // Labels are in the details panel only (UI-18): open it from the cost cell and read size there.
+    await expect(row.locator("td")).toHaveCount(5);
+    await row.getByRole("button", { name: new RegExp(`Price details for ${SETUP_A}$`) }).click();
+    const panel = p.getByRole("dialog", { name: `Details: ${SETUP_A}` });
+    await expect(panel.getByRole("heading", { level: 3, name: "Labels", exact: true })).toBeVisible();
+    await expect(panel.locator('xpath=.//dt[normalize-space(.)="size"]/following-sibling::dd[1]')).toHaveText("large");
+    await panel.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(panel).toHaveCount(0);
+    asserted(`the ${SETUP_A} row has five cells and no label; its details panel lists size large`);
     await p.getByRole("button", { name: `Acquire ${SETUP_A}` }).click();
     const dlg = p.getByRole("dialog");
     await expect(dlg).toContainText(new RegExp(`Acquire ${SETUP_A}\\?`));

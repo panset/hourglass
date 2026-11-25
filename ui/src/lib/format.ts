@@ -24,6 +24,16 @@ export function formatTokens(value: number | null | undefined, opts: FormatToken
   return opts.signed && value > 0 ? "+" + abs : abs;
 }
 
+/**
+ * A weight where it is explained: as `formatTokens`, except that a weight three decimals would print as zero
+ * is shown with every digit the API sent, so no price above zero stands beside a weight of "0". Formatting only.
+ */
+export function formatWeight(value: number | null | undefined): string {
+  const short = formatTokens(value);
+  if (short !== "0" || !value) return short;
+  return (value < 0 ? MINUS : "") + new Intl.NumberFormat("en-US", { maximumFractionDigits: 20 }).format(Math.abs(value));
+}
+
 /** "2 d 4 h", "1 h 20 m", "40 min", "<1 min". Input is whole seconds. */
 export function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -94,8 +104,12 @@ export function formatMultiplier(multiplier: number): string {
   return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(multiplier)}×`;
 }
 
+/** A cost per hour without its unit, 1 to 3 decimals: 2 -> "2.0", 0.125 -> "0.125". */
+export function formatRate(tokensPerHour: number): string {
+  return new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 3 }).format(tokensPerHour);
+}
+
 /** 2 -> "2.0 / h" */
 export function formatPerHour(tokensPerHour: number): string {
-  const nf = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 3 });
-  return `${nf.format(tokensPerHour)} / h`;
+  return `${formatRate(tokensPerHour)} / h`;
 }

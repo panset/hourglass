@@ -285,12 +285,13 @@ export interface paths {
         };
         /**
          * Setups with labels, weight, state, holder and holder's balance
-         * @description Visible to every user with a role. Also returns `display_label_keys`
-         *     (SET-6). Admins additionally get disabled setups and the `admin`
-         *     sub-object; for other users `admin` is null and disabled setups are
-         *     omitted. `selector` uses the RULE-2 syntax; a bad one is 400
-         *     `invalid_selector` with the parse error. The state and label filters
-         *     of the Setups page are applied client-side on this list.
+         * @description Visible to every user with a role. Also returns `display_label_keys`,
+         *     kept for compatibility; the Setups page does not read it. Admins
+         *     additionally get disabled setups and the `admin` sub-object; for other
+         *     users `admin` is null and disabled setups are omitted. `selector` uses
+         *     the RULE-2 syntax; a bad one is 400 `invalid_selector` with the parse
+         *     error. The state filter and exact-match label tokens are applied
+         *     client-side on this list.
          *
          */
         get: operations["listSetups"];
@@ -1365,9 +1366,12 @@ export interface components {
              *     distinct. `[]` when no setup has a label (SET-8).
              *      */
             label_index: components["schemas"]["LabelIndexKey"][];
-            /** @example [
+            /**
+             * @description Kept for compatibility; no page reads it since v1.3.0.
+             * @example [
              *       "tier"
-             *     ] */
+             *     ]
+             */
             display_label_keys: string[];
             /** @description Counts over all enabled setups, ignoring `selector` ("9 of 11 setups deployed · 2 free"). */
             summary: {
@@ -1377,6 +1381,18 @@ export interface components {
             };
             /** @description Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`. */
             metering_description: string | null;
+            /** @description What every `cost_per_hour_tokens` in this response was computed
+             *     with, read once per request (UI-18). Added in v1.3.0; a client
+             *     should treat it as optional when it may talk to an older server.
+             *      */
+            pricing: {
+                /** @description The multiplier of `cost_per_hour_tokens.now`. */
+                multiplier: number;
+                /** @description The highest band's multiplier, of `cost_per_hour_tokens.at_peak`. */
+                peak_multiplier: number;
+                /** @description Smoothed pressure of the sample `multiplier` comes from; null before the first successful poll. */
+                pressure: number | null;
+            };
         };
         LabelIndexKey: {
             /** @example site */
@@ -1589,9 +1605,12 @@ export interface components {
         Settings: {
             /** @default 1 */
             default_weight: number;
-            /** @example [
+            /**
+             * @description Kept for compatibility; no page reads it since v1.3.0.
+             * @example [
              *       "tier"
-             *     ] */
+             *     ]
+             */
             display_label_keys: string[];
             bands: components["schemas"]["Bands"];
             /**

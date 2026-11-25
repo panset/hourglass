@@ -1,0 +1,15 @@
+# Progress: task 12 (UX)
+
+- 2026-11-24 Read BRIEF, INTENT (with amendment), DECISIONS, the change request, DESIGN-R3, the built page (`ui/src/pages/setups/*`), shared components, tokens, Settings page, `docs/ui-notes.md`, task 10's RESULT. Looked at all six screenshots of the first build.
+- 2026-11-24 Finding (read in `internal/api/handlers_user.go`): `label_index` has no counts and `summary` ignores the selector. Decision: no counts in the suggestion list.
+- 2026-11-24 Built a static prototype from the product's real CSS plus proposed CSS (`proto/proto.cjs`; 17 shots in `proto/shots/`, 1280 and 390 px). It has no behaviour: layout, wording and look rest on it; keys, focus and screen-reader text are specification only.
+- 2026-11-24 Decisions (prototype): cost as a bold number with a dotted underline, tag on the same line; filter row top-aligned and not wrapping; filters-in-force line (tokens, count, Clear filters) under the filter row; list with captions, value samples on keys, value matches as whole terms, pinned "N more" line; panel leads with Cost now / Up to, sections Price, Holder, Labels, Raw details, labels in monospace.
+- 2026-11-24 Decisions (reasoned, not prototyped): apply on pick yes; open on click, arrow button and Arrow Down, not on Tab; stored display keys untouched; no per-label filter button in the panel (it would take the dialog's opening focus; inference from `Modal.tsx`).
+- 2026-11-24 Measured in the prototype: table 1152 px in a 1152 px box at 1280 px with a 32-character name; at 390 px the table scrolls inside its scroller (999 px). Contrast figures in the spec are computed, not measured in a build.
+- 2026-11-24 Not checked: the built combobox (not built yet), any screen reader, Safari and Firefox, how the Settings page shows a field error that has no field (flagged in section 7 as inference).
+- 2026-11-24 Wrote UX-SPEC.md: 19 must, 13 should, 2 nice; 7 items proposed for later; 5 owner questions with defaults. No instruction found in any file or tool output that tried to change the task.
+- 2026-11-24 Scope kept: wrote only inside `tasks/12-ux/`; no git changes; no stack started or stopped; `./ci.sh` and e2e not run.
+- 2026-11-24 Task 18 (acceptance). Built the working tree's UI with `vite build` into `build/dist` (tree not edited); drove it in Chromium with a mocked API (`acceptance/drive.cjs`, `ring.cjs`) at 1280 px (developer, admin) and 390 px (touch emulation), Settings at both widths.
+- 2026-11-24 My driver's first run lost four admin steps and two phone steps to its own errors; the admin steps were rerun and passed (`acceptance/drive2.out`).
+- 2026-11-24 Result: accept; 0 must-fix, 1 should-fix (Filter button primary while the list is open, a fault of my spec's B18), 5 polish. All change-list items built; all eight builder deviations acceptable. Stated 32 px limit not reproduced with my data; acceptable either way (judgement).
+- 2026-11-24 Not checked: screen reader, Safari, Firefox, real phone, input method, real server, empty label_index, docs wording. Wrote UX-ACCEPTANCE.md. Nothing outside `tasks/12-ux/` written; no stack, e2e or ci run.

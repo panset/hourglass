@@ -1,0 +1,7 @@
+- 2026-11-24 Read BRIEF, COMMON, INTENT, DECISIONS, change request, DESIGN Rev 2. Next: read target docs.
+- 2026-11-24 Read ui-notes, decisions (format, D74, D90-D92), reported-weights, integrating, README, progress. ci.sh has no docs lint, so no command to run.
+- 2026-11-24 Decision: requirement list with test names goes in docs/progress.md (the repo keeps requirement text in design docs and the SPEC-source D-entry; progress.md is the status record); the full text of UI-15..UI-20 also goes in D95.
+- 2026-11-24 Edited ui-notes.md (Setups section, line-167 hint, overdrawn marker, Differences 4/6/14, new 15, spec-asks item 4).
+- 2026-11-24 Edited reported-weights.md (UI-12 amended, WGT-14 note, test-plan line), integrating.md:471, README.md:7,9, setups-declutter.md status + corrections.
+- 2026-11-24 Appended D93-D95 to decisions.md (Q-A one line, Q-B B2). Added progress.md section.
+- 2026-11-24 Wrote RESULT.md. Done.

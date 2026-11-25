@@ -20,6 +20,45 @@ export function WeightTag({ source }: { source: string | null | undefined }) {
   );
 }
 
+/** The sentence shown wherever a price is explained while `reported_weights_enabled` is true (UI-12, UI-18). */
+export const PRICE_CHANGE_SENTENCE = "Weights are reported by automation, so the price can change while the setup is held.";
+
+/** What a price source tag means, for screen readers: the tag itself is one word. */
+const PRICE_SOURCE_SENTENCE: Record<string, string> = {
+  reported: "The price comes from a reported weight.",
+  override: "The price comes from a weight pinned by an admin.",
+};
+
+/**
+ * The source tag of a price cell (UI-16): the same badge and word as `WeightTag` for `reported` and `override`,
+ * followed by a visually hidden sentence, and nothing for any other source. The badge has no `title`: the
+ * sentence is a sibling, so the badge's text stays the one word.
+ */
+export function PriceSourceTag({ source }: { source: string | null | undefined }) {
+  if (!source || !Object.hasOwn(PRICE_SOURCE_SENTENCE, source)) return null;
+  const sentence = PRICE_SOURCE_SENTENCE[source];
+  return (
+    <>
+      <Badge tone={source === "reported" ? "blue" : "grey"}>{source}</Badge>
+      <span className="sr-only">{sentence}</span>
+    </>
+  );
+}
+
+const SOURCE_MEANING: Record<string, string> = {
+  rule: "set by a rate rule",
+  default: "the default weight",
+  reported: "sent by automation",
+  override: "pinned by an admin",
+};
+
+/** A weight source in words, starting with the tag word: `override (pinned by an admin)`. Any other value is shown as sent. */
+export function sourceWords(source: string | null | undefined): string {
+  if (!source) return "";
+  const meaning = Object.hasOwn(SOURCE_MEANING, source) ? SOURCE_MEANING[source] : undefined;
+  return meaning ? `${source} (${meaning})` : source;
+}
+
 /** `memory-gb 512 · storage-gb 4000 · tier gold`, or null when there are none. Not a column and not a filter (WGT-16). */
 export function attributesLine(attrs: Record<string, string> | null | undefined): string | null {
   const parts = Object.entries(attrs ?? {}).map(([k, v]) => `${k} ${v}`);

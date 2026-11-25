@@ -1,0 +1,11 @@
+# Progress: 03-design-review
+
+- 2026-11-24 Read BRIEF, INTENT, the change request, DESIGN.md, RESULT.md, PLAN.md, DECISIONS.md. Next: check the design's code claims (server cost computation, the setups page, Modal, Table, tests, e2e).
+- 2026-11-24 Checked the server side: `listSetups`, `loadLab`, `lab.cost`, `HourlyCostMT`, `meteringOf`, the collector's sample write, the resolver. The design's cost table holds. `pricing` would come from the same `lab` value as the costs (no extra read). Found: `l.mult` is the stored sample's multiplier and `l.peakMult` is from current settings, so after a band edit `now` can exceed `at_peak` until the next poll.
+- 2026-11-24 Checked the UI side: `index.tsx`, `Modal`, `Table`/`Clip`, `weight.tsx`, `format.ts`, `useApi`, `usePolling`, `TopBar`, `LabelChips`, `setups.test.tsx`, fixtures, the Playwright specs and config. Found: no handling of a missing `pricing` (new UI, older API); focus return fails when the opener row is gone; a typed fixture the file list misses (`admin-shared/fixtures.ts`).
+- 2026-11-24 Read the prototype script and its screenshot. Found: every non-label cell in the prototype is `nowrap`, the product's `.linkButton`, `.reason` and Held by cell are not; the screenshot shows 6 characters per label, not 8 to 9; the script's "worst" row was run but its result is not in DESIGN.md.
+- 2026-11-24 Decision: I did not run the prototype in a browser. The brief allows focused unit tests and read-only git only, so layout findings are from reading and are marked as inference where they depend on browser behaviour.
+- 2026-11-24 Checked the label filters: a value with whitespace or one of `, ( ) = !` has no selector term (`rules.LabelTerm`), so its chip is unusable and the removed dropdown was its only filter. Owner question.
+- 2026-11-24 Checked docs and other consumers: `docs/integrating.md:471`, `README.md:9`, `docs/ui-notes.md` items 4, 6, 14 mention the weight on the Setups row and are not in the design's list. The v1.1.0 comparer reports an added object as one path, so `pricing` is one entry.
+- 2026-11-24 Decision: verdict is "build with the listed changes". Next: write REVIEW.md.
+- 2026-11-24 Wrote REVIEW.md (3 must fix, 9 should fix, 9 notes; two owner questions). Re-checked the line numbers it cites and corrected five. Task finished; final reply sent.

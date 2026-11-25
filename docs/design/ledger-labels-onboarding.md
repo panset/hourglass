@@ -2,6 +2,8 @@
 
 Status: approved direction, not implemented. Written 2026-11-23 against `main` at `d96a950` and checked against the code the same day.
 
+**Amended by D96 (2026-11-24).** The label chips of section B2 and requirement UI-9 are superseded: the Setups page has no "Available labels" block and no label columns, and the Label selector box suggests label keys and values as the user types. UI-9 is replaced by UI-21 and UI-22 of [setups-declutter.md](setups-declutter.md#amendment-2026-11-24). SET-8 (`label_index`) is unchanged. The text below is kept as the history of this design.
+
 This document is the brief for the agent that implements, tests and releases the work with the `/orchestrate` skill. It says what to build and why, and names the decisions the owner already made. Where it leaves a detail open, choose the simplest option that satisfies the numbered requirements in [Requirements](#requirements) and record the choice in `docs/decisions.md` from D69 on. If something would contradict this document, stop and ask the owner.
 
 Customers already run Hourglass. Every change here must leave an upgraded installation working with no configuration change, and must leave existing API clients working. [Compatibility](#compatibility) lists what that means for each part.
@@ -194,6 +196,8 @@ Grouping by local day needs the configured timezone, which SQLite cannot compute
 
 ### B2. UI
 
+> Amended by D96: the chips described in this section were removed in v1.3.0. UI-9 is replaced by UI-21 and UI-22 of [setups-declutter.md](setups-declutter.md#amendment-2026-11-24). The bullets below are history.
+
 - Under the Label selector box, an "Available labels" block lists each key from `label_index` with its values as chips. A key shows its first 12 values and a "+N more" control for the rest. With more than 8 keys the block starts collapsed behind a "Show labels" control. Record the two numbers if you change them.
 - A chip is a button with an accessible name such as "Filter by site=sjc", and it works with the keyboard. Activating it puts its `selector` term into the selector box and applies the filter:
   - if the box already holds exactly that term, the term is removed (the chip toggles);
@@ -204,6 +208,7 @@ Grouping by local day needs the configured timezone, which SQLite cannot compute
 - A value whose `selector` is null is shown as a chip that cannot be activated, with a short explanation that it cannot be used in a selector.
 - The placeholder is the first non-null term of `label_index` ("e.g. site=sjc"). With an empty index the placeholder is omitted and the block says no setup has labels.
 - The existing dropdowns for `display_label_keys` stay as they are.
+- (Amended by D96: the dropdowns went with D93 and the chips with D96; the selector box's suggestions replace them.)
 
 ## C. Greeting
 
@@ -369,7 +374,7 @@ Every requirement gets at least one test named after its id that fails when the 
 ### Frontend
 
 - **UI-8** The Ledger on My usage shows at most 20 rows, by day by default with a switch to every poll, with Newer and Older controls that are disabled at the ends; changing the month or the view returns to the first page.
-- **UI-9** The Setups page lists every key and value of `label_index` as chips; activating a chip adds, replaces or removes its term and filters; a value with no term cannot be activated; the placeholder is taken from the index.
+- **UI-9** (Replaced. Amended by D96: UI-9 is replaced by UI-21 and UI-22 of [setups-declutter.md](setups-declutter.md#amendment-2026-11-24); its D94(j) amendment is superseded too. Original text, kept as history:) The Setups page lists every key and value of `label_index` as chips; activating a chip adds, replaces or removes its term and filters; a value with no term cannot be activated; the placeholder is taken from the index.
 - **UI-10** The top bar shows "Hello, {display_name}" for SSO users and the local admin, and no greeting when the name is empty.
 - **UI-11** Admin > Users shows the pre-approval list with its source and use, adds pasted emails with a role, and removes database entries.
 

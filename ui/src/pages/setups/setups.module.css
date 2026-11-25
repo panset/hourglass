@@ -3,28 +3,97 @@
 .titleRow { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--gap-control); }
 .titleRow h1 { margin: 0; }
 .summary { font-size: var(--fs-14); color: var(--color-muted); }
-.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--gap-control); }
-.filters form { display: flex; align-items: flex-end; gap: var(--gap-control); }
+
+/* Filter row: the controls share one top edge, so a message under the selector box moves none of them. */
+.filters { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--gap-control); }
+.filters form { display: flex; flex: 1 1 360px; flex-wrap: nowrap; align-items: flex-start; gap: var(--gap-control); min-width: 0; }
 .stateSel { width: 180px; }
-.labelSel { width: 160px; }
-.selectorInput { width: 260px; }
+.selectorField { flex: 0 1 360px; min-width: 0; }
+/* Down by one label line, to stand beside the box. */
+.filterBtn { flex: none; margin-top: calc(var(--fs-13) * 1.45 + var(--gap-label)); }
+.selectorWrap { position: relative; }
+/* Typed text is a label term: monospace, as in the list, the token and My usage. The placeholder is prose. */
+.selectorWrap .selectorInput { width: 100%; padding-right: 40px; font-family: var(--font-mono); font-size: var(--fs-13); }
+.selectorWrap .selectorInput::placeholder { font-family: var(--font-sans); font-size: var(--fs-14); color: var(--color-muted); opacity: 1; }
+/* The arrow of the State select, so the box reads as something that lists things. Not a Tab stop. */
+.toggle { position: absolute; top: 1px; right: 1px; bottom: 1px; width: 38px; padding: 0; border: 0; border-radius: 0 5px 5px 0; background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23767676' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / 12px 12px; cursor: pointer; }
+.selectorError { font-size: var(--fs-13); color: var(--color-red); overflow-wrap: anywhere; }
+.selectorHelp { font-size: var(--fs-13); color: var(--color-muted); }
+
+/* The suggestion list: under the box, at least its width, below the dialog (z-index 40). The options scroll;
+   the "N more" line is outside the scroller, so it is in view without scrolling. */
+.list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; display: flex; flex-direction: column; min-width: 100%; width: max-content; max-width: min(520px, calc(100vw - 2 * var(--page-pad))); background: var(--color-bg); border: 1px solid var(--color-control-border); border-radius: var(--radius-control); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
+/* Eight options and a caption. */
+.listScroll { max-height: 328px; overflow-y: auto; padding: 4px 0; }
+/* Sticky, so a long list still says whose values it shows. */
+.caption { position: sticky; top: -4px; background: var(--color-bg); padding: 8px 12px 4px; font-size: var(--fs-12); font-weight: 500; color: var(--color-muted); }
+.option { display: flex; align-items: baseline; gap: 16px; min-height: 36px; padding: 8px 12px; cursor: pointer; }
+.option:hover { background: var(--color-panel); }
+/* The active option: a background and a bar, so it is not told by colour alone. */
+.option[aria-selected="true"] { background: var(--color-panel); box-shadow: inset 3px 0 0 var(--color-accent); }
+.optMain { font-family: var(--font-mono); font-size: var(--fs-13); overflow-wrap: anywhere; }
+.optNote { margin-left: auto; min-width: 0; max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-12); color: var(--color-muted); }
+.listNote { padding: 8px 12px; font-size: var(--fs-12); color: var(--color-muted); }
+.more { padding: 8px 12px; font-size: var(--fs-12); color: var(--color-muted); border-top: 1px solid var(--color-row-rule); }
+@media (pointer: coarse) {
+  .option { min-height: 44px; padding-top: 12px; padding-bottom: 12px; }
+  .listScroll { max-height: 392px; }
+}
+
+/* The line under the filter row, only while a filter is in force: tokens, count, Clear filters. */
+.inForce { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--fs-14); }
+.inForce ul { display: flex; flex-wrap: wrap; gap: 8px; max-width: 100%; margin: 0; padding: 0; list-style: none; }
+.exactLead { color: var(--color-muted); }
+.count { color: var(--color-muted); }
+.applied { color: var(--color-muted); max-width: 100%; overflow-wrap: anywhere; }
+.applied code { font-size: var(--fs-13); color: var(--color-text); }
+/* An exact-match token: the look of the product's label chip, with a remove button joined to it. */
+.token { display: inline-flex; align-items: stretch; max-width: 100%; border: 1px solid var(--color-control-border); border-radius: var(--radius-chip); background: var(--color-panel); }
+.tokenText { align-self: center; max-width: 40ch; padding: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--fs-12); }
+.tokenRemove { flex: none; min-width: 28px; min-height: 28px; padding: 0; border: 0; border-left: 1px solid var(--color-control-border); background: none; font: inherit; font-size: var(--fs-16); line-height: 1; color: var(--color-text); cursor: pointer; }
+.tokenRemove:hover { color: var(--color-accent); }
+
 .overdrawn { color: var(--color-amber-text); font-weight: 600; }
-.muted { color: var(--color-muted); }
 .actions { display: flex; gap: 8px; align-items: center; }
-.releasing { display: inline-flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .row-disabled { opacity: 0.7; }
-.reason { font-size: var(--fs-12); color: var(--color-muted); display: block; max-width: 18em; }
-.details { background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 12px; max-height: 50vh; overflow: auto; font-family: var(--font-mono); font-size: var(--fs-12); }
+/* Second line of the Held by cell: the word, not colour alone. */
+.overdrawnNote { display: block; font-size: var(--fs-12); }
+.holderLine { display: inline-block; }
+.you { font-weight: 600; }
+/* The cost is a number first and a control second: text colour, and a dotted underline as the sign that it opens the panel. */
+.costButton { background: none; border: 0; padding: 0; font: inherit; color: var(--color-text); cursor: pointer; text-decoration: underline dotted var(--color-control-border); text-underline-offset: 4px; }
+.costButton:hover { color: var(--color-accent); text-decoration-style: solid; text-decoration-color: currentColor; }
+.costNow { font-weight: 600; }
+.costMax { color: var(--color-muted); }
+.costButton:hover .costMax { color: inherit; }
+/* The source tag, on the cost's own line. */
+.costTag { margin-left: 8px; }
+/* Second line of the cost cell, only for a hold that is not charging yet: the policy's reason. The cell is nowrap; this line has a stated width and wraps, also inside a word. */
+.costNote { display: block; width: 12em; white-space: normal; overflow-wrap: anywhere; font-size: var(--fs-12); color: var(--color-muted); }
 .linkButton { background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent); text-decoration: underline; cursor: pointer; }
-.chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
-.labels { display: flex; flex-direction: column; gap: 8px; }
-.labelsHead { display: flex; align-items: baseline; gap: var(--gap-control); }
-.labelsTitle { margin: 0; font-size: var(--fs-14); }
-.labelKey { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-.labelKeyName { font-weight: 600; font-size: var(--fs-14); min-width: 6em; }
-.chipList { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.chip { font: inherit; font-size: var(--fs-12); padding: 2px 10px; border-radius: 999px; border: 1px solid var(--color-control-border); background: var(--color-bg); color: var(--color-text); cursor: pointer; }
-.chip:hover { background: var(--color-panel); }
-.chipSelected { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
-.chipSelected:hover { background: var(--color-accent); }
-.chipUnusable { color: var(--color-muted); text-decoration: line-through; cursor: not-allowed; border-style: dashed; }
+
+/* The details JSON inside the panel: no height limit and wrapped lines, so the dialog is the only scroller. */
+.details { margin: 0; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-card); padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-12); }
+.panel { display: flex; flex-direction: column; gap: 12px; }
+.panel h3 { margin: 12px 0 0; font-size: var(--fs-14); }
+.panel p { margin: 0; }
+/* Price and Holder share one first-column width, so their values start at the same x. */
+.panelList { display: grid; grid-template-columns: 10em minmax(0, 1fr); gap: 6px 16px; margin: 0; font-size: var(--fs-14); }
+.panelList dt { color: var(--color-muted); overflow-wrap: anywhere; }
+.panelList dd { margin: 0; overflow-wrap: anywhere; }
+/* The answer: the two costs, larger. */
+.panelLead dd { font-size: var(--fs-16); }
+.panelLead dd strong { font-weight: 600; }
+.upToNote { font-size: var(--fs-14); color: var(--color-muted); }
+.panel .panelNote { font-size: var(--fs-13); color: var(--color-muted); }
+/* Labels: monospace, the face they have wherever the selector takes them. The key column is as wide as the longest key, up to 20 em. */
+.panelLabels { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); }
+.panelLabels dt { max-width: 20em; font-family: var(--font-mono); font-size: var(--fs-13); }
+.panelLabels dd { font-family: var(--font-mono); font-size: var(--fs-13); }
+.emptyValue { font-family: var(--font-sans); color: var(--color-muted); }
+@media (max-width: 480px) {
+  .panelList { grid-template-columns: 8.5em minmax(0, 1fr); }
+  .panelLabels { grid-template-columns: minmax(0, 1fr); }
+  .panelLabels dt { max-width: none; }
+  .panelLabels dd { margin-bottom: 6px; }
+}

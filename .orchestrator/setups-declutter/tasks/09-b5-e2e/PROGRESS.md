@@ -1,0 +1,7 @@
+# Progress 09 (B5)
+
+- 2026-11-24 read BRIEF, COMMON, INTENT, DECISIONS, change request, DESIGN Rev 2, 08/05/02 RESULTs, integration.spec.ts, e2e/README.md. Next: read page code and admin forms, then write W2 update and U20/S1/S2.
+- 2026-11-24 wrote W2 update, helpers (loadSetups, measureSetups, checkPanel, ddOf) and steps U20/S1/S2 in integration.spec.ts; e2e/README.md updated; e2e tsc exit 0. Stopped hourglass-demo with 'stop' (volumes kept), ports free. Next: e2e/run.sh integration.
+- 2026-11-24 first launch failed at once: macOS has no 'timeout' (exit 127, nothing ran). Relaunched with perl alarm 2700 s, output to e2e-integration.log. Next: read exit and tail when it ends.
+- 2026-11-24 run 1: exit 1 after 1491 s. U20, S1, S2 and all earlier steps pass; I9 and I10 failed with 429 instead of 401. Cause: the hourglass-demo host connector (lab-connector.py, pid 25143, started by .orchestrator/reported-weights/demo/start-connector.sh) kept calling localhost:8080/api/v1/integration/state every 15 s with the demo's token, so the e2e stack rate-limited failed auth from the host (containers.log: state 429 every 15 s from start). Not a product bug. Decision: kill the connector (the demo's own stop.sh does the same; part of 'demo stopped'; no volume touched; its pid file left as is). Rerunning. Run-1 artifacts: run1-steps.json, run1-e2e-integration.log.
+- 2026-11-24 run 2 (connector stopped): exit 0 after 1490 s; 1 Playwright test, 20 steps, all pass incl. U20, S1, S2. Screenshots copied to screenshots/. Writing RESULT.md.

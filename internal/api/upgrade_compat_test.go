@@ -192,7 +192,7 @@ func TestUPG2_ResponsesAndSignInDifferFromTheReleaseOnlyByAddedFields(t *testing
 			{"setups_admin", "/api/v1/setups", adm},
 		} {
 			sameAsRelease(t, c.key, withoutSetupWeightFields(t, c.key,
-				without(t, c.key, e.getJSON(c.s, c.path), "label_index", "reported_weights_enabled")), g[c.key])
+				without(t, c.key, e.getJSON(c.s, c.path), "label_index", "reported_weights_enabled", "pricing")), g[c.key])
 		}
 	})
 	t.Run("session", func(t *testing.T) {

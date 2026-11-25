@@ -414,12 +414,13 @@ paths:
       tags: [Setups]
       summary: Setups with labels, weight, state, holder and holder's balance
       description: |
-        Visible to every user with a role. Also returns `display_label_keys`
-        (SET-6). Admins additionally get disabled setups and the `admin`
-        sub-object; for other users `admin` is null and disabled setups are
-        omitted. `selector` uses the RULE-2 syntax; a bad one is 400
-        `invalid_selector` with the parse error. The state and label filters
-        of the Setups page are applied client-side on this list.
+        Visible to every user with a role. Also returns `display_label_keys`,
+        kept for compatibility; the Setups page does not read it. Admins
+        additionally get disabled setups and the `admin` sub-object; for other
+        users `admin` is null and disabled setups are omitted. `selector` uses
+        the RULE-2 syntax; a bad one is 400 `invalid_selector` with the parse
+        error. The state filter and exact-match label tokens are applied
+        client-side on this list.
       x-roles: role
       parameters:
         - name: selector
@@ -2049,7 +2050,7 @@ components:
           description: Null for users who are not admins.
     SetupList:
       type: object
-      required: [setups, display_label_keys, label_index, summary, metering_description, reported_weights_enabled]
+      required: [setups, display_label_keys, label_index, summary, metering_description, reported_weights_enabled, pricing]
       properties:
         reported_weights_enabled:
           type: boolean
@@ -2067,6 +2068,7 @@ components:
           items: {$ref: '#/components/schemas/LabelIndexKey'}
         display_label_keys:
           type: array
+          description: Kept for compatibility; no page reads it since v1.3.0.
           items: {type: string}
           example: [tier]
         summary:
@@ -2081,6 +2083,26 @@ components:
           type: string
           nullable: true
           description: Always null; the metering policy interface has no describe method. The per-hold reason is `metering.reason`.
+        pricing:
+          type: object
+          required: [multiplier, peak_multiplier, pressure]
+          description: |
+            What every `cost_per_hour_tokens` in this response was computed
+            with, read once per request (UI-18). Added in v1.3.0; a client
+            should treat it as optional when it may talk to an older server.
+          properties:
+            multiplier:
+              type: number
+              description: The multiplier of `cost_per_hour_tokens.now`.
+            peak_multiplier:
+              type: number
+              description: The highest band's multiplier, of `cost_per_hour_tokens.at_peak`.
+            pressure:
+              type: number
+              nullable: true
+              minimum: 0
+              maximum: 1
+              description: Smoothed pressure of the sample `multiplier` comes from; null before the first successful poll.
     LabelIndexKey:
       type: object
       required: [key, values]
@@ -2351,6 +2373,7 @@ components:
         default_weight: {type: number, minimum: 0, default: 1}
         display_label_keys:
           type: array
+          description: Kept for compatibility; no page reads it since v1.3.0.
           maxItems: 32
           uniqueItems: true
           items: {type: string}

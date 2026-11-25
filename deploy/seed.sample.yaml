@@ -2,9 +2,6 @@
 # Sample seed file (SET-7): the reference scenario's setups and rate rules.
 # Imported once, when the database has no setups; never applied again.
 #
-# One setting the scenario needs is not seedable and is set by an admin on
-# first run (Admin > Settings), or through PUT /api/v1/admin/settings:
-#   - display label keys: size
 # The resource pools are named <setup>_RP; the provider's pool_name_suffix
 # (config.sample.yaml) maps them to these setup names.
 setups:
